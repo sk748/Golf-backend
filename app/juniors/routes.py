@@ -1,0 +1,306 @@
+from flask import Blueprint, jsonify, request
+from sqlalchemy.exc import IntegrityError
+
+from app.juniors.controllers import (
+    junior_schema, juniors_schema,
+    level_band_schema, level_bands_schema,
+    level_benchmark_schema, level_benchmarks_schema,
+    badge_schema, badges_schema,
+    junior_badge_schema, junior_badges_schema,
+    list_juniors, get_junior, create_junior, update_junior, delete_junior,
+    get_junior_progress, get_monthly_report,
+    list_level_bands, get_level_band, create_level_band, update_level_band, delete_level_band,
+    list_level_benchmarks, get_level_benchmark, create_level_benchmark,
+    update_level_benchmark, delete_level_benchmark,
+    list_badges, get_badge, create_badge, update_badge, delete_badge,
+    list_junior_badges, award_badge, revoke_badge,
+)
+from app.utils.decorators import (
+    require_roles, require_auth, admin_only, get_current_user, require_ownership, has_role
+)
+
+juniors_bp = Blueprint("juniors_bp", __name__, url_prefix="/api")
+
+
+def _data(data, status=200, count=None):
+    payload = {"data": data}
+    if count is not None:
+        payload["count"] = count
+    return jsonify(payload), status
+
+
+def _err(code, message, status):
+    return jsonify({"error": {"code": code, "message": message}}), status
+
+
+def _not_found(resource="Resource"):
+    return _err("NOT_FOUND", f"{resource} not found", 404)
+
+
+# ── Junior Profiles ────────────────────────────────────────────────────────────
+
+@juniors_bp.route("/juniors", methods=["GET"])
+@require_auth
+def get_juniors():
+    caller = get_current_user()
+    # parents can only see their own children
+    parent_id = request.args.get("parent_id")
+    if has_role(caller, "parent"):
+        parent_id = caller.id      # force scope to own children
+    items = list_juniors(
+        parent_id=parent_id,
+        band_id=request.args.get("band_id"),
+        current_level=request.args.get("current_level"),
+        age_min=request.args.get("age_min", type=int),
+        age_max=request.args.get("age_max", type=int),
+    )
+    return _data(juniors_schema.dump(items), count=len(items))
+
+
+@juniors_bp.route("/juniors", methods=["POST"])
+@require_roles("admin", "coach")
+def post_junior():
+    data = request.get_json() or {}
+    try:
+        junior = create_junior(data)
+        return _data(junior_schema.dump(junior), 201)
+    except ValueError as exc:
+        return _err("VALIDATION_ERROR", str(exc), 400)
+    except IntegrityError:
+        return _err("CONFLICT", "Junior profile conflicts with existing data", 409)
+
+
+@juniors_bp.route("/juniors/<int:junior_id>", methods=["GET"])
+@require_auth
+def get_junior_route(junior_id):
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    # parents can only view their own child
+    caller = get_current_user()
+    if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
+        return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    return _data(junior_schema.dump(junior))
+
+
+@juniors_bp.route("/juniors/<int:junior_id>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_junior(junior_id):
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    data = request.get_json() or {}
+    try:
+        return _data(junior_schema.dump(update_junior(junior, data)))
+    except ValueError as exc:
+        return _err("VALIDATION_ERROR", str(exc), 400)
+
+
+@juniors_bp.route("/juniors/<int:junior_id>", methods=["DELETE"])
+@admin_only
+def delete_junior_route(junior_id):
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    delete_junior(junior)
+    return "", 204
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/progress", methods=["GET"])
+@require_auth
+def junior_progress(junior_id):
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    caller = get_current_user()
+    if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
+        return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    result, err = get_junior_progress(junior_id)
+    if err:
+        return _not_found("Junior")
+    return _data(result)
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/monthly-report", methods=["GET"])
+@require_roles("admin", "coach", "committee", "parent")
+def monthly_report(junior_id):
+    month = request.args.get("month")
+    if not month:
+        return _err("VALIDATION_ERROR", "month is required", 400)
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    caller = get_current_user()
+    if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
+        return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    result, err = get_monthly_report(junior_id, month)
+    if err:
+        return _not_found("Junior")
+    return _data(result)
+
+
+# ── Level Bands ────────────────────────────────────────────────────────────────
+
+@juniors_bp.route("/level-bands", methods=["GET"])
+@require_auth
+def get_level_bands():
+    items = list_level_bands()
+    return _data(level_bands_schema.dump(items), count=len(items))
+
+
+@juniors_bp.route("/level-bands", methods=["POST"])
+@admin_only
+def post_level_band():
+    try:
+        band = create_level_band(request.get_json() or {})
+        return _data(level_band_schema.dump(band), 201)
+    except IntegrityError:
+        return _err("CONFLICT", "Level band conflicts with existing data", 409)
+
+
+@juniors_bp.route("/level-bands/<int:band_id>", methods=["GET"])
+@require_auth
+def get_level_band_route(band_id):
+    band = get_level_band(band_id)
+    if band is None:
+        return _not_found("Level band")
+    return _data(level_band_schema.dump(band))
+
+
+@juniors_bp.route("/level-bands/<int:band_id>", methods=["PUT"])
+@admin_only
+def put_level_band(band_id):
+    band = get_level_band(band_id)
+    if band is None:
+        return _not_found("Level band")
+    return _data(level_band_schema.dump(update_level_band(band, request.get_json() or {})))
+
+
+@juniors_bp.route("/level-bands/<int:band_id>", methods=["DELETE"])
+@admin_only
+def delete_level_band_route(band_id):
+    band = get_level_band(band_id)
+    if band is None:
+        return _not_found("Level band")
+    delete_level_band(band)
+    return "", 204
+
+
+# ── Level Benchmarks ──────────────────────────────────────────────────────────
+
+@juniors_bp.route("/level-benchmarks", methods=["GET"])
+@require_auth
+def get_level_benchmarks():
+    items = list_level_benchmarks(level_number=request.args.get("level_number"))
+    return _data(level_benchmarks_schema.dump(items), count=len(items))
+
+
+@juniors_bp.route("/level-benchmarks", methods=["POST"])
+@admin_only
+def post_level_benchmark():
+    try:
+        bm = create_level_benchmark(request.get_json() or {})
+        return _data(level_benchmark_schema.dump(bm), 201)
+    except IntegrityError:
+        return _err("CONFLICT", "Benchmark conflicts with existing data", 409)
+
+
+@juniors_bp.route("/level-benchmarks/<int:benchmark_id>", methods=["GET"])
+@require_auth
+def get_level_benchmark_route(benchmark_id):
+    bm = get_level_benchmark(benchmark_id)
+    if bm is None:
+        return _not_found("Level benchmark")
+    return _data(level_benchmark_schema.dump(bm))
+
+
+@juniors_bp.route("/level-benchmarks/<int:benchmark_id>", methods=["PUT"])
+@admin_only
+def put_level_benchmark(benchmark_id):
+    bm = get_level_benchmark(benchmark_id)
+    if bm is None:
+        return _not_found("Level benchmark")
+    return _data(level_benchmark_schema.dump(update_level_benchmark(bm, request.get_json() or {})))
+
+
+@juniors_bp.route("/level-benchmarks/<int:benchmark_id>", methods=["DELETE"])
+@admin_only
+def delete_level_benchmark_route(benchmark_id):
+    bm = get_level_benchmark(benchmark_id)
+    if bm is None:
+        return _not_found("Level benchmark")
+    delete_level_benchmark(bm)
+    return "", 204
+
+
+# ── Badges ─────────────────────────────────────────────────────────────────────
+
+@juniors_bp.route("/badges", methods=["GET"])
+@require_auth
+def get_badges():
+    items = list_badges()
+    return _data(badges_schema.dump(items), count=len(items))
+
+
+@juniors_bp.route("/badges", methods=["POST"])
+@admin_only
+def post_badge():
+    b = create_badge(request.get_json() or {})
+    return _data(badge_schema.dump(b), 201)
+
+
+@juniors_bp.route("/badges/<int:badge_id>", methods=["GET"])
+@require_auth
+def get_badge_route(badge_id):
+    b = get_badge(badge_id)
+    if b is None:
+        return _not_found("Badge")
+    return _data(badge_schema.dump(b))
+
+
+@juniors_bp.route("/badges/<int:badge_id>", methods=["PUT"])
+@admin_only
+def put_badge(badge_id):
+    b = get_badge(badge_id)
+    if b is None:
+        return _not_found("Badge")
+    return _data(badge_schema.dump(update_badge(b, request.get_json() or {})))
+
+
+@juniors_bp.route("/badges/<int:badge_id>", methods=["DELETE"])
+@admin_only
+def delete_badge_route(badge_id):
+    b = get_badge(badge_id)
+    if b is None:
+        return _not_found("Badge")
+    delete_badge(b)
+    return "", 204
+
+
+# ── Junior Badges ─────────────────────────────────────────────────────────────
+
+@juniors_bp.route("/junior-badges", methods=["GET"])
+@require_auth
+def get_junior_badges():
+    items = list_junior_badges(junior_id=request.args.get("junior_id"))
+    return _data(junior_badges_schema.dump(items), count=len(items))
+
+
+@juniors_bp.route("/junior-badges", methods=["POST"])
+@require_roles("admin", "coach")
+def post_junior_badge():
+    data = request.get_json() or {}
+    try:
+        jb = award_badge(data)
+        return _data(junior_badge_schema.dump(jb), 201)
+    except IntegrityError:
+        return _err("CONFLICT", "Badge already awarded to this junior", 409)
+
+
+@juniors_bp.route("/junior-badges/<int:junior_id>/<int:badge_id>", methods=["DELETE"])
+@require_roles("admin", "coach")
+def delete_junior_badge(junior_id, badge_id):
+    jb = revoke_badge(junior_id, badge_id)
+    if jb is None:
+        return _not_found("Junior badge")
+    return "", 204
