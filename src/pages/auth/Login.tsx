@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/useAuth';
 import { ApiError } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { AuthShell, fieldClass, labelClass } from './AuthShell';
+import { DevQuickLogin } from './DevQuickLogin';
 
 export function Login() {
   const { login } = useAuth();
@@ -18,12 +19,11 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runLogin(rawEmail: string, rawPassword: string) {
     setError(null);
     setSubmitting(true);
     try {
-      await login({ email: email.trim().toLowerCase(), password });
+      await login({ email: rawEmail.trim().toLowerCase(), password: rawPassword });
       navigate(from, { replace: true });
     } catch (err) {
       setError(
@@ -34,6 +34,18 @@ export function Login() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runLogin(email, password);
+  }
+
+  // Dev quick login: reflect the chosen account in the fields, then sign in.
+  function onQuickPick(pickedEmail: string, pickedPassword: string) {
+    setEmail(pickedEmail);
+    setPassword(pickedPassword);
+    void runLogin(pickedEmail, pickedPassword);
   }
 
   return (
@@ -99,6 +111,8 @@ export function Login() {
           Create an account
         </Link>
       </p>
+
+      <DevQuickLogin onPick={onQuickPick} />
     </AuthShell>
   );
 }
