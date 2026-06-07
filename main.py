@@ -1,6 +1,10 @@
 import os
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
+load_dotenv()  # load variables from .env before config classes read os.environ
+
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -67,7 +71,7 @@ def create_app(config_filename=None):
     # Register all module blueprints
     app.register_blueprint(user_v1)          # /api/auth/* + /api/users/*
     app.register_blueprint(courses_bp)       # /api/courses, /api/tee-sets, /api/holes, /api/courses-with-tees, /api/seed
-    app.register_blueprint(tournaments_bp)   # /api/tournaments, /api/teams, /api/matches, /api/penalties
+    app.register_blueprint(tournaments_bp)   # /api/tournaments, /api/tournament-*, /api/external-results, /api/series
     app.register_blueprint(rounds_bp)        # /api/rounds, /api/hole-scores, /api/scores/sync
     app.register_blueprint(juniors_bp)       # /api/juniors, /api/level-bands, /api/level-benchmarks, /api/badges
     app.register_blueprint(evaluations_bp)   # /api/evaluations
