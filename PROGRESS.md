@@ -62,3 +62,26 @@ the API contract was ambiguous and how it was resolved)._
 - **Note for Phase 5:** the backend **tournaments domain is already live** (this
   monorepo's backend was built/migrated earlier), so Phase 5 is no longer blocked on
   backend availability.
+
+### Design foundation — done (branch `feat/frontend-phase0`)
+- Adopted the **KCC design system** (`docs/KCC_DESIGN_SYSTEM.md`) as the visual base:
+  dark navy / azure / gold / silver / slate, glassmorphism, DM Sans + JetBrains Mono.
+  Where the doc conflicted with the build it was overridden — kept the **real 5 roles**
+  (committee added; player uses the "student" azure treatment, committee = violet).
+- **Tailwind v4 `@theme` tokens** + global CSS (fonts via Google Fonts link, `.glass`/
+  `.glass-light`, fade/slide/stagger animations w/ reduced-motion, scrollbar, selection).
+- **Primitives** (`src/components/ui/`): Button, GlassCard, Badge + RoleBadge, Avatar,
+  StatCard — all with `data-testid`s. `cn()` helper. (SidebarItem/AppShell deferred to
+  Phase 1.)
+- **Pre-signup landing page** (`/` when logged out): full-bleed **photo slideshow**
+  (auto-collects from `src/assets/landing/` via `import.meta.glob` — drop a file to add
+  one), navy scrim, hero + auth CTAs. Logo at `public/kcc-logo.png`.
+- **Routing:** `/` now switches via `Home` — Landing when logged out, role Dashboard when
+  logged in; `/login`+`/register` still `PublicOnly`. Auth flow / locked api.ts untouched.
+- Restyled Login, Register, Dashboard, FullPageMessage to the system.
+- Added approved deps **lucide-react** + **recharts** (recharts unused until charts land).
+- Verified: tsc ✓, eslint ✓, vite build ✓; api-contract-auditor PASS (locked files
+  untouched, no mock data, 5 roles intact, no WHS math).
+- _Known follow-up:_ hero JPGs are full-res (~2 MB total) — fine for now; can add image
+  optimization later if landing load matters. Logo is azure-on-transparent (doc said
+  "white"); placed over scrim/navy where it reads — a white/mono version would be nicer.

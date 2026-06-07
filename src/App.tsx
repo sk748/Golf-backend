@@ -1,14 +1,14 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { PublicOnly } from './auth/PublicOnly';
-import { RequireRole } from './auth/RequireRole';
+import { Home } from './pages/Home';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
-import { Dashboard } from './pages/dashboard/Dashboard';
 
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<Home />} />
       <Route
         path="/login"
         element={
@@ -23,14 +23,6 @@ export function App() {
           <PublicOnly>
             <Register />
           </PublicOnly>
-        }
-      />
-      <Route
-        path="/"
-        element={
-          <RequireRole>
-            <Dashboard />
-          </RequireRole>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />

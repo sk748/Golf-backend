@@ -8,7 +8,11 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    // Bind to all interfaces and accept the cloud IDE's proxy host (ONA /
+    // Gitpod / Codespaces) so the forwarded URL can reach the dev server.
+    host: true,
     port: 5173,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

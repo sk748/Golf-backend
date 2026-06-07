@@ -4,7 +4,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../auth/useAuth';
 import { ApiError } from '../../lib/api';
-import { AuthShell, fieldClass, labelClass, primaryButtonClass } from './AuthShell';
+import { Button } from '../../components/ui/Button';
+import { AuthShell, fieldClass, labelClass } from './AuthShell';
 
 export function Login() {
   const { login } = useAuth();
@@ -36,15 +37,13 @@ export function Login() {
   }
 
   return (
-    <AuthShell
-      title="Welcome back"
-      subtitle="Sign in to the Junior Development Programme."
-    >
+    <AuthShell title="Welcome back" subtitle="Sign in to the Junior Golf Academy.">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && (
           <p
             role="alert"
-            className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-400"
+            data-testid="auth-error"
           >
             {error}
           </p>
@@ -62,6 +61,7 @@ export function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={fieldClass}
+            data-testid="login-email"
           />
         </div>
 
@@ -77,24 +77,25 @@ export function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
+            data-testid="login-password"
           />
         </div>
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
           disabled={submitting}
-          className={primaryButtonClass}
+          data-testid="auth-submit-btn"
         >
           {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-stone-600">
+      <p className="mt-6 text-center text-sm text-slate">
         New here?{' '}
-        <Link
-          to="/register"
-          className="font-medium text-green-800 hover:underline"
-        >
+        <Link to="/register" className="font-semibold text-azure hover:underline">
           Create an account
         </Link>
       </p>

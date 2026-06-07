@@ -4,12 +4,14 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../auth/useAuth';
 import { ApiError } from '../../lib/api';
+import { cn } from '../../lib/cn';
 import type { RegisterableRole, RegisterPayload } from '../../types/api';
-import { AuthShell, fieldClass, labelClass, primaryButtonClass } from './AuthShell';
+import { Button } from '../../components/ui/Button';
+import { AuthShell, fieldClass, labelClass } from './AuthShell';
 
 // Public registration only creates player or parent accounts (CLAUDE.md §4).
 const ROLE_OPTIONS: { value: RegisterableRole; label: string; hint: string }[] = [
-  { value: 'player', label: 'Junior golfer', hint: "I'm a player in the programme." },
+  { value: 'player', label: 'Junior golfer', hint: "I'm a player in the academy." },
   { value: 'parent', label: 'Parent / guardian', hint: 'I manage my child’s account.' },
 ];
 
@@ -63,15 +65,13 @@ export function Register() {
   }
 
   return (
-    <AuthShell
-      title="Create your account"
-      subtitle="Join the Junior Development Programme."
-    >
+    <AuthShell title="Create your account" subtitle="Join the Junior Golf Academy.">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {error && (
           <p
             role="alert"
-            className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-400"
+            data-testid="auth-error"
           >
             {error}
           </p>
@@ -88,17 +88,18 @@ export function Register() {
                   key={opt.value}
                   onClick={() => setRole(opt.value)}
                   aria-pressed={selected}
-                  className={
-                    'rounded-md border px-3 py-2 text-left text-sm transition ' +
-                    (selected
-                      ? 'border-green-700 bg-green-50 ring-1 ring-green-700/30'
-                      : 'border-stone-300 hover:border-stone-400')
-                  }
+                  data-testid={`role-option-${opt.value}`}
+                  className={cn(
+                    'rounded-xl border px-3 py-2.5 text-left transition-all',
+                    selected
+                      ? 'border-azure/40 bg-azure/15'
+                      : 'border-white/10 hover:border-white/20 hover:bg-white/5',
+                  )}
                 >
-                  <span className="block font-medium text-stone-900">
+                  <span className="block text-sm font-bold text-silver">
                     {opt.label}
                   </span>
-                  <span className="block text-xs text-stone-500">{opt.hint}</span>
+                  <span className="block text-xs text-slate">{opt.hint}</span>
                 </button>
               );
             })}
@@ -117,6 +118,7 @@ export function Register() {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className={fieldClass}
+            data-testid="register-name"
           />
         </div>
 
@@ -132,6 +134,7 @@ export function Register() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className={fieldClass}
+            data-testid="register-email"
           />
         </div>
 
@@ -148,8 +151,9 @@ export function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={fieldClass}
+            data-testid="register-password"
           />
-          <p className="mt-1 text-xs text-stone-500">At least 8 characters.</p>
+          <p className="mt-1 text-xs text-slate">At least 8 characters.</p>
         </div>
 
         {role === 'player' && (
@@ -163,7 +167,8 @@ export function Register() {
                 type="date"
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
-                className={fieldClass}
+                className={cn(fieldClass, '[color-scheme:dark]')}
+                data-testid="register-dob"
               />
             </div>
             <div>
@@ -175,6 +180,7 @@ export function Register() {
                 value={gender}
                 onChange={(e) => setGender(e.target.value as 'male' | 'female')}
                 className={fieldClass}
+                data-testid="register-gender"
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -183,18 +189,21 @@ export function Register() {
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="lg"
+          fullWidth
           disabled={submitting}
-          className={primaryButtonClass}
+          data-testid="auth-submit-btn"
         >
           {submitting ? 'Creating account…' : 'Create account'}
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-stone-600">
+      <p className="mt-6 text-center text-sm text-slate">
         Already have an account?{' '}
-        <Link to="/login" className="font-medium text-green-800 hover:underline">
+        <Link to="/login" className="font-semibold text-azure hover:underline">
           Sign in
         </Link>
       </p>

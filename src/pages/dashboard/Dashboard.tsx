@@ -1,7 +1,12 @@
 import { useNavigate } from 'react-router-dom';
+import { Award, LogOut, TrendingDown, UserCircle } from 'lucide-react';
 
 import { useAuth } from '../../auth/useAuth';
 import type { Role } from '../../types/api';
+import { Avatar } from '../../components/ui/Avatar';
+import { Badge, RoleBadge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { StatCard } from '../../components/ui/StatCard';
 
 // Phase 0 placeholder. Each role's real dashboard is built in Phase 1 (and its
 // design is reviewed with the product owner first, per WORKING_AGREEMENT). For
@@ -33,7 +38,7 @@ export function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  if (!user) return null; // guarded by RequireRole; satisfies the type checker.
+  if (!user) return null; // guarded upstream; satisfies the type checker.
 
   const landing = ROLE_LANDING[user.role];
 
@@ -43,58 +48,63 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <span className="text-sm font-semibold text-green-800">
-            Karen Golf — Junior Development
-          </span>
+    <div className="min-h-screen bg-navy">
+      <header className="sticky top-0 z-10 border-b border-white/5 bg-navy/80 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+          <img src="/kcc-logo.png" alt="Karen Country Club" className="h-9 w-auto" />
           <div className="flex items-center gap-3">
-            <span className="text-sm text-stone-600">{user.full_name}</span>
-            <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium capitalize text-stone-700">
-              {user.role}
-            </span>
-            <button
-              type="button"
+            <RoleBadge role={user.role} />
+            <Avatar name={user.full_name || user.email} />
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onLogout}
-              className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+              data-testid="sign-out-btn"
             >
-              Sign out
-            </button>
+              <LogOut size={16} /> Sign out
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-2xl font-semibold text-stone-900">{landing.title}</h1>
-        <p className="mt-2 text-stone-600">
-          Signed in as {user.email}. {landing.blurb}
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <p className="animate-fade-in-up text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
+          Welcome back
+        </p>
+        <h1 className="animate-fade-in-up stagger-1 mt-1 text-2xl font-black text-silver sm:text-3xl">
+          {landing.title}
+        </h1>
+        <p className="animate-fade-in-up stagger-1 mt-2 max-w-2xl text-sm text-slate">
+          Signed in as {user.full_name || user.email}. {landing.blurb}
         </p>
 
-        <dl className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg bg-white p-4 ring-1 ring-stone-200">
-            <dt className="text-xs uppercase tracking-wide text-stone-500">Role</dt>
-            <dd className="mt-1 text-lg font-medium capitalize text-stone-900">
-              {user.role}
-            </dd>
-          </div>
-          <div className="rounded-lg bg-white p-4 ring-1 ring-stone-200">
-            <dt className="text-xs uppercase tracking-wide text-stone-500">
-              Membership
-            </dt>
-            <dd className="mt-1 text-lg font-medium capitalize text-stone-900">
-              {user.membership_type}
-            </dd>
-          </div>
-          <div className="rounded-lg bg-white p-4 ring-1 ring-stone-200">
-            <dt className="text-xs uppercase tracking-wide text-stone-500">
-              Handicap index
-            </dt>
-            <dd className="mt-1 text-lg font-medium text-stone-900">
-              {user.current_hcp_index ?? '—'}
-            </dd>
-          </div>
-        </dl>
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+          <StatCard
+            icon={UserCircle}
+            value={<span className="capitalize">{user.role}</span>}
+            label="Role"
+            className="animate-fade-in-up stagger-1"
+            testId="stat-role"
+          />
+          <StatCard
+            icon={Award}
+            value={<span className="capitalize">{user.membership_type}</span>}
+            label="Membership"
+            className="animate-fade-in-up stagger-2"
+            testId="stat-membership"
+          />
+          <StatCard
+            icon={TrendingDown}
+            value={user.current_hcp_index ?? '—'}
+            label="Handicap index"
+            className="animate-fade-in-up stagger-3"
+            testId="stat-handicap"
+          />
+        </div>
+
+        <div className="mt-6">
+          <Badge tone="azure">Phase 0 · role routing live</Badge>
+        </div>
       </main>
     </div>
   );
