@@ -5,9 +5,18 @@ from app.admin.controllers import (
     toggle_user_active, change_user_role,
 )
 from app.auth.controllers import user_schema, users_schema
-from app.utils.decorators import admin_only
+from app.utils.decorators import admin_only, get_current_user
+from app.audit.service import record
 
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
+
+
+def _user_label(user):
+    return f"{user.first_name} {user.last_name}".strip() or user.email
+
+
+def _role_value(user):
+    return user.role.value if hasattr(user.role, "value") else user.role
 
 
 def _data(data, status=200, count=None):
@@ -45,6 +54,8 @@ def activate_user(user_id):
     user, err = toggle_user_active(user_id, True)
     if err:
         return _err("NOT_FOUND", err, 404)
+    record("user.activated", actor=get_current_user(), target_type="user",
+           target_id=user.id, target_label=_user_label(user))
     return _data(user_schema.dump(user))
 
 
@@ -54,6 +65,8 @@ def deactivate_user(user_id):
     user, err = toggle_user_active(user_id, False)
     if err:
         return _err("NOT_FOUND", err, 404)
+    record("user.deactivated", actor=get_current_user(), target_type="user",
+           target_id=user.id, target_label=_user_label(user))
     return _data(user_schema.dump(user))
 
 
@@ -64,8 +77,15 @@ def update_user_role(user_id):
     new_role = data.get("role")
     if not new_role:
         return _err("VALIDATION_ERROR", "role is required", 400)
+    from app.database.database import db
+    from app.auth.models import User
+    existing = db.session.get(User, user_id)
+    old_role = _role_value(existing) if existing else None
     user, err = change_user_role(user_id, new_role)
     if err:
         status = 404 if "not found" in err.lower() else 400
         return _err("ERROR", err, status)
+    record("user.role_changed", actor=get_current_user(), target_type="user",
+           target_id=user.id, target_label=_user_label(user),
+           metadata={"old_role": old_role, "new_role": _role_value(user)})
     return _data(user_schema.dump(user))

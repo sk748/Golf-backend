@@ -17,6 +17,7 @@ from app.juniors.models import JuniorProfile, LevelBand, LevelBenchmark, Badge, 
 from app.evaluations.models import Evaluation
 from app.attendance.models import Attendance
 from app.sessions.models import Session, Class, ClassEnrollment, BookingRequest
+from app.audit.models import AuditLog
 
 __all__ = [
     "User", "UserRole", "MembershipType",
@@ -28,6 +29,7 @@ __all__ = [
     "Evaluation",
     "Attendance",
     "Session", "Class", "ClassEnrollment", "BookingRequest",
+    "AuditLog",
     "register_all",
 ]
 

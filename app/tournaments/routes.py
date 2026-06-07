@@ -14,6 +14,7 @@ from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, has_role,
 )
 from app.tournaments import controllers as c
+from app.audit.service import record
 
 tournaments_bp = Blueprint("tournaments_bp", __name__, url_prefix="/api")
 
@@ -84,6 +85,8 @@ def post_tournament():
     except IntegrityError:
         db.session.rollback()
         return _err("CONFLICT", "Tournament conflicts with existing data", 409)
+    record("tournament.created", actor=get_current_user(), target_type="tournament",
+           target_id=t.id, target_label=t.name)
     return _data(c.tournament_schema.dump(t), 201)
 
 

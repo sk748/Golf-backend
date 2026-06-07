@@ -25,6 +25,7 @@ from app.evaluations.routes import evaluations_bp
 from app.attendance.routes import attendance_bp
 from app.sessions.routes import sessions_bp
 from app.admin.routes import admin_bp
+from app.audit.routes import audit_bp
 from app.whs.routes import whs_v1
 
 def create_app(config_filename=None):
@@ -78,6 +79,7 @@ def create_app(config_filename=None):
     app.register_blueprint(attendance_bp)    # /api/attendance
     app.register_blueprint(sessions_bp)      # /api/sessions, /api/classes, /api/enrollments, /api/booking-requests
     app.register_blueprint(admin_bp)         # /api/admin/*
+    app.register_blueprint(audit_bp)         # /api/admin/audit-log
     app.register_blueprint(whs_v1)           # /api/whs/*
 
     # Swagger UI — served only in non-production environments
