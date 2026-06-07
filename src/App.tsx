@@ -7,6 +7,7 @@ import { Home } from './pages/Home';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { RoleDashboard } from './pages/dashboard/RoleDashboard';
+import { AchievementsPage } from './pages/player/AchievementsPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
@@ -41,6 +42,14 @@ export function App() {
         }
       >
         <Route path="/dashboard" element={<RoleDashboard />} />
+        <Route
+          path="/achievements"
+          element={
+            <RequireRole roles={['player']}>
+              <AchievementsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/users"
           element={
