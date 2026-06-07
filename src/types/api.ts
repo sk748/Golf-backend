@@ -135,7 +135,26 @@ export interface Hole {
   red_yards: number;
 }
 
-// ── Tournament summary (list shape used by activity feed / lists) ─────────────
+// ── Audit log ────────────────────────────────────────────────────────────────
+// GET /api/admin/audit-log -> AuditEntry[] (envelope also carries count).
+// `description` is a ready-to-display plain-English sentence.
+export interface AuditEntry {
+  id: number;
+  created_at: string;
+  actor_user_id: string | null;
+  actor_name: string;
+  actor_role: string | null;
+  category: string; // user | evaluation | tournament | round | junior | ...
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  description: string;
+  meta: Record<string, unknown> | null;
+  ip_address: string | null;
+}
+
+// ── Tournament summary (list shape used by lists) ─────────────────────────────
 export interface TournamentSummary {
   id: number;
   name: string;

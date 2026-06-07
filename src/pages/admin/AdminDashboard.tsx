@@ -17,11 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { StatCard } from '../../components/ui/StatCard';
 import type { Role } from '../../types/api';
-import {
-  useAdminStats,
-  useRecentActivity,
-  type ActivityItem,
-} from './admin-dashboard.queries';
+import { useAdminStats, useRecentActivity } from './admin-dashboard.queries';
 
 // Normalize any thrown value into a user-facing message.
 function errorMessage(err: unknown, fallback: string): string {
@@ -56,10 +52,18 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-const ACTIVITY_ICON: Record<ActivityItem['kind'], LucideIcon> = {
+// Icon by audit category, with a sensible fallback for any new categories.
+const ACTIVITY_ICON: Record<string, LucideIcon> = {
   user: UserPlus,
   tournament: Trophy,
+  evaluation: ClipboardCheck,
+  junior: GraduationCap,
+  round: Flag,
 };
+
+function iconFor(category: string): LucideIcon {
+  return ACTIVITY_ICON[category] ?? Layers;
+}
 
 // Role breakdown rows for section B, in display order.
 const ROLE_ROWS: { role: Role; label: string; key: 'admins' | 'coaches' | 'committee' | 'parents' | 'players' }[] = [
@@ -224,7 +228,7 @@ export function AdminDashboard() {
             <h2 className="text-sm font-bold text-silver">Recent activity</h2>
           </div>
           <p className="mt-1 text-xs text-slate">
-            Recent additions — a full audit log is coming soon.
+            The latest actions across the club.
           </p>
 
           <div className="mt-4">
@@ -251,7 +255,7 @@ export function AdminDashboard() {
             ) : (
               <ul className="flex flex-col gap-3" data-testid="activity-list">
                 {activity.items.map((item) => {
-                  const Icon = ACTIVITY_ICON[item.kind];
+                  const Icon = iconFor(item.category);
                   return (
                     <li
                       key={item.id}
