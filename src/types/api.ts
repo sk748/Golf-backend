@@ -135,6 +135,115 @@ export interface Hole {
   red_yards: number;
 }
 
+// ── Player / juniors ─────────────────────────────────────────────────────────
+// GET /api/juniors/me
+export interface JuniorProfile {
+  id: number;
+  user_id: string;
+  parent_id: string | null;
+  date_of_birth: string;
+  gender: string;
+  current_level: number;
+  band_id: number;
+  curriculum: string | null;
+  has_handicap: boolean;
+  handicap_index: number | null;
+  tournament_ready: boolean;
+  experience: string;
+  availability: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// GET /api/level-bands -> LevelBand[]
+export interface LevelBand {
+  id: number;
+  name: string;
+  band_label: string;
+  min_level: number;
+  max_level: number;
+  min_sessions: number;
+  report_template: string;
+  description: string;
+}
+
+// GET /api/level-benchmarks -> LevelBenchmark[]
+export interface LevelBenchmark {
+  id: number;
+  level_number: number;
+  full_swing_target: number;
+  around_green_target: number;
+  putting_target: number;
+  nine_hole_target: number;
+}
+
+// GET /api/juniors/:id/progress
+export interface JuniorProgress {
+  junior_id: number;
+  current_level: number;
+  level_changes: { report_month: string; current_level: number }[];
+  evaluations: {
+    report_month: string;
+    current_level: number;
+    assessment: string;
+    recommendation: string;
+    avg_score_9: number | null;
+    avg_score_18: number | null;
+    best_gross_score: number | null;
+  }[];
+  attendance: { present: number; absent: number; excused: number; total: number };
+  benchmarks: LevelBenchmark[];
+}
+
+// GET /api/juniors/me/feedback -> PlayerFeedback | null (coach identity stripped)
+export interface PlayerFeedback {
+  report_month: string | null;
+  current_level: number;
+  assessment: string;
+  recommendation: string;
+  special_remarks: string | null;
+  putting_assessment: string | null;
+  chipping_assessment: string | null;
+  full_swing_assessment: string | null;
+  avg_score_9: number | null;
+  avg_score_18: number | null;
+  competitions_played: number | null;
+  best_gross_score: number | null;
+  attendance_count: number;
+  attendance_total: number | null;
+  fully_signed_off: boolean;
+}
+
+// GET /api/rounds, GET /api/users/:id/handicap-history -> Round[]
+export interface Round {
+  id: number;
+  user_id: string;
+  course_id: number;
+  tee_set_id: number;
+  date_played: string;
+  round_type: string;
+  competition_name: string | null;
+  gross_score: number;
+  adjusted_gross_score: number | null;
+  score_differential: number | null;
+  pcc_adjustment: number | null;
+  handicap_before: number | null;
+  handicap_after: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// GET /api/hole-scores?round_id= -> HoleScore[]
+export interface HoleScore {
+  id: number;
+  round_id: number;
+  hole_number: number;
+  strokes: number;
+  putts: number | null;
+  fairway_hit: boolean | null;
+  gir: boolean | null;
+}
+
 // ── Audit log ────────────────────────────────────────────────────────────────
 // GET /api/admin/audit-log -> AuditEntry[] (envelope also carries count).
 // `description` is a ready-to-display plain-English sentence.
