@@ -1,10 +1,21 @@
 venv
-.env.example
 .env
 
 # Python
 __pycache__/
 *.py[cod]
+
+# Node / Vite (frontend)
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+.eslintcache
+
+# Editor / OS
+.DS_Store
 
 # Claude Code — per-checkout settings and worktrees (never committed)
 .claude/settings.json
