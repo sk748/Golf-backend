@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, ScrollText, Trophy, Users } from 'lucide-react';
+import { BarChart3, LayoutDashboard, Map, ScrollText, Trophy, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../../types/api';
 
@@ -28,6 +28,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   parent: [dashboard],
   player: [
     dashboard,
+    { to: '/progress', label: 'Progress', icon: BarChart3 },
     { to: '/achievements', label: 'Achievements', icon: Trophy },
   ],
 };

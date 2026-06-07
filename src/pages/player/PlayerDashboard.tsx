@@ -6,13 +6,18 @@
 // friendly to-par labels/colours (explicitly allowed — not WHS/handicap math).
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Activity,
+  ArrowRight,
   ChevronRight,
   Flag,
   Loader2,
   Minus,
+  Sparkles,
+  Target,
   TrendingDown,
+  TrendingUp,
   Trophy,
 } from 'lucide-react';
 import {
@@ -35,9 +40,23 @@ import type { Round } from '../../types/api';
 import { LevelProgressCard } from './LevelProgressCard';
 import { RoundScorecardModal } from './RoundScorecardModal';
 import { useHandicapHistory, useRounds } from './player-games.queries';
+import { useAchievements } from '../../features/achievements/use-achievements';
+import { AchievementIcon } from '../../features/achievements/AchievementIcon';
+import type { EvaluatedAchievement } from '../../features/achievements/catalog';
 
 const COURSE_PAR = 72;
 const RECENT_LIMIT = 6;
+const MAX_LEVEL = 9;
+const BADGE_PREVIEW_LIMIT = 6;
+
+// Map a level (1-9) to its programme band. Used for the next-level callout and
+// the level meter — purely a display label, not progression logic.
+function bandForLevel(level: number): string {
+  if (level >= 9) return 'Elite';
+  if (level >= 6) return 'Intermediate';
+  if (level >= 4) return 'Attaining Handicap';
+  return 'Beginner';
+}
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#012349',
@@ -115,9 +134,39 @@ export function PlayerDashboard() {
 
   const rounds = useRounds();
   const history = useHandicapHistory(userId);
+  const { achievements, earnedCount, total, currentLevel } = useAchievements();
 
   const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [previewRound, setPreviewRound] = useState<Round | null>(null);
+
+  const nextLevel = currentLevel + 1;
+  const atTop = currentLevel >= MAX_LEVEL;
+
+  // Nearest locked achievement: among locked ones that track progress, the
+  // closest to completion (highest progressNow/progressTarget). Fall back to
+  // the first locked achievement if none expose progress.
+  const nextGoal = useMemo<EvaluatedAchievement | null>(() => {
+    const locked = achievements.filter((a) => !a.earned);
+    if (locked.length === 0) return null;
+    const withProgress = locked.filter(
+      (a) => a.progressTarget != null && a.progressTarget > 0 && a.progressNow != null,
+    );
+    if (withProgress.length > 0) {
+      return withProgress.reduce((best, a) => {
+        const ratio = (a.progressNow as number) / (a.progressTarget as number);
+        const bestRatio = (best.progressNow as number) / (best.progressTarget as number);
+        return ratio > bestRatio ? a : best;
+      });
+    }
+    return locked[0];
+  }, [achievements]);
+
+  // Badge wall preview: earned first (rewarding), locked fill the rest.
+  const badgePreview = useMemo<EvaluatedAchievement[]>(() => {
+    const earned = achievements.filter((a) => a.earned);
+    const locked = achievements.filter((a) => !a.earned);
+    return [...earned, ...locked].slice(0, BADGE_PREVIEW_LIMIT);
+  }, [achievements]);
 
   // Handicap trend points (oldest -> newest), only rounds that have a value.
   const trendData = useMemo<TrendPoint[]>(() => {
@@ -172,44 +221,129 @@ export function PlayerDashboard() {
         Every round is progress. Keep playing and watch your game grow.
       </p>
 
-      {/* ── 1) HERO: handicap index + trend chip ─────────────────────────── */}
-      <GlassCard className="stagger-1 mt-6 p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate">
-              Handicap index
-            </p>
-            <p
-              className="mt-1 font-mono text-5xl font-black leading-none text-azure sm:text-6xl"
-              data-testid="hero-handicap"
-            >
-              {heroIndex != null ? heroIndex : '—'}
-            </p>
-          </div>
-
-          {/* Trend chip — lower is better in golf, so DOWN = good (encouraging). */}
-          {latestHcp != null && prevHcp != null && (
-            <div data-testid="hero-trend">
-              {latestHcp < prevHcp ? (
-                <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-400">
-                  <TrendingDown size={18} />
-                  Improving — nice work!
-                </span>
-              ) : latestHcp > prevHcp ? (
-                <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
-                  <Minus size={18} />
-                  Steady — keep at it
-                </span>
+      {/* ── 0) NEXT-LEVEL CALLOUT — the motivating top of the page ────────── */}
+      <Link
+        to="/progress"
+        data-testid="next-level-callout"
+        className={cn(
+          'group stagger-1 mt-6 block rounded-2xl border border-azure/40 bg-gradient-to-br from-azure/20 via-azure/10 to-transparent p-6 transition-all',
+          'hover:-translate-y-0.5 hover:border-azure/70 hover:shadow-lg hover:shadow-azure/10',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/60',
+        )}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-azure/25">
+              <TrendingUp size={24} className="text-azure" />
+            </span>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
+                Your next milestone
+              </p>
+              {atTop ? (
+                <p className="mt-1 text-xl font-black text-silver sm:text-2xl">
+                  You&apos;re at the top — Elite!
+                </p>
               ) : (
-                <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
-                  <Minus size={18} />
-                  Holding steady
-                </span>
+                <p className="mt-1 text-xl font-black text-silver sm:text-2xl">
+                  Next: Level {nextLevel}
+                  <span className="ml-2 text-base font-bold text-azure">
+                    {bandForLevel(nextLevel)}
+                  </span>
+                </p>
               )}
+              <p className="mt-1 text-sm text-slate">
+                {atTop
+                  ? 'You have reached the highest band. Keep your game sharp!'
+                  : 'Keep going — see exactly what it takes to get there.'}
+              </p>
             </div>
-          )}
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-xl bg-azure px-4 py-2 text-sm font-bold text-navy transition group-hover:gap-3">
+            {atTop ? 'View progress' : 'See your path'}
+            <ArrowRight size={18} />
+          </span>
         </div>
-      </GlassCard>
+
+        {/* Level meter — current level out of 9, with band label. */}
+        <div className="mt-5" data-testid="level-meter">
+          <div className="flex items-center justify-between text-xs font-bold text-slate">
+            <span>
+              Level{' '}
+              <span className="text-silver">{currentLevel}</span> of {MAX_LEVEL}
+            </span>
+            <span className="text-azure">{bandForLevel(currentLevel)}</span>
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            {Array.from({ length: MAX_LEVEL }, (_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  'h-2 flex-1 rounded-full transition-colors',
+                  i < currentLevel ? 'bg-azure' : 'bg-white/10',
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </Link>
+
+      {/* ── 1) HERO: handicap index + trend chip (links to full history) ──── */}
+      <Link
+        to="/handicap"
+        data-testid="handicap-link"
+        className={cn(
+          'group block focus:outline-none',
+        )}
+      >
+        <GlassCard
+          className={cn(
+            'stagger-1 mt-6 p-6 transition-all',
+            'group-hover:-translate-y-0.5 group-hover:border group-hover:border-azure/40',
+            'group-focus-visible:ring-2 group-focus-visible:ring-azure/50',
+          )}
+        >
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate">
+                Handicap index
+              </p>
+              <p
+                className="mt-1 font-mono text-5xl font-black leading-none text-azure sm:text-6xl"
+                data-testid="hero-handicap"
+              >
+                {heroIndex != null ? heroIndex : '—'}
+              </p>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-azure/80 transition group-hover:gap-2 group-hover:text-azure">
+                View handicap history
+                <ArrowRight size={14} />
+              </span>
+            </div>
+
+            {/* Trend chip — lower is better in golf, so DOWN = good (encouraging). */}
+            {latestHcp != null && prevHcp != null && (
+              <div data-testid="hero-trend">
+                {latestHcp < prevHcp ? (
+                  <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-400">
+                    <TrendingDown size={18} />
+                    Improving — nice work!
+                  </span>
+                ) : latestHcp > prevHcp ? (
+                  <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
+                    <Minus size={18} />
+                    Steady — keep at it
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
+                    <Minus size={18} />
+                    Holding steady
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </GlassCard>
+      </Link>
 
       {/* ── 2 + 3) Charts ────────────────────────────────────────────────── */}
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -336,11 +470,121 @@ export function PlayerDashboard() {
         <LevelProgressCard />
       </div>
 
+      {/* ── 4b) Your next goal + badge-wall preview ──────────────────────── */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        {/* Your next goal — nearest locked achievement */}
+        <GlassCard className="p-5" data-testid="next-goal">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">Your next goal</h2>
+            <Target size={16} className="text-azure" />
+          </div>
+
+          {nextGoal ? (
+            <Link
+              to="/achievements"
+              className={cn(
+                'group mt-4 flex items-start gap-4 rounded-xl p-2 transition-all',
+                'hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50',
+              )}
+            >
+              <AchievementIcon
+                icon={nextGoal.icon}
+                tier={nextGoal.tier}
+                earned={nextGoal.earned}
+                size="sm"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-silver">{nextGoal.title}</p>
+                <p className="mt-0.5 text-xs text-slate">{nextGoal.description}</p>
+                {nextGoal.progressTarget != null &&
+                  nextGoal.progressTarget > 0 &&
+                  nextGoal.progressNow != null && (
+                    <div className="mt-2">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-azure transition-all"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.round((nextGoal.progressNow / nextGoal.progressTarget) * 100),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] font-bold text-slate">
+                        {nextGoal.progressNow} / {nextGoal.progressTarget}
+                      </p>
+                    </div>
+                  )}
+                <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-azure transition group-hover:gap-2">
+                  See all achievements
+                  <ArrowRight size={14} />
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="mt-4 flex flex-col items-center justify-center gap-2 py-4 text-center">
+              <Sparkles size={28} className="text-gold" />
+              <p className="text-sm font-bold text-silver">All achievements unlocked!</p>
+              <p className="text-xs text-slate">
+                Incredible work — you have earned every badge.
+              </p>
+            </div>
+          )}
+        </GlassCard>
+
+        {/* Badge-wall preview */}
+        <GlassCard className="p-5" data-testid="badge-preview">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">
+              Achievements — {earnedCount}/{total} unlocked
+            </h2>
+            <Link
+              to="/achievements"
+              className="inline-flex items-center gap-1 text-xs font-bold text-azure transition hover:gap-2"
+            >
+              View all
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+
+          {badgePreview.length === 0 ? (
+            <p className="mt-4 text-sm text-slate">
+              Play and train to start earning badges.
+            </p>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {badgePreview.map((a) => (
+                <AchievementIcon
+                  key={a.id}
+                  icon={a.icon}
+                  tier={a.tier}
+                  earned={a.earned}
+                  size="sm"
+                />
+              ))}
+            </div>
+          )}
+        </GlassCard>
+      </div>
+
       {/* ── 5) Recent games: list + hover preview, click opens scorecard ─── */}
       <div className="mt-6">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-black text-silver">Recent games</h2>
-          <span className="text-xs text-slate">Tap a game to see every hole</span>
+          <div className="flex items-baseline gap-4">
+            <span className="hidden text-xs text-slate sm:inline">
+              Tap a game to see every hole
+            </span>
+            <Link
+              to="/handicap"
+              data-testid="games-view-all"
+              className="inline-flex items-center gap-1 text-xs font-bold text-azure transition hover:gap-2"
+            >
+              View all
+              <ArrowRight size={14} />
+            </Link>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
