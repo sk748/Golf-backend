@@ -9,6 +9,7 @@ import { Register } from './pages/auth/Register';
 import { RoleDashboard } from './pages/dashboard/RoleDashboard';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
+import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 
 export function App() {
   return (
@@ -45,6 +46,14 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminUsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/audit-log"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminAuditLogPage />
             </RequireRole>
           }
         />

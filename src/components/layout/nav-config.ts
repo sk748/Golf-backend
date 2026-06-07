@@ -1,4 +1,4 @@
-import { LayoutDashboard, Map, Users } from 'lucide-react';
+import { LayoutDashboard, Map, ScrollText, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../../types/api';
 
@@ -20,6 +20,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
     { to: '/users', label: 'Users', icon: Users },
+    { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
   ],
   coach: [dashboard],

@@ -226,6 +226,13 @@ export function AdminDashboard() {
         <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Recent activity</h2>
+            <Link
+              to="/audit-log"
+              className="text-xs font-medium text-azure hover:underline"
+              data-testid="activity-view-all"
+            >
+              View all
+            </Link>
           </div>
           <p className="mt-1 text-xs text-slate">
             The latest actions across the club.
