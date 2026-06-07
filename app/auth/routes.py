@@ -9,6 +9,15 @@ from app.auth.controllers import (
 )
 from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, require_ownership
 from app.utils.limiter import limiter
+from app.audit.service import record
+
+
+def _user_label(user):
+    return f"{user.first_name} {user.last_name}".strip() or user.email
+
+
+def _role_value(user):
+    return user.role.value if hasattr(user.role, "value") else user.role
 
 user_v1 = Blueprint("user_v1", __name__, url_prefix="/api")
 
@@ -91,6 +100,14 @@ def create_user_route():
     data = request.get_json() or {}
     try:
         user = create_user(data)
+        record(
+            "user.created",
+            actor=get_current_user(),
+            target_type="user",
+            target_id=user.id,
+            target_label=_user_label(user),
+            metadata={"role": _role_value(user)},
+        )
         return _data(user_schema.dump(user), 201)
     except IntegrityError:
         return jsonify({"error": {"code": "CONFLICT", "message": "User already exists"}}), 409

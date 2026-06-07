@@ -8,22 +8,28 @@ detect all tables across all modules.
 
 from app.auth.models import User, UserRole, MembershipType
 from app.courses.models import Course, TeeSet, Hole
-from app.tournaments.models import Tournament, Team, Match, Penalty
+from app.tournaments.models import (
+    Tournament, TournamentDivision, TournamentEntry, TournamentScore,
+    TournamentHoleScore, TournamentMatch, ExternalResult, Series,
+)
 from app.rounds.models import Round, HoleScore
 from app.juniors.models import JuniorProfile, LevelBand, LevelBenchmark, Badge, JuniorBadge
 from app.evaluations.models import Evaluation
 from app.attendance.models import Attendance
 from app.sessions.models import Session, Class, ClassEnrollment, BookingRequest
+from app.audit.models import AuditLog
 
 __all__ = [
     "User", "UserRole", "MembershipType",
     "Course", "TeeSet", "Hole",
-    "Tournament", "Team", "Match", "Penalty",
+    "Tournament", "TournamentDivision", "TournamentEntry", "TournamentScore",
+    "TournamentHoleScore", "TournamentMatch", "ExternalResult", "Series",
     "Round", "HoleScore",
     "JuniorProfile", "LevelBand", "LevelBenchmark", "Badge", "JuniorBadge",
     "Evaluation",
     "Attendance",
     "Session", "Class", "ClassEnrollment", "BookingRequest",
+    "AuditLog",
     "register_all",
 ]
 
