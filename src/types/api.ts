@@ -83,3 +83,65 @@ export interface ApiErrorDetail {
 export interface ApiErrorBody {
   error: string | ApiErrorDetail;
 }
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+// GET /api/admin/stats
+export interface AdminStats {
+  users: {
+    total: number;
+    players: number;
+    coaches: number;
+    parents: number;
+    admins: number;
+    committee: number;
+  };
+  juniors: number;
+  tournaments: { total: number; active: number };
+  sessions: number;
+  classes: number;
+  evaluations: { total: number; unsigned: number };
+  rounds: number;
+}
+
+// ── Course reference ─────────────────────────────────────────────────────────
+// GET /api/courses-with-tees -> CourseWithTees[]
+export interface CourseTee {
+  id: number;
+  color: string;
+  name: string;
+  gender: string; // "men" | "women"
+  course_rating: number;
+  slope_rating: number;
+  total_yards: number;
+}
+export interface CourseWithTees {
+  id: number;
+  name: string;
+  par: number;
+  altitude_ft: number | null;
+  grass_type: string | null;
+  tees: CourseTee[];
+}
+// GET /api/holes?course_id= -> Hole[]
+export interface Hole {
+  id: number;
+  course_id: number;
+  hole_number: number;
+  par: number;
+  stroke_index: number;
+  white_yards: number;
+  yellow_yards: number;
+  blue_yards: number;
+  red_yards: number;
+}
+
+// ── Tournament summary (list shape used by activity feed / lists) ─────────────
+export interface TournamentSummary {
+  id: number;
+  name: string;
+  status: string;
+  format: string;
+  start_date: string;
+  holes: number;
+  created_at: string;
+}

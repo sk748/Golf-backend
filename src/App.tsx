@@ -6,7 +6,9 @@ import { AppShell } from './components/layout/AppShell';
 import { Home } from './pages/Home';
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
-import { Dashboard } from './pages/dashboard/Dashboard';
+import { RoleDashboard } from './pages/dashboard/RoleDashboard';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 
 export function App() {
   return (
@@ -37,7 +39,23 @@ export function App() {
           </RequireRole>
         }
       >
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<RoleDashboard />} />
+        <Route
+          path="/users"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminUsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/courses"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminCoursesPage />
+            </RequireRole>
+          }
+        />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
