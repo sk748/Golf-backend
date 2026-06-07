@@ -6,6 +6,48 @@ evaluation_schema = SimpleModelSchema(Evaluation)
 evaluations_schema = SimpleModelSchema(Evaluation, many=True)
 
 
+def _enum_value(v):
+    return v.value if hasattr(v, "value") else v
+
+
+def latest_player_feedback(junior_id: int):
+    """
+    The most recent COACH-SIGNED evaluation for a junior, anonymized for the
+    student: shows where they are and what to improve, but NOT who wrote it
+    (no coach_id / coach name / committee_signed_by, no internal signature ids).
+    Returns None if the junior has no signed evaluation yet.
+    """
+    ev = (
+        Evaluation.query.filter_by(junior_id=junior_id, coach_signed=True)
+        .order_by(Evaluation.report_month.desc())
+        .first()
+    )
+    if ev is None:
+        return None
+
+    def _num(x):
+        return float(x) if x is not None else None
+
+    return {
+        "report_month": ev.report_month.isoformat() if ev.report_month else None,
+        "current_level": ev.current_level,
+        "assessment": _enum_value(ev.assessment),
+        "recommendation": _enum_value(ev.recommendation),
+        "special_remarks": ev.special_remarks,
+        "putting_assessment": ev.putting_assessment,
+        "chipping_assessment": ev.chipping_assessment,
+        "full_swing_assessment": ev.full_swing_assessment,
+        "avg_score_9": _num(ev.avg_score_9),
+        "avg_score_18": _num(ev.avg_score_18),
+        "competitions_played": ev.competitions_played,
+        "best_gross_score": ev.best_gross_score,
+        "attendance_count": ev.attendance_count,
+        "attendance_total": ev.attendance_total,
+        # Status only — never the identities behind it.
+        "fully_signed_off": bool(ev.coach_signed and ev.committee_signed),
+    }
+
+
 # ── Evaluations ───────────────────────────────────────────────────────────────
 
 def list_evaluations(junior_id=None, coach_id=None, report_month=None,

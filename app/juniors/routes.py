@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from app.juniors.models import JuniorProfile
 from app.juniors.controllers import (
     junior_schema, juniors_schema,
     level_band_schema, level_bands_schema,
@@ -55,6 +56,33 @@ def get_juniors():
         age_max=request.args.get("age_max", type=int),
     )
     return _data(juniors_schema.dump(items), count=len(items))
+
+
+# ── Player self-service ("me") ─────────────────────────────────────────────────
+# Let a signed-in player fetch their OWN junior profile + anonymized feedback
+# without learning other juniors' ids. ("me" never matches <int:junior_id>.)
+
+@juniors_bp.route("/juniors/me", methods=["GET"])
+@require_auth
+def get_my_junior():
+    caller = get_current_user()
+    junior = JuniorProfile.query.filter_by(user_id=caller.id).first()
+    if junior is None:
+        return _not_found("Junior profile")
+    return _data(junior_schema.dump(junior))
+
+
+@juniors_bp.route("/juniors/me/feedback", methods=["GET"])
+@require_auth
+def get_my_feedback():
+    """Latest coach-signed evaluation feedback, anonymized (no coach identity)."""
+    from app.evaluations.controllers import latest_player_feedback
+
+    caller = get_current_user()
+    junior = JuniorProfile.query.filter_by(user_id=caller.id).first()
+    if junior is None:
+        return _not_found("Junior profile")
+    return _data(latest_player_feedback(junior.id))
 
 
 @juniors_bp.route("/juniors", methods=["POST"])
