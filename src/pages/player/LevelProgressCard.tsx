@@ -18,9 +18,11 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import {
   Award,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Loader2,
   Lock,
+  MessageSquare,
   MessageSquareText,
   Sparkles,
   Target,
@@ -406,6 +408,40 @@ export function LevelProgressCard() {
   // the progress signal so the number isn't misleadingly "0".
   const progressLoading = progress.isLoading && Boolean(juniorId);
 
+  // ── Collapsed hover/focus preview ─────────────────────────────────────────
+  // Condensed "next step" cue. Prefer the coach recommendation; otherwise fall
+  // back to a sessions-to-go count toward the next level, then sensible defaults.
+  // Reuses the same next-level / sessions / recommendation data as the expanded
+  // view so the two never disagree.
+  const latestEval = progress.data?.evaluations?.[0];
+  const previewRecommendation = recommendationLabel(
+    feedback.data?.recommendation ?? latestEval?.recommendation,
+  );
+  const sessionsToGo = Math.max(0, target - present);
+  let nextStepCue: string;
+  if (previewRecommendation) {
+    nextStepCue = previewRecommendation;
+  } else if (nextLevel === null) {
+    nextStepCue = "You're at the top level!";
+  } else if (target > 0 && sessionsToGo > 0) {
+    nextStepCue = `Level ${nextLevel} — ${sessionsToGo} session${
+      sessionsToGo === 1 ? '' : 's'
+    } to go`;
+  } else if (target > 0) {
+    nextStepCue = `Level ${nextLevel} — ready when your coach is`;
+  } else {
+    nextStepCue = `Level ${nextLevel} — keep going, you've got this!`;
+  }
+
+  // Top anonymized coach comment for the preview. Prefer overall remarks, then
+  // the first available skill note. Never reveals coach identity.
+  const coachComment =
+    feedback.data?.special_remarks ||
+    feedback.data?.full_swing_assessment ||
+    feedback.data?.chipping_assessment ||
+    feedback.data?.putting_assessment ||
+    'No feedback yet — keep playing!';
+
   const toggle = () => setExpanded((v) => !v);
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -424,7 +460,7 @@ export function LevelProgressCard() {
       onKeyDown={onKeyDown}
       data-testid="level-card"
       className={cn(
-        'animate-fade-in-up cursor-pointer border border-white/10 p-6 transition-all',
+        'group animate-fade-in-up cursor-pointer border border-white/10 p-6 transition-all',
         'hover:-translate-y-1 hover:border-azure/40',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50',
       )}
@@ -510,6 +546,43 @@ export function LevelProgressCard() {
           />
         </div>
       </div>
+
+      {/* Collapsed hover/focus preview ─────────────────────────────────
+          Surfaces the next step + top anonymous coach note without a click.
+          Revealed on hover AND keyboard focus; never shown once expanded. */}
+      {!expanded ? (
+        <div
+          data-testid="level-preview"
+          aria-hidden="true"
+          className={cn(
+            'mt-3 border-t border-white/5 pt-3',
+            'hidden group-hover:block group-focus-within:block',
+            'motion-safe:opacity-0 motion-safe:transition-opacity motion-safe:duration-200',
+            'group-hover:opacity-100 group-focus-within:opacity-100',
+          )}
+        >
+          <p
+            className="flex items-start gap-1.5 text-xs text-slate"
+            data-testid="level-preview-next"
+          >
+            <ChevronRight size={14} className="mt-0.5 shrink-0 text-azure" />
+            <span>
+              Next step:{' '}
+              <span className="font-medium text-silver">{nextStepCue}</span>
+            </span>
+          </p>
+          <p
+            className="mt-1.5 flex items-start gap-1.5 text-xs text-slate"
+            data-testid="level-preview-coach"
+          >
+            <MessageSquare size={14} className="mt-0.5 shrink-0 text-azure" />
+            <span>
+              Coach says:{' '}
+              <span className="line-clamp-2 text-silver">{coachComment}</span>
+            </span>
+          </p>
+        </div>
+      ) : null}
 
       {/* Expanded details ─────────────────────────────────────────────── */}
       {expanded ? (
