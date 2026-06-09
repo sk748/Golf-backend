@@ -172,9 +172,14 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
   total-gross fallback (hidden for Stableford), gated on `in_progress`, edit-safe (per-hole
   submit requires all holes). Backend owns all math; verified live end-to-end (per-hole
   Stableford → net/points/course-handicap + handicap-index update → leaderboard rank).
-- **Next tournament passes (not built):** admin/coach **create/edit** tournaments+divisions
-  (incl. the status lifecycle control — needed to advance a tournament to `in_progress`
-  in-app; today done via API/seed); match-play **bracket**; external results; series standings.
+- ✅ **Create/edit + status control + divisions shipped** (`b158c0f`): admin/coach
+  `/tournaments/new` + `/tournaments/:id/edit` form (format, scoring basis, course→tee,
+  holes, dates, counts-toward-handicap, eligibility), a **divisions manager** (add/edit/delete)
+  in edit mode, and a **status lifecycle control** on the detail page (Open/Close/Start/
+  Complete + Cancel) — closes the score-entry seam (advancing to `in_progress` is now
+  self-service). Client-side validation (backend is permissive). Verified live end-to-end.
+- **Next tournament passes (not built):** match-play **bracket** (generate-bracket / bracket
+  view / advance winners); **external results** (log + feed junior stats); **series standings**.
 
 ### Next up (other)
 - Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
