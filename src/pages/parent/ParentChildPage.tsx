@@ -10,12 +10,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
+  ArrowRight,
   CalendarDays,
+  CheckCircle2,
   ClipboardList,
   Loader2,
   Target,
   TrendingUp,
+  Trophy,
   Users,
+  X,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
@@ -23,6 +27,7 @@ import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
+import { Button } from '../../components/ui/Button';
 import {
   bandForLevel,
   childName,
@@ -34,6 +39,16 @@ import {
   type ParentChild,
   type ParentLevelBand,
 } from './parent-children.queries';
+import { useTournaments } from '../tournaments/tournaments.queries';
+import {
+  entryStatusLabel,
+  entryStatusTone,
+  useApproveEntry,
+  useDeclineEntry,
+  useMyEntries,
+  useWithdrawEntry,
+  type TournamentEntry,
+} from '../tournaments/tournament-entries.queries';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -213,6 +228,186 @@ function MonthlyReportPanel({
         </div>
       ))}
     </dl>
+  );
+}
+
+// ── Tournaments (one child's entries + actions) ───────────────────────────────
+// Entries carry no tournament name, so we cross-reference tournament_id →
+// tournament via useTournaments(). interested → Approve/Decline; registered/
+// confirmed → Withdraw; declined/withdrawn shown muted.
+
+function ChildEntryRow({
+  entry,
+  tournamentName,
+}: {
+  entry: TournamentEntry;
+  tournamentName: string;
+}) {
+  const approve = useApproveEntry();
+  const decline = useDeclineEntry();
+  const withdraw = useWithdrawEntry();
+  const busy = approve.isPending || decline.isPending || withdraw.isPending;
+  const actionError =
+    (approve.isError && approve.error) ||
+    (decline.isError && decline.error) ||
+    (withdraw.isError && withdraw.error) ||
+    null;
+
+  const muted = entry.status === 'declined' || entry.status === 'withdrawn';
+
+  return (
+    <li
+      className={cn('glass-light rounded-xl p-3.5', muted && 'opacity-60')}
+      data-testid={`child-entry-${entry.id}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            to={`/tournaments/${entry.tournament_id}`}
+            className="inline-flex items-center gap-1 text-sm font-bold text-silver transition hover:text-azure focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50 rounded"
+          >
+            {tournamentName}
+            <ArrowRight size={13} className="text-azure" aria-hidden />
+          </Link>
+        </div>
+        <Badge tone={entryStatusTone(entry.status)}>
+          {entryStatusLabel(entry.status)}
+        </Badge>
+      </div>
+
+      {entry.status === 'interested' ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => approve.mutate(entry.id)}
+            disabled={busy}
+            data-testid={`child-entry-approve-${entry.id}`}
+          >
+            {approve.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <CheckCircle2 className="h-4 w-4" aria-hidden />
+            )}
+            Approve
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => decline.mutate(entry.id)}
+            disabled={busy}
+            data-testid={`child-entry-decline-${entry.id}`}
+          >
+            {decline.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <X className="h-4 w-4" aria-hidden />
+            )}
+            Decline
+          </Button>
+        </div>
+      ) : entry.status === 'registered' || entry.status === 'confirmed' ? (
+        <div className="mt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => withdraw.mutate(entry.id)}
+            disabled={busy}
+            data-testid={`child-entry-withdraw-${entry.id}`}
+          >
+            {withdraw.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <X className="h-4 w-4" aria-hidden />
+            )}
+            Withdraw
+          </Button>
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <p
+          role="alert"
+          className="mt-2.5 rounded-lg bg-red-500/15 p-2.5 text-xs text-red-400"
+        >
+          {actionError instanceof ApiError
+            ? actionError.message
+            : 'Something went wrong. Please try again.'}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function ChildTournamentsCard({ child }: { child: ParentChild }) {
+  const entries = useMyEntries();
+  const tournaments = useTournaments();
+
+  const mine = (entries.data ?? []).filter((e) => e.junior_id === child.id);
+  // interested first (action needed), then active, then muted; newest within.
+  const order: Record<string, number> = {
+    interested: 0,
+    registered: 1,
+    confirmed: 1,
+    declined: 2,
+    withdrawn: 2,
+  };
+  const sorted = [...mine].sort((a, b) => {
+    const byStatus = (order[a.status] ?? 3) - (order[b.status] ?? 3);
+    if (byStatus !== 0) return byStatus;
+    return (b.registered_at ?? '').localeCompare(a.registered_at ?? '');
+  });
+
+  const tournamentName = (id: number): string =>
+    tournaments.data?.find((t) => t.id === id)?.name ?? 'Tournament';
+
+  return (
+    <GlassCard className="animate-fade-in-up stagger-3 p-5 sm:p-6" data-testid="child-tournaments">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15">
+            <Trophy size={16} className="text-gold" aria-hidden />
+          </span>
+          <h2 className="text-sm font-bold text-silver">Tournaments</h2>
+        </div>
+        <Link
+          to="/tournaments"
+          className="inline-flex items-center gap-1 text-xs font-bold text-azure transition hover:gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50 rounded"
+        >
+          Browse events
+          <ArrowRight size={14} aria-hidden />
+        </Link>
+      </div>
+
+      <div className="mt-5">
+        {entries.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate">
+            <Loader2 size={16} className="animate-spin text-azure" aria-hidden />
+            Loading entries…
+          </div>
+        ) : entries.isError ? (
+          <p className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400" role="alert">
+            {entries.error instanceof ApiError
+              ? entries.error.message
+              : 'Could not load tournament entries.'}
+          </p>
+        ) : sorted.length === 0 ? (
+          <p className="text-sm text-slate" data-testid="child-tournaments-empty">
+            {childName(child)} isn&apos;t entered in any tournaments yet. Browse
+            upcoming events to register.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2.5" data-testid="child-tournaments-list">
+            {sorted.map((e) => (
+              <ChildEntryRow
+                key={e.id}
+                entry={e}
+                tournamentName={tournamentName(e.tournament_id)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </GlassCard>
   );
 }
 
@@ -460,6 +655,9 @@ function ChildDetail({
           ) : null}
         </>
       )}
+
+      {/* Tournaments (own query — not gated on the progress fetch) */}
+      <ChildTournamentsCard child={child} />
 
       {/* Monthly report with picker */}
       <GlassCard className="animate-fade-in-up stagger-4 p-5 sm:p-6">

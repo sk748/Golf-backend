@@ -11,11 +11,14 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   CalendarPlus,
+  CheckCircle2,
   ClipboardCheck,
   Loader2,
   Sparkles,
+  Trophy,
   TrendingUp,
   Users,
+  X,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
@@ -40,6 +43,13 @@ import {
   useMyBookingRequests,
   type BookingRequest,
 } from './parent-sessions.queries';
+import { useTournaments } from '../tournaments/tournaments.queries';
+import {
+  useApproveEntry,
+  useDeclineEntry,
+  useMyEntries,
+  type TournamentEntry,
+} from '../tournaments/tournament-entries.queries';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -319,6 +329,162 @@ function RequestsSummary({
   );
 }
 
+// ── Tournament approvals ──────────────────────────────────────────────────────
+// Children's RSVPs awaiting a parent decision (status 'interested'). Entry names
+// aren't embedded, so we cross-reference: tournament_id → tournament name via
+// useTournaments(), and junior_id → child name via useMyChildren().
+
+function ApprovalRow({
+  entry,
+  childLabel,
+  tournamentName,
+  tournamentId,
+}: {
+  entry: TournamentEntry;
+  childLabel: string;
+  tournamentName: string;
+  tournamentId: number;
+}) {
+  const approve = useApproveEntry();
+  const decline = useDeclineEntry();
+  const busy = approve.isPending || decline.isPending;
+  const actionError =
+    (approve.isError && approve.error) ||
+    (decline.isError && decline.error) ||
+    null;
+
+  return (
+    <li
+      className="glass-light rounded-xl p-3.5"
+      data-testid={`approval-${entry.id}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-silver">{childLabel}</p>
+          <Link
+            to={`/tournaments/${tournamentId}`}
+            className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-azure transition hover:gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50 rounded"
+          >
+            {tournamentName}
+            <ArrowRight size={12} aria-hidden />
+          </Link>
+        </div>
+        <Badge tone="gold" shape="pill">
+          Wants to play
+        </Badge>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          onClick={() => approve.mutate(entry.id)}
+          disabled={busy}
+          data-testid={`approval-approve-${entry.id}`}
+        >
+          {approve.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+          )}
+          Approve
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => decline.mutate(entry.id)}
+          disabled={busy}
+          data-testid={`approval-decline-${entry.id}`}
+        >
+          {decline.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <X className="h-4 w-4" aria-hidden />
+          )}
+          Decline
+        </Button>
+      </div>
+
+      {actionError ? (
+        <p
+          role="alert"
+          className="mt-2.5 rounded-lg bg-red-500/15 p-2.5 text-xs text-red-400"
+        >
+          {actionError instanceof ApiError
+            ? actionError.message
+            : 'Something went wrong. Please try again.'}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function ApprovalsCard({ kids }: { kids: ParentChild[] }) {
+  const entries = useMyEntries();
+  const tournaments = useTournaments();
+
+  const pending = (entries.data ?? []).filter((e) => e.status === 'interested');
+
+  const childLabel = (juniorId: number): string => {
+    const child = kids.find((k) => k.id === juniorId);
+    return child ? childName(child) : 'Your child';
+  };
+  const tournamentName = (id: number): string =>
+    tournaments.data?.find((t) => t.id === id)?.name ?? 'Tournament';
+
+  return (
+    <GlassCard className="animate-fade-in-up stagger-2 p-5 sm:p-6" data-testid="approvals-card">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold/15">
+          <Trophy size={16} className="text-gold" aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-sm font-bold text-silver">Tournament approvals</h2>
+          <p className="text-xs text-slate">
+            RSVPs from your {kids.length > 1 ? 'children' : 'child'} awaiting your
+            go-ahead
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {entries.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate">
+            <Loader2 size={16} className="animate-spin text-azure" aria-hidden />
+            Loading approvals…
+          </div>
+        ) : entries.isError ? (
+          <p className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400" role="alert">
+            {entries.error instanceof ApiError
+              ? entries.error.message
+              : 'Could not load tournament approvals.'}
+          </p>
+        ) : pending.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <CheckCircle2 size={24} className="text-emerald-400/70" aria-hidden />
+            <p className="text-sm font-semibold text-silver">No pending approvals</p>
+            <p className="max-w-sm text-xs text-slate">
+              When your child asks to play in a tournament, you&apos;ll be able to
+              approve their spot here.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2.5" data-testid="approvals-list">
+            {pending.map((e) => (
+              <ApprovalRow
+                key={e.id}
+                entry={e}
+                childLabel={childLabel(e.junior_id)}
+                tournamentName={tournamentName(e.tournament_id)}
+                tournamentId={e.tournament_id}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </GlassCard>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function ParentDashboard() {
@@ -453,6 +619,13 @@ export function ParentDashboard() {
               aria-hidden
             />
           </Link>
+        </div>
+      ) : null}
+
+      {/* Tournament approvals */}
+      {kids.length > 0 ? (
+        <div className="mt-6">
+          <ApprovalsCard kids={kids} />
         </div>
       ) : null}
 

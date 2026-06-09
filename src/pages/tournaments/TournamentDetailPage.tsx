@@ -1,23 +1,39 @@
-// Tournament detail — SHARED across all roles, strictly read-only. Shows the
-// event header, eligibility rules, divisions, and description. No register /
-// RSVP / score / edit actions here (later, role-specific passes). No role branch.
+// Tournament detail — SHARED across all roles. The header, eligibility rules,
+// divisions, and description are read-only and identical for everyone. Below
+// that, a ROLE-AWARE entry section lets a player RSVP ("I'm interested") and a
+// parent register / approve / decline / withdraw their child(ren) — the
+// player-RSVP → parent-approval flow. admin/coach/committee see nothing new here
+// (their tools are a later pass). The backend is authoritative on eligibility
+// and status transitions; the UI gates optimistically and surfaces backend
+// errors (INELIGIBLE 400, duplicate 409) inline.
 
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarDays,
+  CheckCircle2,
   Flag,
+  Hand,
+  Heart,
   Layers,
   Loader2,
   Scale,
   ShieldCheck,
   Trophy,
   UserCheck,
+  X,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { useAuth } from '../../auth/useAuth';
+import {
+  childName,
+  useMyChildren,
+  type ParentChild,
+} from '../parent/parent-children.queries';
 import {
   divisionBasisLabel,
   eligibilitySummary,
@@ -28,8 +44,22 @@ import {
   statusTone,
   useTournament,
   useTournamentDivisions,
+  type Tournament,
   type TournamentDivision,
 } from './tournaments.queries';
+import {
+  eligibility,
+  entryStatusLabel,
+  entryStatusTone,
+  useApproveEntry,
+  useCreateEntry,
+  useDeclineEntry,
+  useMyEntries,
+  useMyJunior,
+  useWithdrawEntry,
+  type EligibilityJunior,
+  type TournamentEntry,
+} from './tournament-entries.queries';
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -200,6 +230,458 @@ function DivisionsSection({
   );
 }
 
+// ── Entry / RSVP section (role-aware) ─────────────────────────────────────────
+
+function isRegistrationOpen(t: Tournament): boolean {
+  return t.status === 'registration_open';
+}
+
+// A friendly inline message derived from a mutation error.
+function mutationMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'CONFLICT' || error.status === 409) {
+      return error.message || 'This entry already exists.';
+    }
+    if (error.code === 'INELIGIBLE') {
+      return error.message || 'This junior is not eligible for this event.';
+    }
+    return error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong. Please try again.';
+}
+
+function SectionShell({
+  children,
+  subtitle,
+}: {
+  children: React.ReactNode;
+  subtitle?: string;
+}) {
+  return (
+    <GlassCard className="overflow-hidden" data-testid="entry-section">
+      <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
+        <Trophy className="h-4 w-4 text-azure" aria-hidden />
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-widest text-azure">
+            Your entry
+          </h2>
+          {subtitle ? (
+            <p className="mt-0.5 text-xs normal-case tracking-normal text-slate">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="px-5 py-5">{children}</div>
+    </GlassCard>
+  );
+}
+
+function ReasonsList({ reasons }: { reasons: string[] }) {
+  if (reasons.length === 0) return null;
+  return (
+    <ul className="mt-1 space-y-1 text-xs text-slate">
+      {reasons.map((r) => (
+        <li key={r}>• {r}</li>
+      ))}
+    </ul>
+  );
+}
+
+// ── Player: RSVP for themselves ───────────────────────────────────────────────
+
+function PlayerEntrySection({ t }: { t: Tournament }) {
+  const junior = useMyJunior();
+  const entries = useMyEntries({ tournamentId: t.id });
+  const create = useCreateEntry();
+  const withdraw = useWithdrawEntry();
+
+  // /api/juniors/me 404s when the signed-in user has no junior profile.
+  if (junior.isError) {
+    const status = junior.error instanceof ApiError ? junior.error.status : 0;
+    return (
+      <SectionShell>
+        <p className="text-sm text-slate" data-testid="player-no-profile">
+          {status === 404
+            ? "You don't have a player profile yet, so you can't enter events. Please check with the club office."
+            : 'Could not load your player profile.'}
+        </p>
+      </SectionShell>
+    );
+  }
+
+  if (junior.isLoading || entries.isLoading) {
+    return (
+      <SectionShell>
+        <div className="flex items-center gap-2 text-sm text-slate">
+          <Loader2 className="h-4 w-4 animate-spin text-azure" aria-hidden />
+          Loading your entry…
+        </div>
+      </SectionShell>
+    );
+  }
+
+  const me = junior.data;
+  if (!me) return null;
+
+  const myEntry = (entries.data ?? []).find(
+    (e) => e.tournament_id === t.id && e.junior_id === me.id,
+  );
+
+  // Already has an entry — show its status warmly (+ cancel while interested).
+  if (myEntry) {
+    return (
+      <SectionShell>
+        <PlayerEntryStatus
+          entry={myEntry}
+          onCancel={() => withdraw.mutate(myEntry.id)}
+          canceling={withdraw.isPending}
+          cancelError={withdraw.isError ? withdraw.error : null}
+        />
+      </SectionShell>
+    );
+  }
+
+  const open = isRegistrationOpen(t);
+  const verdict = eligibility(t, me as EligibilityJunior);
+
+  if (!open) {
+    return (
+      <SectionShell>
+        <p className="text-sm text-slate" data-testid="player-closed">
+          Registration isn&apos;t open for this event right now.
+        </p>
+      </SectionShell>
+    );
+  }
+
+  if (!verdict.eligible) {
+    return (
+      <SectionShell subtitle="This event has entry requirements you don't meet yet.">
+        <p className="text-sm font-semibold text-silver">Not eligible just yet</p>
+        <ReasonsList reasons={verdict.reasons} />
+        <Button variant="ghost" size="sm" disabled className="mt-4">
+          I&apos;m interested
+        </Button>
+      </SectionShell>
+    );
+  }
+
+  return (
+    <SectionShell subtitle="Let your parent know you'd like to play — they'll confirm your spot.">
+      <Button
+        size="md"
+        onClick={() => create.mutate({ tournament_id: t.id, junior_id: me.id })}
+        disabled={create.isPending}
+        data-testid="player-rsvp-btn"
+      >
+        {create.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Hand className="h-4 w-4" aria-hidden />
+        )}
+        I&apos;m interested
+      </Button>
+      {create.isError ? (
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+          data-testid="player-rsvp-error"
+        >
+          {mutationMessage(create.error)}
+        </p>
+      ) : null}
+    </SectionShell>
+  );
+}
+
+function PlayerEntryStatus({
+  entry,
+  onCancel,
+  canceling,
+  cancelError,
+}: {
+  entry: TournamentEntry;
+  onCancel: () => void;
+  canceling: boolean;
+  cancelError: unknown;
+}) {
+  const headline =
+    entry.status === 'interested'
+      ? 'Waiting for a parent to confirm'
+      : entry.status === 'registered' || entry.status === 'confirmed'
+        ? "You're in 🎉"
+        : entry.status === 'declined'
+          ? 'Not this time'
+          : 'Entry withdrawn';
+
+  const blurb =
+    entry.status === 'interested'
+      ? "We've let your parent know — they'll approve your spot."
+      : entry.status === 'registered' || entry.status === 'confirmed'
+        ? 'Your place is confirmed. See you on the course!'
+        : entry.status === 'declined'
+          ? 'This one wasn’t approved this time — there will be more events soon.'
+          : 'This entry has been withdrawn.';
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={entryStatusTone(entry.status)}>
+          {entryStatusLabel(entry.status)}
+        </Badge>
+      </div>
+      <p className="mt-3 text-base font-bold text-silver">{headline}</p>
+      <p className="mt-1 text-sm text-slate">{blurb}</p>
+
+      {entry.status === 'interested' ? (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCancel}
+            disabled={canceling}
+            className="mt-4"
+            data-testid="player-cancel-btn"
+          >
+            {canceling ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <X className="h-4 w-4" aria-hidden />
+            )}
+            Cancel
+          </Button>
+          {cancelError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+            >
+              {mutationMessage(cancelError)}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Parent: register / approve / decline / withdraw per child ─────────────────
+
+function ParentEntrySection({ t }: { t: Tournament }) {
+  const children = useMyChildren();
+  const entries = useMyEntries({ tournamentId: t.id });
+
+  if (children.isLoading || entries.isLoading) {
+    return (
+      <SectionShell>
+        <div className="flex items-center gap-2 text-sm text-slate">
+          <Loader2 className="h-4 w-4 animate-spin text-azure" aria-hidden />
+          Loading your family…
+        </div>
+      </SectionShell>
+    );
+  }
+
+  if (children.isError) {
+    return (
+      <SectionShell>
+        <p
+          role="alert"
+          className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+        >
+          {children.error instanceof ApiError
+            ? children.error.message
+            : "Could not load your child's details."}
+        </p>
+      </SectionShell>
+    );
+  }
+
+  const kids = children.data ?? [];
+  if (kids.length === 0) {
+    return (
+      <SectionShell>
+        <p className="text-sm text-slate" data-testid="parent-no-children">
+          No child is linked to your account yet, so there&apos;s nothing to
+          register. Please check with the club office.
+        </p>
+      </SectionShell>
+    );
+  }
+
+  return (
+    <SectionShell subtitle="Register your child, or approve a spot they've asked for.">
+      <ul className="divide-y divide-white/5" data-testid="parent-children-entries">
+        {kids.map((child) => (
+          <ParentChildEntryRow
+            key={child.id}
+            t={t}
+            child={child}
+            entry={(entries.data ?? []).find(
+              (e) => e.tournament_id === t.id && e.junior_id === child.id,
+            )}
+          />
+        ))}
+      </ul>
+    </SectionShell>
+  );
+}
+
+function ParentChildEntryRow({
+  t,
+  child,
+  entry,
+}: {
+  t: Tournament;
+  child: ParentChild;
+  entry: TournamentEntry | undefined;
+}) {
+  const create = useCreateEntry();
+  const approve = useApproveEntry();
+  const decline = useDeclineEntry();
+  const withdraw = useWithdrawEntry();
+
+  const busy =
+    create.isPending ||
+    approve.isPending ||
+    decline.isPending ||
+    withdraw.isPending;
+
+  const actionError =
+    (create.isError && create.error) ||
+    (approve.isError && approve.error) ||
+    (decline.isError && decline.error) ||
+    (withdraw.isError && withdraw.error) ||
+    null;
+
+  const name = childName(child);
+  const open = isRegistrationOpen(t);
+  const verdict = eligibility(t, child as EligibilityJunior);
+
+  return (
+    <li className="py-4 first:pt-0 last:pb-0" data-testid={`parent-child-${child.id}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-silver">{name}</p>
+          <p className="mt-0.5 text-xs text-slate">Level {child.current_level}</p>
+        </div>
+        {entry ? (
+          <Badge tone={entryStatusTone(entry.status)}>
+            {entryStatusLabel(entry.status)}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="mt-3">
+        {entry ? (
+          // Has an entry: actions depend on its status.
+          entry.status === 'interested' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => approve.mutate(entry.id)}
+                disabled={busy}
+                data-testid={`approve-${child.id}`}
+              >
+                {approve.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" aria-hidden />
+                )}
+                Approve
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => decline.mutate(entry.id)}
+                disabled={busy}
+                data-testid={`decline-${child.id}`}
+              >
+                {decline.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <X className="h-4 w-4" aria-hidden />
+                )}
+                Decline
+              </Button>
+              <span className="text-xs text-slate">
+                {name} asked to play — confirm their spot.
+              </span>
+            </div>
+          ) : entry.status === 'registered' || entry.status === 'confirmed' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => withdraw.mutate(entry.id)}
+                disabled={busy}
+                data-testid={`withdraw-${child.id}`}
+              >
+                {withdraw.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <X className="h-4 w-4" aria-hidden />
+                )}
+                Withdraw
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate">
+              {entry.status === 'declined'
+                ? 'You declined this entry.'
+                : 'This entry has been withdrawn.'}
+            </p>
+          )
+        ) : !open ? (
+          <p className="text-xs text-slate">Registration is not open.</p>
+        ) : !verdict.eligible ? (
+          <div>
+            <Button variant="ghost" size="sm" disabled data-testid={`register-${child.id}`}>
+              Register
+            </Button>
+            <ReasonsList reasons={verdict.reasons} />
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() =>
+              create.mutate({ tournament_id: t.id, junior_id: child.id })
+            }
+            disabled={busy}
+            data-testid={`register-${child.id}`}
+          >
+            {create.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Heart className="h-4 w-4" aria-hidden />
+            )}
+            Register
+          </Button>
+        )}
+      </div>
+
+      {actionError ? (
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+        >
+          {mutationMessage(actionError)}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+// Picks the right entry section for the signed-in role; renders nothing for
+// admin/coach/committee (their tooling is a later pass).
+function EntrySection({ t }: { t: Tournament }) {
+  const { user } = useAuth();
+  if (user?.role === 'player') return <PlayerEntrySection t={t} />;
+  if (user?.role === 'parent') return <ParentEntrySection t={t} />;
+  return null;
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TournamentDetailPage() {
@@ -311,6 +793,11 @@ export function TournamentDetailPage() {
               isError={divisionsQuery.isError}
               error={divisionsQuery.error}
             />
+          </div>
+
+          {/* Role-aware entry / RSVP (player + parent only) */}
+          <div className="mt-6">
+            <EntrySection t={t} />
           </div>
         </>
       ) : null}
