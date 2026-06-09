@@ -166,8 +166,15 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
   and `/my-child`; player can self-cancel an RSVP while still interested. Display-only
   eligibility gating (backend authoritative). tsc+lint+build green; contract-audit PASS;
   full lifecycle verified via proxy.
-- **Next tournament passes (not built):** admin/coach **create/edit** tournaments+divisions;
-  **score entry + leaderboard**; match-play **bracket**; external results; series standings.
+- ✅ **Score entry + leaderboard shipped** (`a09c291`): read-only **leaderboard** section on
+  the detail page (all roles; division tables, ties marked); admin/coach **score-entry** screen
+  at `/tournaments/:id/enter-scores` — per-hole scorecard (par/SI display, running total) +
+  total-gross fallback (hidden for Stableford), gated on `in_progress`, edit-safe (per-hole
+  submit requires all holes). Backend owns all math; verified live end-to-end (per-hole
+  Stableford → net/points/course-handicap + handicap-index update → leaderboard rank).
+- **Next tournament passes (not built):** admin/coach **create/edit** tournaments+divisions
+  (incl. the status lifecycle control — needed to advance a tournament to `in_progress`
+  in-app; today done via API/seed); match-play **bracket**; external results; series standings.
 
 ### Next up (other)
 - Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
