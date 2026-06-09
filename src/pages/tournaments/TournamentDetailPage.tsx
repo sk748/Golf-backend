@@ -16,7 +16,9 @@ import {
   Hand,
   Heart,
   Layers,
+  ListOrdered,
   Loader2,
+  PencilLine,
   Scale,
   ShieldCheck,
   Trophy,
@@ -47,6 +49,15 @@ import {
   type Tournament,
   type TournamentDivision,
 } from './tournaments.queries';
+import {
+  columnValue,
+  leaderboardColumns,
+  rankDisplay,
+  useLeaderboard,
+  type LeaderboardColumn,
+  type LeaderboardDivision,
+  type LeaderboardRow,
+} from './tournament-scores.queries';
 import {
   eligibility,
   entryStatusLabel,
@@ -682,6 +693,161 @@ function EntrySection({ t }: { t: Tournament }) {
   return null;
 }
 
+// ── Leaderboard (all roles, read-only) ────────────────────────────────────────
+// Ranks + ties are computed server-side; we only display them. Columns depend
+// on format/basis (Stableford → Points; stroke/match → Gross, +Net for net/both).
+
+function LeaderboardDivisionTable({
+  division,
+  columns,
+}: {
+  division: LeaderboardDivision;
+  columns: LeaderboardColumn[];
+}) {
+  const rows = division.rows;
+  return (
+    <div className="overflow-x-auto" data-testid={`leaderboard-division-${division.division_id ?? 'overall'}`}>
+      {division.division ? (
+        <p className="px-5 pb-2 pt-4 text-xs font-bold uppercase tracking-widest text-slate">
+          {division.division}
+        </p>
+      ) : null}
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wider text-slate">
+            <th scope="col" className="px-5 py-2 font-semibold">
+              #
+            </th>
+            <th scope="col" className="py-2 font-semibold">
+              Golfer
+            </th>
+            {columns.map((c) => (
+              <th
+                key={c.key}
+                scope="col"
+                className="px-3 py-2 text-right font-semibold"
+              >
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row: LeaderboardRow) => (
+            <tr
+              key={row.entry_id}
+              className="border-t border-white/5"
+              data-testid={`leaderboard-row-${row.entry_id}`}
+            >
+              <td className="px-5 py-3 font-mono font-bold text-gold">
+                {rankDisplay(row.rank, rows)}
+              </td>
+              <td className="py-3 font-semibold text-silver">
+                {row.name?.trim() || `Golfer #${row.junior_id}`}
+              </td>
+              {columns.map((c) => (
+                <td
+                  key={c.key}
+                  className="px-3 py-3 text-right font-mono text-silver"
+                >
+                  {columnValue(row, c.key)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LeaderboardSection({ t }: { t: Tournament }) {
+  const query = useLeaderboard(t.id);
+  const columns = leaderboardColumns(t.format, t.scoring_basis);
+  const divisions = (query.data?.divisions ?? []).filter(
+    (d) => d.rows.length > 0,
+  );
+  const hasRows = divisions.length > 0;
+
+  // Pre-scoring lifecycle with nothing on the board yet: a muted hint, not an
+  // alarming empty state.
+  const preScoring =
+    t.status !== 'in_progress' && t.status !== 'completed';
+  if (preScoring && !hasRows && !query.isLoading) {
+    return (
+      <GlassCard className="overflow-hidden" data-testid="leaderboard-section">
+        <SectionHeader />
+        <p
+          className="px-5 py-8 text-sm text-slate"
+          data-testid="leaderboard-pre"
+        >
+          Leaderboard appears once scoring begins.
+        </p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="overflow-hidden" data-testid="leaderboard-section">
+      <SectionHeader />
+      {query.isLoading ? (
+        <div className="flex items-center gap-3 px-5 py-8 text-sm text-slate">
+          <Loader2 className="h-5 w-5 animate-spin text-azure" aria-hidden />
+          Loading leaderboard…
+        </div>
+      ) : query.isError ? (
+        <div
+          role="alert"
+          className="m-5 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+          data-testid="leaderboard-error"
+        >
+          {errorMessage(query.error)}
+        </div>
+      ) : !hasRows ? (
+        <p className="px-5 py-8 text-sm text-slate" data-testid="leaderboard-empty">
+          No scores yet.
+        </p>
+      ) : (
+        <div className="divide-y divide-white/5 pb-2">
+          {divisions.map((d) => (
+            <LeaderboardDivisionTable
+              key={d.division_id ?? 'overall'}
+              division={d}
+              columns={columns}
+            />
+          ))}
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+function SectionHeader() {
+  return (
+    <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
+      <ListOrdered className="h-4 w-4 text-azure" aria-hidden />
+      <h2 className="text-sm font-bold uppercase tracking-widest text-azure">
+        Leaderboard
+      </h2>
+    </div>
+  );
+}
+
+// Admin/coach get a link to the dedicated score-entry page (always shown; that
+// page gates on the not-in-progress status itself).
+function ScoreEntryLink({ t }: { t: Tournament }) {
+  const { user } = useAuth();
+  if (user?.role !== 'admin' && user?.role !== 'coach') return null;
+  return (
+    <Link to={`/tournaments/${t.id}/enter-scores`} data-testid="enter-scores-link">
+      <Button size="md">
+        <PencilLine className="h-4 w-4" aria-hidden />
+        Enter scores
+      </Button>
+    </Link>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TournamentDetailPage() {
@@ -766,6 +932,10 @@ export function TournamentDetailPage() {
             <p className="mt-3 text-sm text-slate">
               {eligibilitySummary(t) ?? 'Open to all juniors'}
             </p>
+
+            <div className="mt-4">
+              <ScoreEntryLink t={t} />
+            </div>
           </div>
 
           {/* Description */}
@@ -798,6 +968,11 @@ export function TournamentDetailPage() {
           {/* Role-aware entry / RSVP (player + parent only) */}
           <div className="mt-6">
             <EntrySection t={t} />
+          </div>
+
+          {/* Leaderboard (all roles, read-only) */}
+          <div className="mt-6">
+            <LeaderboardSection t={t} />
           </div>
         </>
       ) : null}

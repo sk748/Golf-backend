@@ -68,6 +68,23 @@ export function useMyEntries(
   });
 }
 
+// GET /api/tournament-entries?tournament_id= — the FULL role-scoped roster for a
+// single tournament, intended for admin/coach screens (e.g. score entry) where
+// the caller's token grants visibility into every entry, not just their family's.
+// Same query-key shape as useMyEntries(['tournament-entries', { tournamentId }])
+// so cache reads and mutation invalidation stay aligned across the two hooks.
+export function useTournamentEntries(
+  tournamentId: number,
+): UseQueryResult<TournamentEntry[]> {
+  return useQuery({
+    queryKey: ['tournament-entries', { tournamentId }],
+    queryFn: () =>
+      api.get<TournamentEntry[]>('/api/tournament-entries', {
+        tournament_id: String(tournamentId),
+      }),
+  });
+}
+
 // ── Mutations ───────────────────────────────────────────────────────────────────
 // All invalidate ['tournament-entries']. The backend derives status from the
 // caller's role (player → interested, parent → registered), so we only ever send

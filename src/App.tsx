@@ -20,6 +20,7 @@ import { ParentChildPage } from './pages/parent/ParentChildPage';
 import { ParentSessionsPage } from './pages/parent/ParentSessionsPage';
 import { TournamentsListPage } from './pages/tournaments/TournamentsListPage';
 import { TournamentDetailPage } from './pages/tournaments/TournamentDetailPage';
+import { TournamentEnterScoresPage } from './pages/tournaments/TournamentEnterScoresPage';
 
 export function App() {
   return (
@@ -54,6 +55,14 @@ export function App() {
         {/* Tournaments — shared read-only list + detail for every signed-in role. */}
         <Route path="/tournaments" element={<TournamentsListPage />} />
         <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
+        <Route
+          path="/tournaments/:id/enter-scores"
+          element={
+            <RequireRole roles={['admin', 'coach']}>
+              <TournamentEnterScoresPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/achievements"
           element={
