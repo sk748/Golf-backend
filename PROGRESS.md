@@ -21,10 +21,12 @@ not `CLAUDE.md`, which stays locked.
 | 6 | Ship: states, a11y, responsive, prod build | ⬜ |
 | 7+ | Deferred (billing/participant groups, series polish, notifications, bulk import) | ⏸️ |
 
-**Roles shipped:** admin ✅ · player ✅ · coach 🟡 · committee ✅ · parent 🟡.
-admin and player are done end-to-end; committee is complete; coach is complete
-except the deferred "my juniors" widget; parent is built but its session-request
-submit + child-name display are blocked on small backend fixes (see notes).
+**Roles shipped:** admin ✅ · player ✅ · coach 🟡 · committee ✅ · parent ✅.
+admin and player are done end-to-end; committee is complete; parent is now
+complete end-to-end (session-request submit + child-name display verified
+against the merged backend — the two backend fixes landed in merge `7454e09`);
+coach is complete except the "my juniors" widget, whose backend
+(admin→coach assignment) now exists but has no UI yet.
 
 Phases 1–3 are 🟡 because the work done so far is **role-sliced, not
 phase-complete**: the admin slice of Phase 1 and the player-facing slices of
@@ -144,13 +146,13 @@ api-contract-auditor run.
 - **Parent** (`src/pages/parent/`): `ParentDashboard` + `ParentChildPage` (`/my-child`) +
   `ParentSessionsPage` (`/sessions`). Child progress/handicap (handicap gated on presence),
   read-only evaluations via `/api/juniors/:id/progress` (NOT `/api/evaluations`), session
-  requests list. Multi-child supported. **Deferred:** tournaments (RSVP/parent-approval
-  backend feature).
-  - ⚠️ **Backend-blocked (tracked for the next backend pass):**
-    1. `POST /api/booking-requests` doesn't derive `parent_id` from the JWT → the "Request a
-       session" submit will 500 until the backend sets it from the token.
-    2. `/api/juniors` exposes no child name to parents (and parents can't call `/api/users`)
-       → parent pages show "Your child" until the backend embeds the name.
+  requests list. Multi-child supported.
+  - ✅ **Backend fixes landed (merge `7454e09`) — parent now complete end-to-end:**
+    1. `POST /api/booking-requests` derives `parent_id` from the JWT (+ defaults status) →
+       "Request a session" submit returns 201. Verified via the Vite proxy path.
+    2. `/api/juniors` embeds `full_name` → `childName()` renders the real name (the pages were
+       already written to read it; no frontend change needed). Verified.
+  - **Still deferred:** parent tournaments UI (RSVP/approve-decline) — backend exists, UI not built.
 
 ### Next up
 - **Backend pass** (agreed "frontend now, backend next"): admin→coach junior assignment +
