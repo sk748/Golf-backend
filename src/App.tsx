@@ -18,6 +18,8 @@ import { CoachAttendancePage } from './pages/coach/CoachAttendancePage';
 import { CommitteeEvaluationsPage } from './pages/committee/CommitteeEvaluationsPage';
 import { ParentChildPage } from './pages/parent/ParentChildPage';
 import { ParentSessionsPage } from './pages/parent/ParentSessionsPage';
+import { TournamentsListPage } from './pages/tournaments/TournamentsListPage';
+import { TournamentDetailPage } from './pages/tournaments/TournamentDetailPage';
 
 export function App() {
   return (
@@ -49,6 +51,9 @@ export function App() {
         }
       >
         <Route path="/dashboard" element={<RoleDashboard />} />
+        {/* Tournaments — shared read-only list + detail for every signed-in role. */}
+        <Route path="/tournaments" element={<TournamentsListPage />} />
+        <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
         <Route
           path="/achievements"
           element={
