@@ -17,7 +17,7 @@ not `CLAUDE.md`, which stays locked.
 | 2 | Scoring, rounds & handicap (scorecard, /scores/sync, handicap history) | 🟡 |
 | 3 | Juniors: profiles, progress, band-conditional evaluations + sign-off | 🟡 |
 | 4 | Coaching: attendance, weekly schedule, session requests | ⬜ |
-| 5 | Tournaments (depends on backend tournaments domain) | ⬜ |
+| 5 | Tournaments (backend live; shared read-only list+detail shipped) | 🟡 |
 | 6 | Ship: states, a11y, responsive, prod build | ⬜ |
 | 7+ | Deferred (billing/participant groups, series polish, notifications, bulk import) | ⏸️ |
 
@@ -154,10 +154,19 @@ api-contract-auditor run.
        already written to read it; no frontend change needed). Verified.
   - **Still deferred:** parent tournaments UI (RSVP/approve-decline) — backend exists, UI not built.
 
-### Next up
-- **Backend pass** (agreed "frontend now, backend next"): admin→coach junior assignment +
-  `GET /api/coaches/:id/juniors`; tournament RSVP → parent-approval workflow; and the two
-  small parent fixes above (booking `parent_id`, child-name embed). Then unblock the
-  coach "my juniors" widget and the parent tournament + session-submit flows.
-- _(Later)_ Per-role **additional scope** (full feature completeness), and the coach
-  band-conditional **evaluation creation form** + coach sign-off (Phase 3 core).
+### Phase 5 — Tournaments (in progress)
+Backend domain is fully live and the two branches are unified (merge `7454e09`).
+- ✅ **Shared foundation shipped** (`98867f6`): read-only tournament **list + detail**
+  for every signed-in role (`/tournaments`, `/tournaments/:id`) — cards w/ format/status/
+  eligibility, detail w/ eligibility panel + divisions. `src/pages/tournaments/`. tsc+lint+
+  build green; contract-audit PASS; live proxy smoke green.
+- **Next tournament passes (not built):** player **RSVP** + parent **approve/decline**
+  (the bespoke flow — backend ready: player POST→interested, parent `/approve`+`/decline`);
+  admin/coach **create/edit**; **score entry + leaderboard**; match-play **bracket**;
+  external results; series standings.
+
+### Next up (other)
+- Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
+- _(Later)_ Per-role **additional scope**, and the coach band-conditional **evaluation
+  creation form** + coach sign-off (Phase 3 core). Pre-staging: retire dev `create_all`
+  in favour of `flask db upgrade` (migrations baseline now exists).
