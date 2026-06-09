@@ -266,7 +266,7 @@ def put_entry(eid):
 
 
 @tournaments_bp.route("/tournament-entries/<int:eid>", methods=["DELETE"])
-@require_roles("admin", "coach", "parent")
+@require_roles("admin", "coach", "parent", "player")
 def delete_entry_route(eid):
     caller = get_current_user()
     e = c.get_entry(eid)
@@ -274,6 +274,13 @@ def delete_entry_route(eid):
         return _not_found("Entry")
     if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Parents can only withdraw their own child's entry", 403)
+    # A player may cancel their OWN RSVP, but only while it's still interested
+    # (i.e. a parent hasn't approved/declined it yet).
+    if has_role(caller, "player"):
+        if not _junior_in_scope(caller, e.junior):
+            return _err("FORBIDDEN", "Players can only cancel their own RSVP", 403)
+        if (getattr(e.status, "value", e.status)) != "interested":
+            return _err("CONFLICT", "You can only cancel an RSVP a parent hasn't acted on yet", 409)
     c.delete_entry(e)
     return "", 204
 
