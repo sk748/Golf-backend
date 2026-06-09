@@ -37,6 +37,23 @@ def _not_found(resource="Resource"):
     return _err("NOT_FOUND", f"{resource} not found", 404)
 
 
+def _with_child_name(dumped, junior):
+    """Embed the child's name on a dumped junior profile.
+
+    SimpleModelSchema only serializes table columns, so the linked player's
+    name never reaches the client. Parents can't call /api/users to resolve it
+    themselves, so without this their pages can only show "Your child". Coach/
+    committee pages benefit too (one fewer join). Name isn't sensitive within
+    the app, so this is added for every caller, not just parents.
+    """
+    user = junior.user
+    if user is not None:
+        dumped["full_name"] = f"{user.first_name} {user.last_name}".strip()
+        dumped["first_name"] = user.first_name
+        dumped["last_name"] = user.last_name
+    return dumped
+
+
 # ── Junior Profiles ────────────────────────────────────────────────────────────
 
 @juniors_bp.route("/juniors", methods=["GET"])
@@ -54,7 +71,8 @@ def get_juniors():
         age_min=request.args.get("age_min", type=int),
         age_max=request.args.get("age_max", type=int),
     )
-    return _data(juniors_schema.dump(items), count=len(items))
+    dumped = [_with_child_name(d, j) for d, j in zip(juniors_schema.dump(items), items)]
+    return _data(dumped, count=len(items))
 
 
 @juniors_bp.route("/juniors", methods=["POST"])
@@ -80,7 +98,7 @@ def get_junior_route(junior_id):
     caller = get_current_user()
     if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
-    return _data(junior_schema.dump(junior))
+    return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
 @juniors_bp.route("/juniors/<int:junior_id>", methods=["PUT"])

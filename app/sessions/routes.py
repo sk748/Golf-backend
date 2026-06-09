@@ -13,6 +13,7 @@ from app.sessions.controllers import (
     list_booking_requests, get_booking_request, create_booking_request,
     update_booking_request, delete_booking_request,
 )
+from app.juniors.controllers import get_junior
 from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
 
 sessions_bp = Blueprint("sessions_bp", __name__, url_prefix="/api")
@@ -237,7 +238,20 @@ def get_booking_requests():
 @sessions_bp.route("/booking-requests", methods=["POST"])
 @require_roles("admin", "parent")
 def post_booking_request():
-    b = create_booking_request(request.get_json() or {})
+    caller = get_current_user()
+    data = request.get_json() or {}
+    # Parents may only request for their own child: derive parent_id from the
+    # token (it's nullable=False and the client can't be trusted to send it),
+    # and refuse a junior that isn't theirs.
+    if has_role(caller, "parent"):
+        data["parent_id"] = caller.id
+        junior = get_junior(data.get("junior_id"))
+        if junior is None or str(junior.parent_id) != str(caller.id):
+            return _err("FORBIDDEN", "Parents can only request sessions for their own child", 403)
+    # New requests start pending unless an admin says otherwise (status is
+    # nullable=False with no DB default).
+    data.setdefault("status", "pending")
+    b = create_booking_request(data)
     return _data(booking_schema.dump(b), 201)
 
 
