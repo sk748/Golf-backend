@@ -160,10 +160,14 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
   for every signed-in role (`/tournaments`, `/tournaments/:id`) — cards w/ format/status/
   eligibility, detail w/ eligibility panel + divisions. `src/pages/tournaments/`. tsc+lint+
   build green; contract-audit PASS; live proxy smoke green.
-- **Next tournament passes (not built):** player **RSVP** + parent **approve/decline**
-  (the bespoke flow — backend ready: player POST→interested, parent `/approve`+`/decline`);
-  admin/coach **create/edit**; **score entry + leaderboard**; match-play **bracket**;
-  external results; series standings.
+- ✅ **RSVP → parent-approval flow shipped** (`edf871e`, + backend self-cancel `475b545`):
+  player "I'm interested" → `interested`; parent **Register / Approve / Decline / Withdraw**
+  per child on the detail page; **"Tournament approvals"** queue on BOTH the parent dashboard
+  and `/my-child`; player can self-cancel an RSVP while still interested. Display-only
+  eligibility gating (backend authoritative). tsc+lint+build green; contract-audit PASS;
+  full lifecycle verified via proxy.
+- **Next tournament passes (not built):** admin/coach **create/edit** tournaments+divisions;
+  **score entry + leaderboard**; match-play **bracket**; external results; series standings.
 
 ### Next up (other)
 - Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
