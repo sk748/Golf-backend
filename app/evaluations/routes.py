@@ -7,8 +7,13 @@ from app.evaluations.controllers import (
     coach_sign, committee_sign, get_evaluation_summary,
 )
 from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user
+from app.audit.service import record, junior_label
 
 evaluations_bp = Blueprint("evaluations_bp", __name__, url_prefix="/api")
+
+
+def _eval_month(ev):
+    return ev.report_month.strftime("%B %Y") if ev.report_month else "monthly"
 
 
 def _data(data, status=200, count=None):
@@ -113,6 +118,9 @@ def coach_sign_route(evaluation_id):
     if err:
         status = 404 if "not found" in err.lower() else 403
         return _err("FORBIDDEN" if status == 403 else "NOT_FOUND", err, status)
+    record("evaluation.signed", actor=caller, target_type="evaluation",
+           target_id=ev.id, target_label=junior_label(ev.junior_id),
+           metadata={"month": _eval_month(ev)})
     return _data(evaluation_schema.dump(ev))
 
 
@@ -124,4 +132,7 @@ def committee_sign_route(evaluation_id):
     if err:
         status = 404 if "not found" in err.lower() else 403
         return _err("FORBIDDEN" if status == 403 else "NOT_FOUND", err, status)
+    record("evaluation.counter_signed", actor=caller, target_type="evaluation",
+           target_id=ev.id, target_label=junior_label(ev.junior_id),
+           metadata={"month": _eval_month(ev)})
     return _data(evaluation_schema.dump(ev))

@@ -190,23 +190,31 @@ def seed_reference_data():
                                           around_green_target=ag, putting_target=pt,
                                           nine_hole_target=nh))
 
-    # Two example internal tournaments tied to the Karen course (spec §10).
-    db.session.flush()  # ensure course.id is available
+    # ── Example junior tournaments (Tournaments spec §10) ─────────────────────
+    from datetime import date as _date
+    default_tee = TeeSet.query.filter_by(course_id=course.id, name="white", gender="men").first()
+    default_tee_id = default_tee.id if default_tee else None
+
     if not Tournament.query.filter_by(name="Karen Junior Challenge").first():
         db.session.add(Tournament(
-            name="Karen Junior Challenge", format="stableford", scoring_basis="net",
-            course_id=course.id, holes=18, start_date=date(2026, 6, 13),
+            name="Karen Junior Challenge",
+            format="stableford", scoring_basis="net",
+            course_id=course.id, tee_set_id=default_tee_id, holes=18,
+            start_date=_date(2026, 6, 1),
             counts_toward_handicap=True, status="registration_open",
             level_min=6, level_max=9,
-            description="Monthly net Stableford for the intermediate/elite levels; counts toward handicap.",
+            description="Mandatory monthly Stableford for Levels 6-9; counts toward handicap.",
         ))
-    if not Tournament.query.filter_by(name="Karen Junior Open – Beginners").first():
+
+    if not Tournament.query.filter_by(name="Karen Junior Open - Beginners").first():
         db.session.add(Tournament(
-            name="Karen Junior Open – Beginners", format="stroke_play", scoring_basis="gross",
-            course_id=course.id, holes=9, start_date=date(2026, 6, 20),
+            name="Karen Junior Open - Beginners",
+            format="stroke_play", scoring_basis="gross",
+            course_id=course.id, tee_set_id=default_tee_id, holes=9,
+            start_date=_date(2026, 4, 1),
             counts_toward_handicap=False, status="registration_open",
             level_min=1, level_max=5, age_min=5, age_max=12,
-            description="9-hole gross stroke play for beginners; does not count toward handicap.",
+            description="Beginner-friendly 9-hole stroke play, Levels 1-5 (does not count toward handicap).",
         ))
 
     db.session.commit()

@@ -19,7 +19,7 @@ def get_platform_stats():
 
     juniors = JuniorProfile.query.count()
     active_tournaments = Tournament.query.filter(
-        Tournament.status.in_(["registration_open", "registration_closed", "in_progress"])
+        Tournament.status.in_(["registration_open", "in_progress"])
     ).count()
     total_tournaments = Tournament.query.count()
     total_sessions = Session.query.count()

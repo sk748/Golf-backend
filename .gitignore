@@ -1,9 +1,24 @@
 venv
-.env.example
 .env
 
-# Claude Code local state (not shared)
+# Python
+__pycache__/
+*.py[cod]
+
+# Node / Vite (frontend)
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+.eslintcache
+
+# Editor / OS
+.DS_Store
+
+# Claude Code — per-checkout settings and worktrees (never committed)
 .claude/settings.json
 .claude/settings.local.json
-.claude/state.json
 .claude/worktrees/
+.claude/state.json

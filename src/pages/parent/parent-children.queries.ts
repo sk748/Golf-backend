@@ -1,0 +1,163 @@
+// TanStack Query hooks for the PARENT role's view of their own child/children.
+// All reads go through the shared api client (CLAUDE.md §2); query keys mirror
+// the resource path. The backend scopes every read to the signed-in parent
+// (parent_id = current user) — we never request other families' data.
+//
+// No WHS/handicap math here. These hooks only fetch + type data. Handicap is
+// conditional (not every child has one) — gate display on the value, never a
+// placeholder number.
+
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+
+import { api } from '../../lib/api';
+
+// ── Child profile ────────────────────────────────────────────────────────────
+// GET /api/juniors -> the parent's own child/children. The documented
+// JuniorProfile shape (src/types/api.ts) carries ids + level/band but no name.
+// The backend may embed the child's user details; we read them defensively and
+// fall back to a friendly label when absent (display-only — not fabricated).
+export interface ParentChild {
+  id: number;
+  user_id: string;
+  parent_id: string | null;
+  date_of_birth: string;
+  gender: string;
+  current_level: number;
+  band_id: number;
+  curriculum: string | null;
+  has_handicap: boolean;
+  handicap_index: number | null;
+  tournament_ready: boolean;
+  experience: string;
+  availability: string;
+  created_at: string;
+  updated_at: string;
+  // Optional, defensively read — the backend may embed the child's identity.
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  user?: {
+    id?: string;
+    full_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
+}
+
+// Best display name for a child, with a warm fallback when no name is exposed.
+export function childName(child: ParentChild | undefined): string {
+  if (!child) return 'Your child';
+  const direct =
+    child.full_name?.trim() ||
+    [child.first_name, child.last_name].filter(Boolean).join(' ').trim();
+  if (direct) return direct;
+  const nested =
+    child.user?.full_name?.trim() ||
+    [child.user?.first_name, child.user?.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  if (nested) return nested;
+  return 'Your child';
+}
+
+// GET /api/juniors — scoped by the backend to this parent's children.
+export function useMyChildren(): UseQueryResult<ParentChild[]> {
+  return useQuery({
+    queryKey: ['juniors', 'mine'],
+    queryFn: () => api.get<ParentChild[]>('/api/juniors'),
+  });
+}
+
+// ── Progress (handicap, band, attendance, embedded evaluations) ───────────────
+// GET /api/juniors/:id/progress. Parents read evaluation info from HERE — they
+// do NOT have access to /api/evaluations. Disabled until a child id is known.
+export interface ChildEvaluation {
+  report_month: string;
+  current_level: number;
+  assessment: string;
+  recommendation: string;
+  avg_score_9: number | null;
+  avg_score_18: number | null;
+  best_gross_score: number | null;
+}
+
+export interface ChildProgress {
+  junior_id: number;
+  current_level: number;
+  level_changes: { report_month: string; current_level: number }[];
+  evaluations: ChildEvaluation[];
+  attendance: {
+    present: number;
+    absent: number;
+    excused: number;
+    total: number;
+  };
+  benchmarks: {
+    id: number;
+    level_number: number;
+    full_swing_target: number;
+    around_green_target: number;
+    putting_target: number;
+    nine_hole_target: number;
+  }[];
+}
+
+export function useChildProgress(
+  juniorId?: number,
+): UseQueryResult<ChildProgress> {
+  return useQuery({
+    queryKey: ['juniors', juniorId, 'progress'],
+    queryFn: () => api.get<ChildProgress>(`/api/juniors/${juniorId}/progress`),
+    enabled: Boolean(juniorId),
+  });
+}
+
+// ── Monthly report ────────────────────────────────────────────────────────────
+// GET /api/juniors/:id/monthly-report?month=YYYY-MM-01. The exact body shape
+// isn't locked in src/types/api.ts; treat it as a loose record for read-only
+// display (we render known keys defensively and never recompute anything).
+export type ChildMonthlyReport = Record<string, unknown>;
+
+export function useChildMonthlyReport(
+  juniorId: number | undefined,
+  month: string | undefined,
+): UseQueryResult<ChildMonthlyReport> {
+  return useQuery({
+    queryKey: ['juniors', juniorId, 'monthly-report', month],
+    queryFn: () =>
+      api.get<ChildMonthlyReport>(`/api/juniors/${juniorId}/monthly-report`, {
+        month,
+      }),
+    enabled: Boolean(juniorId) && Boolean(month),
+  });
+}
+
+// ── Level bands (reference) ───────────────────────────────────────────────────
+// GET /api/level-bands — name/label, min/max level, min_sessions, description.
+export interface ParentLevelBand {
+  id: number;
+  name: string;
+  band_label: string;
+  min_level: number;
+  max_level: number;
+  min_sessions: number;
+  report_template: string;
+  description: string;
+}
+
+export function useLevelBands(): UseQueryResult<ParentLevelBand[]> {
+  return useQuery({
+    queryKey: ['level-bands'],
+    queryFn: () => api.get<ParentLevelBand[]>('/api/level-bands'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Find the band whose [min_level, max_level] window contains a level.
+export function bandForLevel(
+  bands: ParentLevelBand[] | undefined,
+  level: number,
+): ParentLevelBand | undefined {
+  return bands?.find((b) => level >= b.min_level && level <= b.max_level);
+}

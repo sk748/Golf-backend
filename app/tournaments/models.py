@@ -1,17 +1,19 @@
-"""Tournaments domain — fresh build per docs/Karen_Tournaments_Backend_Spec.md.
+"""
+Junior Tournaments domain — models.
 
-Phase 1 (core): tournaments, divisions, entries. The legacy "Rumble 2.0"
-match-play module that previously lived here has been retired (spec §3).
+Fresh module for the Junior Development Programme's competitions (internal events
+with full lifecycle, plus a lightweight external-result log). Replaces the retired
+"Rumble 2.0" module. Backend owns all competition scoring math (net, Stableford,
+positions, brackets) — see app/tournaments/scoring.py and the Tournaments spec §9.
 
-Scores/hole-scores (Phase 2), match-play bracket (Phase 3), external results
-(Phase 4) and series (Phase 5) are added in later phases.
+Reuses existing tables: users, junior_profiles, courses, tee_sets, holes, rounds.
 """
 
 from enum import Enum
 
 from sqlalchemy import (
-    CheckConstraint, Column, Date, ForeignKey, Integer, Numeric, String, Text, Boolean,
-    UniqueConstraint,
+    Boolean, CheckConstraint, Column, Date, ForeignKey,
+    Integer, Numeric, String, Text, UniqueConstraint,
 )
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
@@ -24,7 +26,7 @@ def enum_values(enum_class):
     return [item.value for item in enum_class]
 
 
-# ── Enums (single source — spec §4) ─────────────────────────────────────────────
+# ── Enums (single source — Tournaments spec §4) ────────────────────────────────
 
 class TournamentFormat(str, Enum):
     stroke_play = "stroke_play"
@@ -47,6 +49,28 @@ class TournamentStatus(str, Enum):
     cancelled = "cancelled"
 
 
+class EntryStatus(str, Enum):
+    # interested/declined extend the spec's lifecycle for the player-RSVP →
+    # parent-approval flow: a player expresses interest (interested), a parent
+    # approves (→ registered) or declines. Parent/admin/coach register directly.
+    interested = "interested"
+    registered = "registered"
+    confirmed = "confirmed"
+    withdrawn = "withdrawn"
+    declined = "declined"
+
+
+class ScoreStatus(str, Enum):
+    pending = "pending"
+    submitted = "submitted"
+    verified = "verified"
+
+
+class MatchStatus(str, Enum):
+    scheduled = "scheduled"
+    completed = "completed"
+
+
 class DivisionBasis(str, Enum):
     age = "age"
     gender = "gender"
@@ -55,19 +79,15 @@ class DivisionBasis(str, Enum):
     custom = "custom"
 
 
-class TournamentEntryStatus(str, Enum):
-    # Spec §4 has registered/confirmed/withdrawn. We extend it for the
-    # player-RSVP → parent-approval flow (Sam's design): a junior (player) can
-    # express interest themselves, which a parent then approves (-> registered)
-    # or declines. Parent/admin registering directly lands straight on registered.
-    interested = "interested"        # player-initiated RSVP, awaiting parent approval
-    registered = "registered"        # registered (parent/admin) or parent-approved RSVP
-    confirmed = "confirmed"          # admin/coach confirmed (e.g. eligible for bracket)
-    withdrawn = "withdrawn"
-    declined = "declined"            # parent declined the player's RSVP
+class ExternalEventType(str, Enum):
+    faldo_series = "faldo_series"
+    us_kids = "us_kids"
+    jgf = "jgf"
+    karen_open = "karen_open"
+    other = "other"
 
 
-# ── Tables ──────────────────────────────────────────────────────────────────────
+# ── 5.1 tournaments ────────────────────────────────────────────────────────────
 
 class Tournament(TimestampMixin, db.Model):
     __tablename__ = "tournaments"
@@ -94,13 +114,11 @@ class Tournament(TimestampMixin, db.Model):
         nullable=False,
         default=TournamentStatus.draft,
     )
-    # series grouping (§5.8) — plain nullable int for now; FK added with the
-    # series table in Phase 5.
-    series_id = Column(Integer, nullable=True)
+    series_id = Column(Integer, ForeignKey("series.id"), nullable=True)
     max_entrants = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
 
-    # Eligibility — all nullable means "no restriction" (spec §5.1 / §9).
+    # Eligibility (all nullable = no restriction)
     age_min = Column(Integer, nullable=True)
     age_max = Column(Integer, nullable=True)
     level_min = Column(Integer, nullable=True)
@@ -111,11 +129,14 @@ class Tournament(TimestampMixin, db.Model):
 
     course = relationship("Course")
     tee_set = relationship("TeeSet")
+    series = relationship("Series", backref="tournaments")
 
     __table_args__ = (
         CheckConstraint("holes IN (9, 18)", name="ck_tournaments_holes"),
     )
 
+
+# ── 5.2 tournament_divisions ───────────────────────────────────────────────────
 
 class TournamentDivision(TimestampMixin, db.Model):
     __tablename__ = "tournament_divisions"
@@ -124,15 +145,15 @@ class TournamentDivision(TimestampMixin, db.Model):
     tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=False)
     name = Column(String(255), nullable=False)
     basis = Column(
-        SQLEnum(DivisionBasis, values_callable=enum_values, name="tournament_division_basis"),
+        SQLEnum(DivisionBasis, values_callable=enum_values, name="division_basis"),
         nullable=False,
     )
     tee_set_id = Column(Integer, ForeignKey("tee_sets.id"), nullable=True)
 
-    # Auto-assign criteria (nullable).
+    # Auto-assign criteria (nullable)
     age_min = Column(Integer, nullable=True)
     age_max = Column(Integer, nullable=True)
-    gender = Column(String(10), nullable=True)
+    gender = Column(String(10), nullable=True)  # male / female
     level_min = Column(Integer, nullable=True)
     level_max = Column(Integer, nullable=True)
     handicap_min = Column(Numeric(4, 1), nullable=True)
@@ -141,6 +162,8 @@ class TournamentDivision(TimestampMixin, db.Model):
     tournament = relationship("Tournament", backref="divisions")
     tee_set = relationship("TeeSet")
 
+
+# ── 5.3 tournament_entries ─────────────────────────────────────────────────────
 
 class TournamentEntry(TimestampMixin, db.Model):
     __tablename__ = "tournament_entries"
@@ -151,17 +174,130 @@ class TournamentEntry(TimestampMixin, db.Model):
     division_id = Column(Integer, ForeignKey("tournament_divisions.id"), nullable=True)
     registered_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(
-        SQLEnum(TournamentEntryStatus, values_callable=enum_values, name="tournament_entry_status"),
+        SQLEnum(EntryStatus, values_callable=enum_values, name="entry_status"),
         nullable=False,
-        default=TournamentEntryStatus.registered,
+        default=EntryStatus.registered,
     )
     registered_at = Column(Date, nullable=False)
 
     tournament = relationship("Tournament", backref="entries")
-    junior = relationship("JuniorProfile", backref="tournament_entries")
+    junior = relationship("JuniorProfile")
     division = relationship("TournamentDivision", backref="entries")
-    registrar = relationship("User", foreign_keys=[registered_by])
+    registrar = relationship("User")
 
     __table_args__ = (
-        UniqueConstraint("tournament_id", "junior_id", name="uq_tournament_entries_tournament_junior"),
+        UniqueConstraint("tournament_id", "junior_id", name="uq_entries_tournament_junior"),
     )
+
+
+# ── 5.4 tournament_scores ──────────────────────────────────────────────────────
+
+class TournamentScore(TimestampMixin, db.Model):
+    __tablename__ = "tournament_scores"
+
+    id = Column(Integer, primary_key=True)
+    entry_id = Column(Integer, ForeignKey("tournament_entries.id"), nullable=False)
+    holes_played = Column(Integer, nullable=False)
+    gross_score = Column(Integer, nullable=False)
+    net_score = Column(Integer, nullable=True)
+    stableford_points = Column(Integer, nullable=True)
+    position = Column(Integer, nullable=True)
+    status = Column(
+        SQLEnum(ScoreStatus, values_callable=enum_values, name="score_status"),
+        nullable=False,
+        default=ScoreStatus.submitted,
+    )
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=True)
+
+    entry = relationship("TournamentEntry", backref="score")
+    round = relationship("Round")
+    hole_scores = relationship(
+        "TournamentHoleScore", backref="tournament_score",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("entry_id", name="uq_scores_entry"),
+    )
+
+
+# ── 5.5 tournament_hole_scores ─────────────────────────────────────────────────
+
+class TournamentHoleScore(TimestampMixin, db.Model):
+    __tablename__ = "tournament_hole_scores"
+
+    id = Column(Integer, primary_key=True)
+    tournament_score_id = Column(Integer, ForeignKey("tournament_scores.id"), nullable=False)
+    hole_number = Column(Integer, nullable=False)
+    strokes = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("tournament_score_id", "hole_number", name="uq_thole_score_hole"),
+        CheckConstraint("hole_number BETWEEN 1 AND 18", name="ck_thole_hole_number"),
+        CheckConstraint("strokes > 0", name="ck_thole_strokes"),
+    )
+
+
+# ── 5.6 tournament_matches ─────────────────────────────────────────────────────
+
+class TournamentMatch(TimestampMixin, db.Model):
+    __tablename__ = "tournament_matches"
+
+    id = Column(Integer, primary_key=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id"), nullable=False)
+    round_number = Column(Integer, nullable=False)
+    bracket_position = Column(Integer, nullable=False)
+    player_a_entry_id = Column(Integer, ForeignKey("tournament_entries.id"), nullable=True)
+    player_b_entry_id = Column(Integer, ForeignKey("tournament_entries.id"), nullable=True)
+    winner_entry_id = Column(Integer, ForeignKey("tournament_entries.id"), nullable=True)
+    result_text = Column(String(50), nullable=True)
+    scheduled_date = Column(Date, nullable=True)
+    status = Column(
+        SQLEnum(MatchStatus, values_callable=enum_values, name="match_status"),
+        nullable=False,
+        default=MatchStatus.scheduled,
+    )
+
+    tournament = relationship("Tournament", backref="matches")
+    player_a = relationship("TournamentEntry", foreign_keys=[player_a_entry_id])
+    player_b = relationship("TournamentEntry", foreign_keys=[player_b_entry_id])
+    winner = relationship("TournamentEntry", foreign_keys=[winner_entry_id])
+
+
+# ── 5.7 external_results ───────────────────────────────────────────────────────
+
+class ExternalResult(TimestampMixin, db.Model):
+    __tablename__ = "external_results"
+
+    id = Column(Integer, primary_key=True)
+    junior_id = Column(Integer, ForeignKey("junior_profiles.id"), nullable=False)
+    event_name = Column(String(255), nullable=False)
+    event_type = Column(
+        SQLEnum(ExternalEventType, values_callable=enum_values, name="external_event_type"),
+        nullable=False,
+    )
+    date = Column(Date, nullable=False)
+    holes = Column(Integer, nullable=True)
+    gross_score = Column(Integer, nullable=True)
+    position = Column(Integer, nullable=True)
+    field_size = Column(Integer, nullable=True)
+    counts_toward_handicap = Column(Boolean, nullable=False, default=False)
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=True)
+    logged_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    notes = Column(Text, nullable=True)
+
+    junior = relationship("JuniorProfile")
+    round = relationship("Round")
+    logger = relationship("User")
+
+
+# ── 5.8 series (optional / fast-follow) ────────────────────────────────────────
+
+class Series(TimestampMixin, db.Model):
+    __tablename__ = "series"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    year = Column(Integer, nullable=False)
+    points_scheme = Column(Text, nullable=True)  # JSON: position -> points
+    status = Column(String(50), nullable=True)

@@ -1,27 +1,20 @@
-"""Tournaments domain routes — Phase 1 (core).
-
-CRUD for tournaments and divisions, plus the entry registration + RSVP
-lifecycle. Scoring/leaderboard (Phase 2), bracket (Phase 3), external results
-(Phase 4) and series (Phase 5) are added later.
 """
+Junior Tournaments domain — routes.
 
-from datetime import date
+Blueprint owns: /api/tournaments, /api/tournament-divisions, /api/tournament-entries,
+/api/tournament-scores, /api/tournament-matches, /api/external-results, /api/series,
+plus computed actions and /api/juniors/<id>/competitions. Roles per spec §7.
+"""
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
 from app.database.database import db
-from app.juniors.models import JuniorProfile
-from app.tournaments.controllers import (
-    tournament_schema, tournaments_schema,
-    division_schema, divisions_schema,
-    entry_schema, entries_schema,
-    list_tournaments, get_tournament, create_tournament, update_tournament, delete_tournament,
-    list_divisions, get_division, create_division, update_division, delete_division,
-    list_entries, get_entry, create_entry, update_entry, delete_entry, set_entry_status,
+from app.utils.decorators import (
+    require_roles, require_auth, admin_only, get_current_user, has_role,
 )
-from app.tournaments.models import TournamentEntryStatus
-from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
+from app.tournaments import controllers as c
+from app.audit.service import record
 
 tournaments_bp = Blueprint("tournaments_bp", __name__, url_prefix="/api")
 
@@ -41,121 +34,20 @@ def _not_found(resource="Resource"):
     return _err("NOT_FOUND", f"{resource} not found", 404)
 
 
-def _status_value(obj):
-    return obj.status.value if hasattr(obj.status, "value") else str(obj.status)
+def _from_tuple(err):
+    code, message, status = err
+    return _err(code, message, status)
 
 
-# ── Tournaments ───────────────────────────────────────────────────────────────
+# ── Parent / player scoping helpers ────────────────────────────────────────────
 
-@tournaments_bp.route("/tournaments", methods=["GET"])
-@require_auth
-def get_tournaments():
-    items = list_tournaments(
-        status=request.args.get("status"),
-        format=request.args.get("format"),
-        series_id=request.args.get("series_id"),
-        date_from=request.args.get("date_from"),
-        date_to=request.args.get("date_to"),
-    )
-    return _data(tournaments_schema.dump(items), count=len(items))
-
-
-@tournaments_bp.route("/tournaments", methods=["POST"])
-@require_roles("admin", "coach")
-def post_tournament():
-    try:
-        t = create_tournament(request.get_json() or {})
-        return _data(tournament_schema.dump(t), 201)
-    except IntegrityError:
-        return _err("CONFLICT", "Tournament conflicts with existing data", 409)
-
-
-@tournaments_bp.route("/tournaments/<int:tournament_id>", methods=["GET"])
-@require_auth
-def get_tournament_route(tournament_id):
-    t = get_tournament(tournament_id)
-    if t is None:
-        return _not_found("Tournament")
-    return _data(tournament_schema.dump(t))
-
-
-@tournaments_bp.route("/tournaments/<int:tournament_id>", methods=["PUT"])
-@require_roles("admin", "coach")
-def put_tournament(tournament_id):
-    t = get_tournament(tournament_id)
-    if t is None:
-        return _not_found("Tournament")
-    try:
-        return _data(tournament_schema.dump(update_tournament(t, request.get_json() or {})))
-    except ValueError as exc:
-        return _err("VALIDATION_ERROR", str(exc), 400)
-
-
-@tournaments_bp.route("/tournaments/<int:tournament_id>", methods=["DELETE"])
-@admin_only
-def delete_tournament_route(tournament_id):
-    t = get_tournament(tournament_id)
-    if t is None:
-        return _not_found("Tournament")
-    delete_tournament(t)
-    return "", 204
-
-
-# ── Divisions ─────────────────────────────────────────────────────────────────
-
-@tournaments_bp.route("/tournament-divisions", methods=["GET"])
-@require_auth
-def get_divisions():
-    items = list_divisions(tournament_id=request.args.get("tournament_id"))
-    return _data(divisions_schema.dump(items), count=len(items))
-
-
-@tournaments_bp.route("/tournament-divisions", methods=["POST"])
-@require_roles("admin", "coach")
-def post_division():
-    try:
-        d = create_division(request.get_json() or {})
-        return _data(division_schema.dump(d), 201)
-    except IntegrityError:
-        return _err("CONFLICT", "Division conflicts with existing data", 409)
-
-
-@tournaments_bp.route("/tournament-divisions/<int:division_id>", methods=["GET"])
-@require_auth
-def get_division_route(division_id):
-    d = get_division(division_id)
-    if d is None:
-        return _not_found("Division")
-    return _data(division_schema.dump(d))
-
-
-@tournaments_bp.route("/tournament-divisions/<int:division_id>", methods=["PUT"])
-@require_roles("admin", "coach")
-def put_division(division_id):
-    d = get_division(division_id)
-    if d is None:
-        return _not_found("Division")
-    return _data(division_schema.dump(update_division(d, request.get_json() or {})))
-
-
-@tournaments_bp.route("/tournament-divisions/<int:division_id>", methods=["DELETE"])
-@admin_only
-def delete_division_route(division_id):
-    d = get_division(division_id)
-    if d is None:
-        return _not_found("Division")
-    delete_division(d)
-    return "", 204
-
-
-# ── Entries (registration + player-RSVP → parent-approval) ──────────────────────
-
-def _entry_in_scope(caller, junior):
-    """True if the caller may act on / see an entry for this junior."""
-    if has_role(caller, "admin", "committee"):
+def _junior_in_scope(caller, junior):
+    """True if caller may act on / view this junior. Admin/coach/committee: all.
+    Parent: own child. Player: self."""
+    if junior is None:
+        return False
+    if has_role(caller, "admin", "coach", "committee"):
         return True
-    if has_role(caller, "coach"):
-        return str(junior.coach_id) == str(caller.id)
     if has_role(caller, "parent"):
         return str(junior.parent_id) == str(caller.id)
     if has_role(caller, "player"):
@@ -163,26 +55,170 @@ def _entry_in_scope(caller, junior):
     return False
 
 
+def _get_junior(junior_id):
+    from app.juniors.models import JuniorProfile
+    return db.session.get(JuniorProfile, junior_id)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tournaments
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/tournaments", methods=["GET"])
+@require_auth
+def get_tournaments():
+    items = c.list_tournaments(
+        status=request.args.get("status"),
+        format=request.args.get("format"),
+        series_id=request.args.get("series_id"),
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
+    )
+    return _data(c.tournaments_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/tournaments", methods=["POST"])
+@require_roles("admin", "coach")
+def post_tournament():
+    try:
+        t = c.create_tournament(request.get_json() or {})
+    except IntegrityError:
+        db.session.rollback()
+        return _err("CONFLICT", "Tournament conflicts with existing data", 409)
+    record("tournament.created", actor=get_current_user(), target_type="tournament",
+           target_id=t.id, target_label=t.name)
+    return _data(c.tournament_schema.dump(t), 201)
+
+
+@tournaments_bp.route("/tournaments/<int:tid>", methods=["GET"])
+@require_auth
+def get_tournament_route(tid):
+    t = c.get_tournament(tid)
+    if t is None:
+        return _not_found("Tournament")
+    return _data(c.tournament_schema.dump(t))
+
+
+@tournaments_bp.route("/tournaments/<int:tid>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_tournament(tid):
+    t = c.get_tournament(tid)
+    if t is None:
+        return _not_found("Tournament")
+    return _data(c.tournament_schema.dump(c.update_tournament(t, request.get_json() or {})))
+
+
+@tournaments_bp.route("/tournaments/<int:tid>", methods=["DELETE"])
+@require_roles("admin", "coach")
+def delete_tournament_route(tid):
+    t = c.get_tournament(tid)
+    if t is None:
+        return _not_found("Tournament")
+    c.delete_tournament(t)
+    return "", 204
+
+
+@tournaments_bp.route("/tournaments/<int:tid>/scores", methods=["POST"])
+@require_roles("admin", "coach")
+def post_tournament_score(tid):
+    result, err = c.submit_score(tid, request.get_json() or {})
+    if err:
+        return _from_tuple(err)
+    return jsonify({"data": result}), 201
+
+
+@tournaments_bp.route("/tournaments/<int:tid>/leaderboard", methods=["GET"])
+@require_auth
+def get_leaderboard(tid):
+    result, err = c.leaderboard(tid)
+    if err:
+        return _from_tuple(err)
+    return _data(result)
+
+
+@tournaments_bp.route("/tournaments/<int:tid>/generate-bracket", methods=["POST"])
+@require_roles("admin", "coach")
+def post_generate_bracket(tid):
+    seed_mode = request.args.get("seed", "handicap")
+    result, err = c.generate_bracket(tid, seed_mode=seed_mode)
+    if err:
+        return _from_tuple(err)
+    return _data(result, 201)
+
+
+@tournaments_bp.route("/tournaments/<int:tid>/bracket", methods=["GET"])
+@require_auth
+def get_bracket_route(tid):
+    result, err = c.get_bracket(tid)
+    if err:
+        return _from_tuple(err)
+    return _data(result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Divisions
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/tournament-divisions", methods=["GET"])
+@require_auth
+def get_divisions():
+    items = c.list_divisions(tournament_id=request.args.get("tournament_id"))
+    return _data(c.divisions_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/tournament-divisions", methods=["POST"])
+@require_roles("admin", "coach")
+def post_division():
+    d = c.create_division(request.get_json() or {})
+    return _data(c.division_schema.dump(d), 201)
+
+
+@tournaments_bp.route("/tournament-divisions/<int:did>", methods=["GET"])
+@require_auth
+def get_division_route(did):
+    d = c.get_division(did)
+    if d is None:
+        return _not_found("Division")
+    return _data(c.division_schema.dump(d))
+
+
+@tournaments_bp.route("/tournament-divisions/<int:did>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_division(did):
+    d = c.get_division(did)
+    if d is None:
+        return _not_found("Division")
+    return _data(c.division_schema.dump(c.update_division(d, request.get_json() or {})))
+
+
+@tournaments_bp.route("/tournament-divisions/<int:did>", methods=["DELETE"])
+@require_roles("admin", "coach")
+def delete_division_route(did):
+    d = c.get_division(did)
+    if d is None:
+        return _not_found("Division")
+    c.delete_division(d)
+    return "", 204
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Entries (registration)
+# ══════════════════════════════════════════════════════════════════════════════
+
 @tournaments_bp.route("/tournament-entries", methods=["GET"])
 @require_auth
 def get_entries():
     caller = get_current_user()
-    kwargs = dict(
+    items = c.list_entries(
         tournament_id=request.args.get("tournament_id"),
         junior_id=request.args.get("junior_id"),
         division_id=request.args.get("division_id"),
         status=request.args.get("status"),
     )
-    # Scope the list to what this role may see.
-    if has_role(caller, "parent"):
-        kwargs["parent_id"] = caller.id
-    elif has_role(caller, "player"):
-        kwargs["player_user_id"] = caller.id
-    elif has_role(caller, "coach"):
-        kwargs["coach_id"] = caller.id
-    # admin / committee: no extra scope (see all)
-    items = list_entries(**kwargs)
-    return _data(entries_schema.dump(items), count=len(items))
+    # parents/players only see entries for juniors in their scope
+    if has_role(caller, "parent", "player"):
+        items = [e for e in items if _junior_in_scope(caller, e.junior)]
+    return _data(c.entries_schema.dump(items), count=len(items))
 
 
 @tournaments_bp.route("/tournament-entries", methods=["POST"])
@@ -190,116 +226,300 @@ def get_entries():
 def post_entry():
     caller = get_current_user()
     data = request.get_json() or {}
-    junior_id = data.get("junior_id")
-    tournament_id = data.get("tournament_id")
-    junior = db.session.get(JuniorProfile, junior_id) if junior_id else None
-    tournament = get_tournament(tournament_id) if tournament_id else None
-    if junior is None or tournament is None:
-        return _err("VALIDATION_ERROR", "tournament_id and a valid junior_id are required", 400)
-
-    # Scope: who may enter whom.
-    if not _entry_in_scope(caller, junior):
-        return _err("FORBIDDEN", "You can only register juniors in your own scope", 403)
-
-    # Registration must be open (spec §9).
-    if _status_value(tournament) != "registration_open":
-        return _err("CONFLICT", "Registration is not open for this tournament", 409)
-
-    # A player expressing interest starts at `interested` (awaiting a parent's
-    # approval); everyone else registers directly.
-    data["status"] = (
-        TournamentEntryStatus.interested.value
-        if has_role(caller, "player")
-        else TournamentEntryStatus.registered.value
-    )
-    data["registered_by"] = caller.id
-    data.setdefault("registered_at", date.today().isoformat())
-    # NOTE: per-tournament eligibility (age/level/handicap, spec §9) is NOT
-    # enforced in v1 by decision — fields exist; the frontend filters. Add the
-    # 400-on-ineligible gate here when eligibility enforcement is turned on.
-    try:
-        e = create_entry(data)
-        return _data(entry_schema.dump(e), 201)
-    except IntegrityError:
-        db.session.rollback()
-        return _err("CONFLICT", "This junior is already entered in this tournament", 409)
+    # Parents register their own child directly; players express interest in
+    # themselves (→ interested, pending a parent's approval).
+    if has_role(caller, "parent", "player"):
+        junior = _get_junior(data.get("junior_id"))
+        if not _junior_in_scope(caller, junior):
+            who = "their own child" if has_role(caller, "parent") else "themselves"
+            return _err("FORBIDDEN", f"You can only register {who}", 403)
+    if has_role(caller, "player"):
+        data["status"] = "interested"
+    entry, err = c.create_entry(data, registered_by=caller.id)
+    if err:
+        return _from_tuple(err)
+    return _data(c.entry_schema.dump(entry), 201)
 
 
-@tournaments_bp.route("/tournament-entries/<int:entry_id>", methods=["GET"])
+@tournaments_bp.route("/tournament-entries/<int:eid>", methods=["GET"])
 @require_auth
-def get_entry_route(entry_id):
-    e = get_entry(entry_id)
-    if e is None:
-        return _not_found("Entry")
+def get_entry_route(eid):
     caller = get_current_user()
-    if not _entry_in_scope(caller, e.junior):
-        return _err("FORBIDDEN", "You cannot view this entry", 403)
-    return _data(entry_schema.dump(e))
-
-
-@tournaments_bp.route("/tournament-entries/<int:entry_id>", methods=["PUT"])
-@require_roles("admin", "coach")
-def put_entry(entry_id):
-    e = get_entry(entry_id)
+    e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    data = request.get_json() or {}
-    allowed = {"division_id", "status"}
-    bad = set(data) - allowed
-    if bad:
-        return _err("VALIDATION_ERROR", f"Unsupported fields: {', '.join(sorted(bad))}", 400)
-    if "status" in data and data["status"] not in [s.value for s in TournamentEntryStatus]:
-        return _err("VALIDATION_ERROR", "Invalid entry status", 400)
-    return _data(entry_schema.dump(update_entry(e, data)))
+    if has_role(caller, "parent", "player") and not _junior_in_scope(caller, e.junior):
+        return _err("FORBIDDEN", "Out of scope", 403)
+    return _data(c.entry_schema.dump(e))
 
 
-@tournaments_bp.route("/tournament-entries/<int:entry_id>/approve", methods=["PUT"])
-@require_roles("admin", "parent")
-def approve_entry(entry_id):
-    e = get_entry(entry_id)
-    if e is None:
-        return _not_found("Entry")
-    caller = get_current_user()
-    if has_role(caller, "parent") and str(e.junior.parent_id) != str(caller.id):
-        return _err("FORBIDDEN", "Parents can only approve their own child's RSVP", 403)
-    if _status_value(e) != TournamentEntryStatus.interested.value:
-        return _err("CONFLICT", "Only an interested (RSVP) entry can be approved", 409)
-    return _data(entry_schema.dump(set_entry_status(e, TournamentEntryStatus.registered.value)))
-
-
-@tournaments_bp.route("/tournament-entries/<int:entry_id>/decline", methods=["PUT"])
-@require_roles("admin", "parent")
-def decline_entry(entry_id):
-    e = get_entry(entry_id)
-    if e is None:
-        return _not_found("Entry")
-    caller = get_current_user()
-    if has_role(caller, "parent") and str(e.junior.parent_id) != str(caller.id):
-        return _err("FORBIDDEN", "Parents can only decline their own child's RSVP", 403)
-    if _status_value(e) != TournamentEntryStatus.interested.value:
-        return _err("CONFLICT", "Only an interested (RSVP) entry can be declined", 409)
-    return _data(entry_schema.dump(set_entry_status(e, TournamentEntryStatus.declined.value)))
-
-
-@tournaments_bp.route("/tournament-entries/<int:entry_id>/withdraw", methods=["PUT"])
+@tournaments_bp.route("/tournament-entries/<int:eid>", methods=["PUT"])
 @require_roles("admin", "coach", "parent")
-def withdraw_entry(entry_id):
-    e = get_entry(entry_id)
-    if e is None:
-        return _not_found("Entry")
+def put_entry(eid):
     caller = get_current_user()
-    if has_role(caller, "parent") and str(e.junior.parent_id) != str(caller.id):
-        return _err("FORBIDDEN", "Parents can only withdraw their own child's entry", 403)
-    if has_role(caller, "coach") and str(e.junior.coach_id) != str(caller.id):
-        return _err("FORBIDDEN", "Coaches can only withdraw their own juniors' entries", 403)
-    return _data(entry_schema.dump(set_entry_status(e, TournamentEntryStatus.withdrawn.value)))
-
-
-@tournaments_bp.route("/tournament-entries/<int:entry_id>", methods=["DELETE"])
-@admin_only
-def delete_entry_route(entry_id):
-    e = get_entry(entry_id)
+    e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    delete_entry(e)
+    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+        return _err("FORBIDDEN", "Parents can only manage their own child's entry", 403)
+    return _data(c.entry_schema.dump(c.update_entry(e, request.get_json() or {})))
+
+
+@tournaments_bp.route("/tournament-entries/<int:eid>", methods=["DELETE"])
+@require_roles("admin", "coach", "parent")
+def delete_entry_route(eid):
+    caller = get_current_user()
+    e = c.get_entry(eid)
+    if e is None:
+        return _not_found("Entry")
+    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+        return _err("FORBIDDEN", "Parents can only withdraw their own child's entry", 403)
+    c.delete_entry(e)
     return "", 204
+
+
+@tournaments_bp.route("/tournament-entries/<int:eid>/approve", methods=["PUT"])
+@require_roles("admin", "parent")
+def approve_entry(eid):
+    """Parent (or admin) approves a player's RSVP: interested → registered."""
+    caller = get_current_user()
+    e = c.get_entry(eid)
+    if e is None:
+        return _not_found("Entry")
+    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+        return _err("FORBIDDEN", "Parents can only approve their own child's RSVP", 403)
+    if (getattr(e.status, "value", e.status)) != "interested":
+        return _err("CONFLICT", "Only an interested (RSVP) entry can be approved", 409)
+    return _data(c.entry_schema.dump(c.update_entry(e, {"status": "registered"})))
+
+
+@tournaments_bp.route("/tournament-entries/<int:eid>/decline", methods=["PUT"])
+@require_roles("admin", "parent")
+def decline_entry(eid):
+    """Parent (or admin) declines a player's RSVP: interested → declined."""
+    caller = get_current_user()
+    e = c.get_entry(eid)
+    if e is None:
+        return _not_found("Entry")
+    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+        return _err("FORBIDDEN", "Parents can only decline their own child's RSVP", 403)
+    if (getattr(e.status, "value", e.status)) != "interested":
+        return _err("CONFLICT", "Only an interested (RSVP) entry can be declined", 409)
+    return _data(c.entry_schema.dump(c.update_entry(e, {"status": "declined"})))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Scores (read / verify; creation is via /tournaments/:id/scores)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/tournament-scores", methods=["GET"])
+@require_auth
+def get_scores():
+    items = c.list_scores(
+        tournament_id=request.args.get("tournament_id"),
+        entry_id=request.args.get("entry_id"),
+    )
+    return _data(c.scores_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/tournament-scores/<int:sid>", methods=["GET"])
+@require_auth
+def get_score_route(sid):
+    sc = c.get_score(sid)
+    if sc is None:
+        return _not_found("Score")
+    return _data(c.score_schema.dump(sc))
+
+
+@tournaments_bp.route("/tournament-scores/<int:sid>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_score(sid):
+    sc = c.get_score(sid)
+    if sc is None:
+        return _not_found("Score")
+    return _data(c.score_schema.dump(c.update_score(sc, request.get_json() or {})))
+
+
+@tournaments_bp.route("/tournament-scores/<int:sid>", methods=["DELETE"])
+@admin_only
+def delete_score_route(sid):
+    sc = c.get_score(sid)
+    if sc is None:
+        return _not_found("Score")
+    c.delete_score(sc)
+    return "", 204
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Matches (match play)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/tournament-matches", methods=["GET"])
+@require_auth
+def get_matches():
+    items = c.list_matches(
+        tournament_id=request.args.get("tournament_id"),
+        round_number=request.args.get("round_number"),
+        status=request.args.get("status"),
+    )
+    return _data(c.matches_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/tournament-matches/<int:mid>", methods=["GET"])
+@require_auth
+def get_match_route(mid):
+    result, err = c.match_detail(mid)
+    if err:
+        return _from_tuple(err)
+    return _data(result)
+
+
+@tournaments_bp.route("/tournament-matches/<int:mid>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_match(mid):
+    m = c.get_match(mid)
+    if m is None:
+        return _not_found("Match")
+    result, err = c.update_match(m, request.get_json() or {})
+    if err:
+        return _from_tuple(err)
+    return _data(c.match_schema.dump(result))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# External results
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/external-results", methods=["GET"])
+@require_auth
+def get_external_results():
+    caller = get_current_user()
+    items = c.list_external_results(
+        junior_id=request.args.get("junior_id"),
+        event_type=request.args.get("event_type"),
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
+    )
+    if has_role(caller, "parent", "player"):
+        items = [r for r in items if _junior_in_scope(caller, r.junior)]
+    return _data(c.externals_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/external-results", methods=["POST"])
+@require_roles("admin", "coach", "parent")
+def post_external_result():
+    caller = get_current_user()
+    data = request.get_json() or {}
+    if has_role(caller, "parent"):
+        junior = _get_junior(data.get("junior_id"))
+        if not _junior_in_scope(caller, junior):
+            return _err("FORBIDDEN", "Parents can only log results for their own child", 403)
+    r = c.create_external_result(data, logged_by=caller.id)
+    return _data(c.external_schema.dump(r), 201)
+
+
+@tournaments_bp.route("/external-results/<int:rid>", methods=["GET"])
+@require_auth
+def get_external_result_route(rid):
+    caller = get_current_user()
+    r = c.get_external_result(rid)
+    if r is None:
+        return _not_found("External result")
+    if has_role(caller, "parent", "player") and not _junior_in_scope(caller, r.junior):
+        return _err("FORBIDDEN", "Out of scope", 403)
+    return _data(c.external_schema.dump(r))
+
+
+@tournaments_bp.route("/external-results/<int:rid>", methods=["PUT"])
+@require_roles("admin", "coach")
+def put_external_result(rid):
+    r = c.get_external_result(rid)
+    if r is None:
+        return _not_found("External result")
+    return _data(c.external_schema.dump(c.update_external_result(r, request.get_json() or {})))
+
+
+@tournaments_bp.route("/external-results/<int:rid>", methods=["DELETE"])
+@require_roles("admin", "coach")
+def delete_external_result_route(rid):
+    r = c.get_external_result(rid)
+    if r is None:
+        return _not_found("External result")
+    c.delete_external_result(r)
+    return "", 204
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Series + standings
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/series", methods=["GET"])
+@require_auth
+def get_series_list():
+    items = c.list_series(year=request.args.get("year"))
+    return _data(c.series_list_schema.dump(items), count=len(items))
+
+
+@tournaments_bp.route("/series", methods=["POST"])
+@admin_only
+def post_series():
+    s = c.create_series(request.get_json() or {})
+    return _data(c.series_schema.dump(s), 201)
+
+
+@tournaments_bp.route("/series/<int:sid>", methods=["GET"])
+@require_auth
+def get_series_route(sid):
+    s = c.get_series(sid)
+    if s is None:
+        return _not_found("Series")
+    return _data(c.series_schema.dump(s))
+
+
+@tournaments_bp.route("/series/<int:sid>", methods=["PUT"])
+@admin_only
+def put_series(sid):
+    s = c.get_series(sid)
+    if s is None:
+        return _not_found("Series")
+    return _data(c.series_schema.dump(c.update_series(s, request.get_json() or {})))
+
+
+@tournaments_bp.route("/series/<int:sid>", methods=["DELETE"])
+@admin_only
+def delete_series_route(sid):
+    s = c.get_series(sid)
+    if s is None:
+        return _not_found("Series")
+    c.delete_series(s)
+    return "", 204
+
+
+@tournaments_bp.route("/series/<int:sid>/standings", methods=["GET"])
+@require_auth
+def get_series_standings(sid):
+    result, err = c.series_standings(sid)
+    if err:
+        return _from_tuple(err)
+    return _data(result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Combined junior competition history (feeds monthly evaluation stats)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@tournaments_bp.route("/juniors/<int:junior_id>/competitions", methods=["GET"])
+@require_auth
+def get_junior_competitions(junior_id):
+    caller = get_current_user()
+    junior = _get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    if not _junior_in_scope(caller, junior):
+        return _err("FORBIDDEN", "Out of scope", 403)
+    result = c.junior_competitions(
+        junior_id,
+        date_from=request.args.get("from"),
+        date_to=request.args.get("to"),
+    )
+    return _data(result)
