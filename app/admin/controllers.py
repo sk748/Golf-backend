@@ -5,7 +5,7 @@ from app.database.database import db
 def get_platform_stats():
     """Aggregate counts used by the AdminDashboard page."""
     from app.juniors.models import JuniorProfile, LevelBand
-    from app.tournaments.models import Tournament, Match
+    from app.tournaments.models import Tournament
     from app.sessions.models import Session, Class
     from app.evaluations.models import Evaluation
     from app.rounds.models import Round
@@ -19,7 +19,7 @@ def get_platform_stats():
 
     juniors = JuniorProfile.query.count()
     active_tournaments = Tournament.query.filter(
-        Tournament.status.in_(["round_robin", "knockout"])
+        Tournament.status.in_(["registration_open", "registration_closed", "in_progress"])
     ).count()
     total_tournaments = Tournament.query.count()
     total_sessions = Session.query.count()
