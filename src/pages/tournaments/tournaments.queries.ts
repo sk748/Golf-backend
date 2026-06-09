@@ -9,7 +9,13 @@
 // (handicap_min/max) dump as numbers, Dates dump as ISO strings. We still read
 // defensively and never recompute any scoring/handicap math here.
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
 
@@ -112,6 +118,135 @@ export function useTournamentDivisions(
         tournament_id: tournamentId,
       }),
     enabled: Number.isFinite(tournamentId),
+  });
+}
+
+// ── Mutation payload types ──────────────────────────────────────────────────────
+// Mirror the backend POST/PUT bodies. All optionals are omitted (not sent as "")
+// when unset; numeric eligibility uses null to clear a previously-set value on
+// update. The form layer is responsible for producing a clean payload.
+
+export interface TournamentInput {
+  name: string;
+  format: TournamentFormat;
+  holes: number; // 9 | 18
+  start_date: string; // ISO YYYY-MM-DD
+  scoring_basis?: ScoringBasis;
+  course_id?: number | null;
+  tee_set_id?: number | null;
+  end_date?: string | null;
+  counts_toward_handicap?: boolean;
+  max_entrants?: number | null;
+  description?: string | null;
+  age_min?: number | null;
+  age_max?: number | null;
+  level_min?: number | null;
+  level_max?: number | null;
+  handicap_min?: number | null;
+  handicap_max?: number | null;
+  handicap_required?: boolean;
+}
+
+export interface DivisionInput {
+  tournament_id: number;
+  name: string;
+  basis: DivisionBasis;
+  tee_set_id?: number | null;
+  age_min?: number | null;
+  age_max?: number | null;
+  gender?: 'male' | 'female' | null;
+  level_min?: number | null;
+  level_max?: number | null;
+  handicap_min?: number | null;
+  handicap_max?: number | null;
+}
+
+// ── Mutation hooks ────────────────────────────────────────────────────────────
+
+// POST /api/tournaments — create. Returns the created tournament (with id).
+export function useCreateTournament(): UseMutationResult<
+  Tournament,
+  unknown,
+  TournamentInput
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TournamentInput) =>
+      api.post<Tournament>('/api/tournaments', body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tournaments'] });
+    },
+  });
+}
+
+// PUT /api/tournaments/:id — partial update (also used for status changes).
+export function useUpdateTournament(): UseMutationResult<
+  Tournament,
+  unknown,
+  { id: number; body: Partial<TournamentInput> & { status?: TournamentStatus } }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      api.put<Tournament>(`/api/tournaments/${id}`, body),
+    onSuccess: (_data, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['tournaments'] });
+      void qc.invalidateQueries({ queryKey: ['tournament', id] });
+      void qc.invalidateQueries({ queryKey: ['tournament', id, 'leaderboard'] });
+    },
+  });
+}
+
+// POST /api/tournament-divisions — create.
+export function useCreateDivision(): UseMutationResult<
+  TournamentDivision,
+  unknown,
+  DivisionInput
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: DivisionInput) =>
+      api.post<TournamentDivision>('/api/tournament-divisions', body),
+    onSuccess: (_data, body) => {
+      void qc.invalidateQueries({
+        queryKey: ['tournament', body.tournament_id, 'divisions'],
+      });
+    },
+  });
+}
+
+// PUT /api/tournament-divisions/:id — partial update.
+export function useUpdateDivision(): UseMutationResult<
+  TournamentDivision,
+  unknown,
+  { id: number; tournamentId: number; body: Partial<DivisionInput> }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      api.put<TournamentDivision>(`/api/tournament-divisions/${id}`, body),
+    onSuccess: (_data, { tournamentId }) => {
+      void qc.invalidateQueries({
+        queryKey: ['tournament', tournamentId, 'divisions'],
+      });
+    },
+  });
+}
+
+// DELETE /api/tournament-divisions/:id.
+export function useDeleteDivision(): UseMutationResult<
+  void,
+  unknown,
+  { id: number; tournamentId: number }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) => api.del<void>(`/api/tournament-divisions/${id}`),
+    onSuccess: (_data, { tournamentId }) => {
+      void qc.invalidateQueries({
+        queryKey: ['tournament', tournamentId, 'divisions'],
+      });
+    },
   });
 }
 

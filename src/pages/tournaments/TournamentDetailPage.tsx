@@ -46,8 +46,10 @@ import {
   statusTone,
   useTournament,
   useTournamentDivisions,
+  useUpdateTournament,
   type Tournament,
   type TournamentDivision,
+  type TournamentStatus,
 } from './tournaments.queries';
 import {
   columnValue,
@@ -848,6 +850,145 @@ function ScoreEntryLink({ t }: { t: Tournament }) {
   );
 }
 
+// ── Admin / coach controls: Edit link + status lifecycle ──────────────────────
+// The backend does NOT validate status transitions, so the UI only offers
+// sensible next steps. Lifecycle:
+//   draft               → Open registration
+//   registration_open   → Close registration, Start
+//   registration_closed → Start, Reopen registration
+//   in_progress         → Complete
+//   (any non-terminal)  → Cancel
+//   completed/cancelled → terminal (no actions)
+
+interface StatusAction {
+  to: TournamentStatus;
+  label: string;
+  variant?: 'primary' | 'ghost' | 'danger' | 'gold';
+  confirm?: string;
+}
+
+function statusActions(status: TournamentStatus): StatusAction[] {
+  switch (status) {
+    case 'draft':
+      return [{ to: 'registration_open', label: 'Open registration' }];
+    case 'registration_open':
+      return [
+        { to: 'registration_closed', label: 'Close registration', variant: 'ghost' },
+        { to: 'in_progress', label: 'Start', variant: 'gold' },
+      ];
+    case 'registration_closed':
+      return [
+        { to: 'in_progress', label: 'Start', variant: 'gold' },
+        { to: 'registration_open', label: 'Reopen registration', variant: 'ghost' },
+      ];
+    case 'in_progress':
+      return [
+        {
+          to: 'completed',
+          label: 'Complete',
+          variant: 'primary',
+          confirm:
+            'Mark this tournament complete? Final standings will be locked in.',
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
+function isTerminal(status: TournamentStatus): boolean {
+  return status === 'completed' || status === 'cancelled';
+}
+
+function AdminControls({ t }: { t: Tournament }) {
+  const { user } = useAuth();
+  const update = useUpdateTournament();
+  if (user?.role !== 'admin' && user?.role !== 'coach') return null;
+
+  const actions = statusActions(t.status);
+  const terminal = isTerminal(t.status);
+
+  const apply = (to: TournamentStatus, confirmMsg?: string) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    update.mutate({ id: t.id, body: { status: to } });
+  };
+
+  return (
+    <GlassCard className="mt-6 overflow-hidden" data-testid="admin-controls">
+      <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
+        <ShieldCheck className="h-4 w-4 text-azure" aria-hidden />
+        <h2 className="text-sm font-bold uppercase tracking-widest text-azure">
+          Manage event
+        </h2>
+      </div>
+      <div className="px-5 py-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate">Status</span>
+          <Badge tone={statusTone(t.status)} shape="pill">
+            {statusLabel(t.status)}
+          </Badge>
+          <Link to={`/tournaments/${t.id}/edit`} className="ml-auto" data-testid="edit-tournament-link">
+            <Button variant="ghost" size="sm">
+              <PencilLine className="h-4 w-4" aria-hidden />
+              Edit details
+            </Button>
+          </Link>
+        </div>
+
+        {terminal ? (
+          <p className="mt-4 text-sm text-slate" data-testid="status-terminal">
+            This event is {statusLabel(t.status).toLowerCase()} — no further status
+            changes.
+          </p>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center gap-2" data-testid="status-actions">
+            {actions.map((a) => (
+              <Button
+                key={a.to}
+                variant={a.variant ?? 'primary'}
+                size="sm"
+                disabled={update.isPending}
+                onClick={() => apply(a.to, a.confirm)}
+                data-testid={`status-to-${a.to}`}
+              >
+                {update.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                ) : null}
+                {a.label}
+              </Button>
+            ))}
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={update.isPending}
+              onClick={() =>
+                apply(
+                  'cancelled',
+                  'Cancel this tournament? This will mark it cancelled for everyone.',
+                )
+              }
+              data-testid="status-to-cancelled"
+            >
+              <X className="h-4 w-4" aria-hidden />
+              Cancel event
+            </Button>
+          </div>
+        )}
+
+        {update.isError ? (
+          <p
+            role="alert"
+            className="mt-3 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+            data-testid="status-error"
+          >
+            {mutationMessage(update.error)}
+          </p>
+        ) : null}
+      </div>
+    </GlassCard>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TournamentDetailPage() {
@@ -937,6 +1078,9 @@ export function TournamentDetailPage() {
               <ScoreEntryLink t={t} />
             </div>
           </div>
+
+          {/* Admin/coach: edit + status lifecycle */}
+          <AdminControls t={t} />
 
           {/* Description */}
           {t.description && (

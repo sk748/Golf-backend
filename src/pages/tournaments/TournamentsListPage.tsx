@@ -9,12 +9,15 @@ import {
   ChevronRight,
   Flag,
   Loader2,
+  Plus,
   Trophy,
   UserCheck,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
+import { useAuth } from '../../auth/useAuth';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import {
   eligibilitySummary,
@@ -124,6 +127,8 @@ function SkeletonGrid() {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export function TournamentsListPage() {
+  const { user } = useAuth();
+  const canCreate = user?.role === 'admin' || user?.role === 'coach';
   const [status, setStatus] = useState('');
   const [format, setFormat] = useState('');
 
@@ -141,9 +146,19 @@ export function TournamentsListPage() {
       <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
         Junior programme
       </p>
-      <div className="mt-1 flex items-center gap-2">
-        <Trophy className="h-6 w-6 text-gold" aria-hidden />
-        <h1 className="text-2xl font-black text-silver">Tournaments</h1>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-6 w-6 text-gold" aria-hidden />
+          <h1 className="text-2xl font-black text-silver">Tournaments</h1>
+        </div>
+        {canCreate ? (
+          <Link to="/tournaments/new" data-testid="create-tournament-link">
+            <Button size="sm">
+              <Plus className="h-4 w-4" aria-hidden />
+              Create tournament
+            </Button>
+          </Link>
+        ) : null}
       </div>
       <p className="mt-2 max-w-2xl text-sm text-slate">
         Club competitions for the Junior Development Programme — formats, dates,
