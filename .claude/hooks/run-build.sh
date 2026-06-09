@@ -18,10 +18,26 @@ case "$path" in
   *) exit 0 ;;
 esac
 
-cd "${CLAUDE_PROJECT_DIR:-.}" 2>/dev/null || exit 0
-command -v npx >/dev/null 2>&1 || { echo "npx not found; skipping type check." >&2; exit 0; }
+# Find the project that owns this file: walk up from the edited file's dir to the
+# nearest ancestor with a local tsc (node_modules/.bin/tsc). The frontend lives in
+# a git worktree, not in CLAUDE_PROJECT_DIR, so we must locate the toolchain by the
+# file's own path rather than assuming the project root.
+dir=$(dirname "$path")
+root=""
+while [ "$dir" != "/" ] && [ -n "$dir" ]; do
+  if [ -x "$dir/node_modules/.bin/tsc" ]; then
+    root="$dir"
+    break
+  fi
+  dir=$(dirname "$dir")
+done
 
-out=$(npx tsc -b --noEmit 2>&1)
+# No local TypeScript toolchain found — nothing to check, skip rather than block.
+[ -z "$root" ] && exit 0
+
+cd "$root" 2>/dev/null || exit 0
+
+out=$("$root/node_modules/.bin/tsc" -b --noEmit 2>&1)
 status=$?
 
 if [ "$status" -ne 0 ]; then

@@ -1,4 +1,16 @@
-import { BarChart3, LayoutDashboard, Map, ScrollText, Trophy, Users } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarDays,
+  CalendarPlus,
+  ClipboardCheck,
+  ClipboardList,
+  LayoutDashboard,
+  Map,
+  ScrollText,
+  TrendingUp,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../../types/api';
 
@@ -23,9 +35,20 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
   ],
-  coach: [dashboard],
-  committee: [dashboard],
-  parent: [dashboard],
+  coach: [
+    dashboard,
+    { to: '/schedule', label: 'Schedule', icon: CalendarDays },
+    { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
+  ],
+  committee: [
+    dashboard,
+    { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
+  ],
+  parent: [
+    dashboard,
+    { to: '/my-child', label: 'My child', icon: TrendingUp },
+    { to: '/sessions', label: 'Coaching', icon: CalendarPlus },
+  ],
   player: [
     dashboard,
     { to: '/progress', label: 'Progress', icon: BarChart3 },

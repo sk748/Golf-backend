@@ -13,6 +13,11 @@ import { PlayerHandicapPage } from './pages/player/PlayerHandicapPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
+import { CoachSchedulePage } from './pages/coach/CoachSchedulePage';
+import { CoachAttendancePage } from './pages/coach/CoachAttendancePage';
+import { CommitteeEvaluationsPage } from './pages/committee/CommitteeEvaluationsPage';
+import { ParentChildPage } from './pages/parent/ParentChildPage';
+import { ParentSessionsPage } from './pages/parent/ParentSessionsPage';
 
 export function App() {
   return (
@@ -89,6 +94,46 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminCoursesPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/schedule"
+          element={
+            <RequireRole roles={['coach']}>
+              <CoachSchedulePage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/attendance"
+          element={
+            <RequireRole roles={['coach']}>
+              <CoachAttendancePage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/evaluations"
+          element={
+            <RequireRole roles={['committee']}>
+              <CommitteeEvaluationsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/my-child"
+          element={
+            <RequireRole roles={['parent']}>
+              <ParentChildPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/sessions"
+          element={
+            <RequireRole roles={['parent']}>
+              <ParentSessionsPage />
             </RequireRole>
           }
         />
