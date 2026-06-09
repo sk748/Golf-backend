@@ -8,7 +8,7 @@ from app.juniors.controllers import (
     badge_schema, badges_schema,
     junior_badge_schema, junior_badges_schema,
     list_juniors, get_junior, create_junior, update_junior, delete_junior,
-    get_junior_progress, get_monthly_report,
+    assign_coach, get_junior_progress, get_monthly_report,
     list_level_bands, get_level_band, create_level_band, update_level_band, delete_level_band,
     list_level_benchmarks, get_level_benchmark, create_level_benchmark,
     update_level_benchmark, delete_level_benchmark,
@@ -70,6 +70,7 @@ def get_juniors():
         current_level=request.args.get("current_level"),
         age_min=request.args.get("age_min", type=int),
         age_max=request.args.get("age_max", type=int),
+        coach_id=request.args.get("coach_id"),
     )
     dumped = [_with_child_name(d, j) for d, j in zip(juniors_schema.dump(items), items)]
     return _data(dumped, count=len(items))
@@ -122,6 +123,34 @@ def delete_junior_route(junior_id):
         return _not_found("Junior")
     delete_junior(junior)
     return "", 204
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/coach", methods=["PUT"])
+@admin_only
+def assign_junior_coach(junior_id):
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    data = request.get_json() or {}
+    if "coach_id" not in data:
+        return _err("VALIDATION_ERROR", "coach_id is required (use null to unassign)", 400)
+    try:
+        assign_coach(junior, data["coach_id"])
+    except ValueError as exc:
+        return _err("VALIDATION_ERROR", str(exc), 400)
+    return _data(_with_child_name(junior_schema.dump(junior), junior))
+
+
+@juniors_bp.route("/coaches/<coach_id>/juniors", methods=["GET"])
+@require_roles("admin", "coach", "committee")
+def coach_juniors(coach_id):
+    # Coaches can only see their own assigned juniors; admin/committee see any.
+    caller = get_current_user()
+    if has_role(caller, "coach") and str(caller.id) != str(coach_id):
+        return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
+    items = list_juniors(coach_id=coach_id)
+    dumped = [_with_child_name(d, j) for d, j in zip(juniors_schema.dump(items), items)]
+    return _data(dumped, count=len(items))
 
 
 @juniors_bp.route("/juniors/<int:junior_id>/progress", methods=["GET"])

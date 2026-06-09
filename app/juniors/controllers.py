@@ -32,10 +32,13 @@ def _resolve_band(data: dict):
 
 # ── Junior Profiles ────────────────────────────────────────────────────────
 
-def list_juniors(parent_id=None, band_id=None, current_level=None, age_min=None, age_max=None):
+def list_juniors(parent_id=None, band_id=None, current_level=None,
+                 age_min=None, age_max=None, coach_id=None):
     q = JuniorProfile.query
     if parent_id:
         q = q.filter_by(parent_id=parent_id)
+    if coach_id:
+        q = q.filter_by(coach_id=coach_id)
     if band_id:
         q = q.filter_by(band_id=band_id)
     if current_level:
@@ -73,6 +76,26 @@ def update_junior(junior, data: dict):
 def delete_junior(junior):
     db.session.delete(junior)
     db.session.commit()
+
+
+def assign_coach(junior, coach_id):
+    """Assign (or, with coach_id=None, unassign) a coach to a junior.
+
+    Raises ValueError if coach_id is given but doesn't resolve to a user with
+    the coach role — the column is a plain users FK, so we enforce the role here.
+    """
+    from app.auth.models import User
+
+    if coach_id is None:
+        junior.coach_id = None
+    else:
+        coach = db.session.get(User, coach_id)
+        role = coach.role.value if (coach and hasattr(coach.role, "value")) else None
+        if coach is None or role != "coach":
+            raise ValueError("coach_id must reference a user with the coach role")
+        junior.coach_id = coach_id
+    db.session.commit()
+    return junior
 
 
 def get_junior_progress(junior_id: int):

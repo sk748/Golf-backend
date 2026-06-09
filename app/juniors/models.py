@@ -79,6 +79,7 @@ class JuniorProfile(TimestampMixin, db.Model):
     id = Column(Integer, primary_key=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, unique=True)
     parent_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # nullable — set later if parent registers
+    coach_id = Column(String(36), ForeignKey("users.id"), nullable=True)   # nullable — admin assigns; unassigned until then
     date_of_birth = Column(Date, nullable=False)
     gender = Column(SQLEnum(JuniorGender, values_callable=enum_values, name="junior_gender"), nullable=False)
     current_level = Column(Integer, nullable=False)
@@ -102,6 +103,7 @@ class JuniorProfile(TimestampMixin, db.Model):
 
     user = relationship("User", foreign_keys=[user_id], backref="junior_profile")
     parent = relationship("User", foreign_keys=[parent_id], backref="children")
+    assigned_coach = relationship("User", foreign_keys=[coach_id], backref="assigned_juniors")
     band = relationship("LevelBand", backref="juniors")
 
     __table_args__ = (
