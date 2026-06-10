@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Flag,
+  GitBranch,
   Hand,
   Heart,
   Layers,
@@ -850,6 +851,21 @@ function ScoreEntryLink({ t }: { t: Tournament }) {
   );
 }
 
+// Match-play events get a bracket. All signed-in roles can view it; the bracket
+// page gates management (confirm entries / generate / record result) to
+// admin/coach itself.
+function BracketLink({ t }: { t: Tournament }) {
+  if (t.format !== 'match_play') return null;
+  return (
+    <Link to={`/tournaments/${t.id}/bracket`} data-testid="bracket-link">
+      <Button variant="ghost" size="md">
+        <GitBranch className="h-4 w-4" aria-hidden />
+        View bracket
+      </Button>
+    </Link>
+  );
+}
+
 // ── Admin / coach controls: Edit link + status lifecycle ──────────────────────
 // The backend does NOT validate status transitions, so the UI only offers
 // sensible next steps. Lifecycle:
@@ -1074,8 +1090,9 @@ export function TournamentDetailPage() {
               {eligibilitySummary(t) ?? 'Open to all juniors'}
             </p>
 
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <ScoreEntryLink t={t} />
+              <BracketLink t={t} />
             </div>
           </div>
 

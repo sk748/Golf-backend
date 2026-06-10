@@ -22,6 +22,7 @@ import { TournamentsListPage } from './pages/tournaments/TournamentsListPage';
 import { TournamentDetailPage } from './pages/tournaments/TournamentDetailPage';
 import { TournamentEnterScoresPage } from './pages/tournaments/TournamentEnterScoresPage';
 import { TournamentFormPage } from './pages/tournaments/TournamentFormPage';
+import { TournamentBracketPage } from './pages/tournaments/TournamentBracketPage';
 
 export function App() {
   return (
@@ -80,6 +81,9 @@ export function App() {
             </RequireRole>
           }
         />
+        {/* Bracket — all signed-in roles can view; management controls are gated
+            to admin/coach inside the page. */}
+        <Route path="/tournaments/:id/bracket" element={<TournamentBracketPage />} />
         <Route
           path="/achievements"
           element={
