@@ -16,16 +16,29 @@ import type { User } from '../../types/api';
 
 // A junior row as served by GET /api/juniors and GET /api/coaches/:id/juniors.
 // The backend embeds the child's name as `full_name` (may be absent — callers
-// fall back to "Golfer #id"; never fabricate a name).
+// fall back to "Golfer #id"; never fabricate a name). The endpoint serializes
+// every JuniorProfile column (SimpleModelSchema), so the full intake fields are
+// typed here too for the staff junior browser/profile pages.
 export interface AssignableJunior {
   id: number;
+  user_id: string;
+  parent_id: string | null;
   coach_id: string | null;
   full_name?: string;
   current_level: number;
   band_id: number;
   date_of_birth: string;
+  gender: string; // 'male' | 'female'
+  curriculum: string | null;
   has_handicap: boolean;
   handicap_index: number | null;
+  played_us_kids: boolean | null;
+  us_kids_best_score: number | null;
+  experience: string;
+  availability: string;
+  medical_conditions: string | null;
+  golf_goals: string | null;
+  tournament_ready: boolean;
 }
 
 // GET /api/juniors — every junior in the programme (admin/coach/committee).

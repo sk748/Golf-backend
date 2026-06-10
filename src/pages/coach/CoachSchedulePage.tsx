@@ -12,6 +12,8 @@ import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
+import { fieldClass, labelClass } from '../auth/AuthShell';
+import { useCoachUsers } from '../admin/coach-assignment.queries';
 import { useCoachSchedule, type CoachSession } from './coach-schedule.queries';
 import {
   currentWeekStart,
@@ -88,9 +90,54 @@ function SessionRow({ s }: { s: CoachSession }) {
   );
 }
 
+// Staff (admin/committee) coach picker. Mounted ONLY for those roles so the
+// coach-list fetch never fires for a coach viewing their own schedule.
+function StaffCoachPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (coachId: string) => void;
+}) {
+  const coaches = useCoachUsers();
+  return (
+    <GlassCard className="animate-fade-in-up stagger-1 mt-6 p-4">
+      <label htmlFor="schedule-coach-picker" className={labelClass}>
+        Coach
+      </label>
+      <select
+        id="schedule-coach-picker"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={fieldClass}
+        disabled={coaches.isLoading}
+        data-testid="schedule-coach-picker"
+      >
+        <option value="">
+          {coaches.isLoading ? 'Loading coaches…' : 'Choose a coach…'}
+        </option>
+        {(coaches.data ?? []).map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.full_name || c.email}
+          </option>
+        ))}
+      </select>
+      {coaches.isError && (
+        <p className="mt-2 text-xs text-red-400" role="alert">
+          {errorMessage(coaches.error, 'Could not load the coach list.')}
+        </p>
+      )}
+    </GlassCard>
+  );
+}
+
 export function CoachSchedulePage() {
   const { user } = useAuth();
-  const coachId = user?.id;
+  // Admin + committee browse any coach's week via the picker; coaches keep
+  // exactly their own schedule (no picker, no extra fetches).
+  const isStaffViewer = user?.role === 'admin' || user?.role === 'committee';
+  const [pickedCoachId, setPickedCoachId] = useState<string>('');
+  const coachId = isStaffViewer ? pickedCoachId || undefined : user?.id;
   const [week, setWeek] = useState<string>(() => currentWeekStart());
 
   const schedule = useCoachSchedule(coachId, week);
@@ -107,6 +154,11 @@ export function CoachSchedulePage() {
       <h1 className="animate-fade-in-up stagger-1 mt-1 text-2xl font-black text-silver sm:text-3xl">
         Weekly schedule
       </h1>
+
+      {/* ── Coach picker (admin/committee only — mount-gated fetch) ──────── */}
+      {isStaffViewer && (
+        <StaffCoachPicker value={pickedCoachId} onChange={setPickedCoachId} />
+      )}
 
       {/* ── Week navigation ─────────────────────────────────────────────── */}
       <GlassCard className="animate-fade-in-up stagger-1 mt-6 flex items-center justify-between gap-2 p-3">
@@ -151,13 +203,26 @@ export function CoachSchedulePage() {
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="mt-6">
-        {schedule.isLoading ? (
+        {isStaffViewer && !coachId ? (
+          <GlassCard
+            className="p-8 text-center"
+            data-testid="schedule-pick-coach"
+          >
+            <CalendarDays size={28} className="mx-auto text-slate" />
+            <p className="mt-3 text-sm font-semibold text-silver">
+              Choose a coach
+            </p>
+            <p className="mt-1 text-xs text-slate">
+              Pick a coach above to see their week.
+            </p>
+          </GlassCard>
+        ) : schedule.isLoading ? (
           <div
             className="flex items-center gap-2 text-sm text-slate"
             data-testid="schedule-loading"
           >
             <Loader2 size={18} className="animate-spin text-azure" />
-            Loading your week…
+            {isStaffViewer ? 'Loading the week…' : 'Loading your week…'}
           </div>
         ) : schedule.isError ? (
           <div
@@ -165,7 +230,12 @@ export function CoachSchedulePage() {
             role="alert"
             data-testid="schedule-error"
           >
-            {errorMessage(schedule.error, 'Could not load your schedule.')}
+            {errorMessage(
+              schedule.error,
+              isStaffViewer
+                ? 'Could not load this schedule.'
+                : 'Could not load your schedule.',
+            )}
           </div>
         ) : sessions.length === 0 ? (
           <GlassCard className="p-8 text-center" data-testid="schedule-empty">

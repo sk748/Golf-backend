@@ -30,6 +30,8 @@ import { LogRoundPage } from './pages/scoring/LogRoundPage';
 import { VerifyRoundsPage } from './pages/scoring/VerifyRoundsPage';
 import { CoachSessionsPage } from './pages/coaching/CoachSessionsPage';
 import { BookSessionPage } from './pages/coaching/BookSessionPage';
+import { JuniorsBrowserPage } from './pages/juniors/JuniorsBrowserPage';
+import { JuniorProfilePage } from './pages/juniors/JuniorProfilePage';
 import { SeriesListPage } from './pages/tournaments/SeriesListPage';
 import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
 
@@ -143,6 +145,24 @@ export function App() {
             </RequireRole>
           }
         />
+        {/* Staff junior browser + full profile view (committee sees the full
+            intake incl. medical/goals; admin/committee can edit). */}
+        <Route
+          path="/juniors"
+          element={
+            <RequireRole roles={['admin', 'coach', 'committee']}>
+              <JuniorsBrowserPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/juniors/:id"
+          element={
+            <RequireRole roles={['admin', 'coach', 'committee']}>
+              <JuniorProfilePage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/achievements"
           element={
@@ -202,7 +222,7 @@ export function App() {
         <Route
           path="/schedule"
           element={
-            <RequireRole roles={['coach']}>
+            <RequireRole roles={['admin', 'coach', 'committee']}>
               <CoachSchedulePage />
             </RequireRole>
           }
@@ -218,7 +238,7 @@ export function App() {
         <Route
           path="/evaluations"
           element={
-            <RequireRole roles={['committee']}>
+            <RequireRole roles={['admin', 'committee']}>
               <CommitteeEvaluationsPage />
             </RequireRole>
           }

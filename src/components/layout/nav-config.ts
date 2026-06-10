@@ -70,6 +70,14 @@ const verifyRounds: NavItem = {
   icon: ShieldCheck,
 };
 
+// Staff junior browser — full profiles (committee sees everything; admin and
+// committee edit; coaches read).
+const juniors: NavItem = {
+  to: '/juniors',
+  label: 'Juniors',
+  icon: Users,
+};
+
 // Group training sessions — coach publishes + approves; parents/players book.
 const groupSessions: NavItem = {
   to: '/coach-sessions',
@@ -86,7 +94,10 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
     { to: '/users', label: 'Users', icon: Users },
+    juniors,
     { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
+    { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
+    { to: '/schedule', label: 'Schedules', icon: CalendarDays },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     groupSessions,
@@ -98,6 +109,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   coach: [
     dashboard,
+    juniors,
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
@@ -110,7 +122,9 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   committee: [
     dashboard,
+    juniors,
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
+    { to: '/schedule', label: 'Schedules', icon: CalendarDays },
     verifyRounds,
     tournaments,
     series,
