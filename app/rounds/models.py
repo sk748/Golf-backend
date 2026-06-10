@@ -21,6 +21,14 @@ class RoundType(str, Enum):
     competition = "competition"
 
 
+class RoundStatus(str, Enum):
+    # Player-entered rounds start pending and only feed the handicap engine
+    # once a coach/admin/committee member verifies them; staff-entered rounds
+    # are verified immediately (build-phase-2 decisions 1-2).
+    pending = "pending"
+    verified = "verified"
+
+
 class Round(TimestampMixin, db.Model):
     __tablename__ = "rounds"
 
@@ -37,8 +45,19 @@ class Round(TimestampMixin, db.Model):
     pcc_adjustment = Column(Numeric(3, 1), nullable=True)
     handicap_before = Column(Numeric(4, 1), nullable=True)
     handicap_after = Column(Numeric(4, 1), nullable=True)
+    # Verification + counting (build-phase-2): only verified AND counting
+    # rounds feed the handicap-index recompute.
+    status = Column(
+        SQLEnum(RoundStatus, values_callable=enum_values, name="round_status"),
+        nullable=False,
+        default=RoundStatus.verified,
+    )
+    counts_toward_handicap = Column(Boolean, nullable=False, default=True)
+    entered_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    verified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    verified_date = Column(Date, nullable=True)
 
-    user = relationship("User", backref="rounds")
+    user = relationship("User", foreign_keys=[user_id], backref="rounds")
     course = relationship("Course", backref="rounds")
     tee_set = relationship("TeeSet", backref="rounds")
 

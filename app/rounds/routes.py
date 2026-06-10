@@ -6,7 +6,7 @@ from app.rounds.controllers import (
     list_rounds, get_round, create_round, update_round, delete_round,
     get_handicap_history,
     list_hole_scores, get_hole_score, create_hole_score, update_hole_score, delete_hole_score,
-    sync_score,
+    sync_score, verify_round,
 )
 from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
 
@@ -33,14 +33,50 @@ def _not_found(resource="Resource"):
 @rounds_bp.route("/scores/sync", methods=["POST"])
 @require_roles("admin", "player", "coach")
 def scores_sync():
+    """Submit a round. Player-entered rounds start PENDING (a coach/admin/
+    committee member verifies before they count); staff-entered rounds are
+    verified immediately. Staff may submit on another player's behalf via
+    user_id; players only ever submit their own."""
+    from app.auth.models import User
+    from app.database.database import db
+
     caller = get_current_user()
     data = request.get_json() or {}
-    result, err = sync_score(caller.email, data)
+
+    target_email = caller.email
+    target_user_id = data.get("user_id")
+    if target_user_id and str(target_user_id) != str(caller.id):
+        if not has_role(caller, "admin", "coach"):
+            return _err("FORBIDDEN", "Players can only submit their own rounds", 403)
+        target = db.session.get(User, str(target_user_id))
+        if target is None:
+            return _err("NOT_FOUND", "Player not found", 404)
+        target_email = target.email
+
+    initial_status = "pending" if has_role(caller, "player") else "verified"
+    result, err = sync_score(
+        target_email, data, entered_by=caller.id, initial_status=initial_status
+    )
     if err:
         if "not found" in err.lower():
             return _err("NOT_FOUND", err, 404)
         return _err("VALIDATION_ERROR", err, 400)
     return jsonify(result), 201
+
+
+@rounds_bp.route("/rounds/<int:round_id>/verify", methods=["POST"])
+@require_roles("admin", "coach", "committee")
+def verify_round_route(round_id):
+    """Verify a pending player-entered round; if it counts toward handicap the
+    player's index recomputes. Idempotent on already-verified rounds."""
+    r = get_round(round_id)
+    if r is None:
+        return _not_found("Round")
+    caller = get_current_user()
+    r, new_index = verify_round(r, caller.id)
+    payload = round_schema.dump(r)
+    payload["new_handicap_index"] = new_index
+    return _data(payload)
 
 
 # ── Rounds CRUD ───────────────────────────────────────────────────────────────
@@ -57,6 +93,7 @@ def get_rounds():
         user_id=user_id,
         course_id=request.args.get("course_id"),
         round_type=request.args.get("round_type"),
+        status=request.args.get("status"),
     )
     return _data(rounds_schema.dump(items), count=len(items))
 
