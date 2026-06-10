@@ -252,10 +252,40 @@ Answers to the 14 decisions raised by the per-role UX gap evaluation:
 13. **Code-splitting:** at ship (Phase 6).
 14. **Guided tutorial:** finishing touches.
 
+### Build phase 2 — ✅ ALL SHIPPED (2026-06-10)
+Every pass: backend smoke-tested live via the proxy (self-cleaning), migration
+verified up/down/up on a clean DB, tsc+lint+build green, api-contract-auditor
+run (findings fixed pre-commit), both branches converged per commit.
+
+1. **Series nav for all roles** (`0b53e84`).
+2. **Rounds verification + counting** (`3fc7560` backend + `ef0740b` frontend):
+   player/coach round logging (/log-round, per-hole or total), player-entered
+   rounds pending until coach/admin/committee verify (/verify-rounds), per-round
+   counts flag; index recomputes from verified+counting rounds only; pending/
+   practice badges on player views. Migration `c4roundverify`.
+3. **Group sessions** (`998ec10` + `5c07a25`): coach publishes bookable sessions
+   (capacity, level/age bounds, focus, requirements) at /coach-sessions;
+   players/parents book at /book-session; coach-or-admin one-sign-off approval;
+   occupancy + eligibility enforced server-side. Migration `d5groupsession`.
+4. **External-result verification** (`6404b76` + `023984b`): parents log on the
+   child page, staff verify (/tournaments/external); unverified results listed
+   but excluded from stats. Migration `e6extverify`.
+5. **Promotion + profile editing** (`ba24d12` + `aa37c63`): 'Promote to L{n+1}'
+   off a counter-signed move_next_level evaluation (stale/reuse-guarded);
+   committee full profile edit; parents edit availability/medical/goals/
+   experience on their child.
+6. **Staff junior browser + oversight** (`d30993b`): /juniors (+ /juniors/:id
+   full-profile 'player dashboard view' incl. medical for committee, staff edit
+   for admin/committee); admin gets Evaluations + Schedules (coach picker);
+   committee gets Juniors + Schedules.
+7. **Membership-number signup chain** (`fb663ea` + `bdd6c4a`): parents record
+   their club number; juniors self-register with it (pending_parent), parent
+   approves (pending_staff), admin/committee activate; parents create child
+   accounts directly (pending_staff); staff intake stays active-on-create;
+   approval queues on the parent dashboard + staff browser. Migration
+   `f7signupchain`.
+
 ### Next up (other)
-- Execute the build-phase-2 plan above (backend: rounds verification + counts
-  flag, group sessions, membership-number signup chain, external-results verify;
-  frontend: round entry + verify queue, session publish/book/approve, signup
-  flows, promotion action, committee browser, admin oversight, series nav).
-- Phase 6 ship pass after: states/a11y/responsive sweep, code-splitting, walk
-  every role through once.
+- Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (~1.16 MB
+  bundle advisory), guided tutorial (parked for finishing touches), walk every
+  role through once. Then the social-features phase Sam scoped.
