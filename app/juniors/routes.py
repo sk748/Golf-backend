@@ -130,17 +130,55 @@ def get_junior_route(junior_id):
     return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
+# Fields a PARENT may edit on their own child's profile (build-phase-2
+# decision 5): family-owned coaching context only. Identity, level/band and
+# programme fields stay staff-only.
+PARENT_EDITABLE_FIELDS = {"availability", "medical_conditions", "golf_goals", "experience"}
+
+
 @juniors_bp.route("/juniors/<int:junior_id>", methods=["PUT"])
-@require_roles("admin", "coach")
+@require_roles("admin", "coach", "committee", "parent")
 def put_junior(junior_id):
     junior = get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
     data = request.get_json() or {}
+    caller = get_current_user()
+    if has_role(caller, "parent"):
+        if str(junior.parent_id) != str(caller.id):
+            return _err("FORBIDDEN", "Parents can only edit their own child's profile", 403)
+        rejected = set(data) - PARENT_EDITABLE_FIELDS
+        if rejected:
+            return _err(
+                "FORBIDDEN",
+                f"Parents may only edit: {', '.join(sorted(PARENT_EDITABLE_FIELDS))}",
+                403,
+            )
     try:
-        return _data(junior_schema.dump(update_junior(junior, data)))
+        return _data(_with_child_name(junior_schema.dump(update_junior(junior, data)), junior))
     except ValueError as exc:
         return _err("VALIDATION_ERROR", str(exc), 400)
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/promote", methods=["POST"])
+@require_roles("admin", "coach")
+def promote_junior_route(junior_id):
+    """Advance the junior one level, traceable to a counter-signed evaluation
+    that recommends move_next_level (build-phase-2 decision 6)."""
+    from app.juniors.controllers import promote_junior
+    from app.evaluations.controllers import get_evaluation
+
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    data = request.get_json() or {}
+    if not data.get("evaluation_id"):
+        return _err("VALIDATION_ERROR", "evaluation_id is required", 400)
+    ev = get_evaluation(int(data["evaluation_id"]))
+    junior, err = promote_junior(junior, ev)
+    if err:
+        return _err("VALIDATION_ERROR", err, 400)
+    return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
 @juniors_bp.route("/juniors/<int:junior_id>", methods=["DELETE"])

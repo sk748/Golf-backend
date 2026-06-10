@@ -78,6 +78,23 @@ def delete_junior(junior):
     db.session.commit()
 
 
+def promote_junior(junior, evaluation):
+    """Advance a junior one level, traceable to a fully counter-signed
+    evaluation that recommends it (build-phase-2 decision 6).
+    Returns (junior, error_string)."""
+    if evaluation is None or evaluation.junior_id != junior.id:
+        return None, "Evaluation not found for this golfer"
+    rec = getattr(evaluation.recommendation, "value", evaluation.recommendation)
+    if rec != "move_next_level":
+        return None, "That evaluation does not recommend a level move"
+    if not (evaluation.coach_signed and evaluation.committee_signed):
+        return None, "Promotion needs a coach-signed AND committee-signed evaluation"
+    if junior.current_level >= 9:
+        return None, "Already at the top level"
+    update_junior(junior, {"current_level": junior.current_level + 1})
+    return junior, None
+
+
 def assign_coach(junior, coach_id):
     """Assign (or, with coach_id=None, unassign) a coach to a junior.
 
