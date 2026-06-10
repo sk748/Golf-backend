@@ -9,6 +9,7 @@ import {
   Medal,
   Globe,
   ListOrdered,
+  UserCog,
   ScrollText,
   TrendingUp,
   Trophy,
@@ -58,6 +59,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
     { to: '/users', label: 'Users', icon: Users },
+    { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     tournaments,

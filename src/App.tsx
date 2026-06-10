@@ -13,6 +13,7 @@ import { PlayerHandicapPage } from './pages/player/PlayerHandicapPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
+import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
 import { CoachSchedulePage } from './pages/coach/CoachSchedulePage';
 import { CoachAttendancePage } from './pages/coach/CoachAttendancePage';
 import { CommitteeEvaluationsPage } from './pages/committee/CommitteeEvaluationsPage';
@@ -130,6 +131,14 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminUsersPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/coach-assignments"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminCoachAssignmentsPage />
             </RequireRole>
           }
         />

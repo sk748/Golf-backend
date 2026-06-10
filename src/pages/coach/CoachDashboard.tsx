@@ -6,6 +6,7 @@ import {
   Clock,
   Loader2,
   PenLine,
+  Users,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
@@ -20,6 +21,10 @@ import {
   useCoachSign,
   useGolferNames,
 } from './coach-evaluations.queries';
+import {
+  useCoachJuniors,
+  type AssignableJunior,
+} from '../admin/coach-assignment.queries';
 import {
   currentWeekStart,
   dayLabel,
@@ -60,6 +65,7 @@ export function CoachDashboard() {
   const evals = useUnsignedEvaluations(coachId);
   const coachSign = useCoachSign();
   const { nameFor } = useGolferNames();
+  const myJuniors = useCoachJuniors(coachId);
 
   const sessions: CoachSession[] = schedule.data ?? [];
   const pending = evals.data ?? [];
@@ -282,6 +288,70 @@ export function CoachDashboard() {
                   testId="eval-sign-error"
                 />
               </div>
+            )}
+          </div>
+        </GlassCard>
+
+        {/* ── My juniors ────────────────────────────────────────────────── */}
+        <GlassCard className="animate-fade-in-up stagger-3 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">My juniors</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate">
+            The juniors assigned to you by the club admin.
+          </p>
+
+          <div className="mt-4">
+            {myJuniors.isLoading ? (
+              <div
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="my-juniors-loading"
+              >
+                <Loader2 size={18} className="animate-spin text-azure" />
+                Loading your juniors…
+              </div>
+            ) : myJuniors.isError ? (
+              <ErrorPanel
+                message={errorMessage(
+                  myJuniors.error,
+                  'Could not load your juniors.',
+                )}
+                testId="my-juniors-error"
+              />
+            ) : (myJuniors.data ?? []).length === 0 ? (
+              <p className="text-sm text-slate" data-testid="my-juniors-empty">
+                No juniors assigned to you yet — the club admin assigns
+                juniors to coaches.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="my-juniors-list">
+                {(myJuniors.data ?? []).map((j: AssignableJunior) => (
+                  <li
+                    key={j.id}
+                    className="glass-light flex items-center gap-3 rounded-xl p-3"
+                    data-testid={`my-junior-${j.id}`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-azure/15">
+                      <Users size={16} className="text-azure" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-silver">
+                        {j.full_name?.trim() || `Golfer #${j.id}`}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                        <Badge tone="slate" className="px-1.5 py-0.5">
+                          L{j.current_level}
+                        </Badge>
+                        {j.has_handicap && j.handicap_index != null && (
+                          <span className="tabular-nums">
+                            HI {j.handicap_index.toFixed(1)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </GlassCard>
