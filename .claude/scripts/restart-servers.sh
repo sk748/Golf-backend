@@ -22,7 +22,12 @@ DEFAULT_APP_DIR="$REPO/.claude/worktrees/frontend-phase0"
 APP_DIR="${KAREN_APP_DIR:-$DEFAULT_APP_DIR}"
 PORT=5000
 LOG=/tmp/karen_server.log
+# The venv lives in the MAIN checkout. When this script runs from a worktree
+# copy (.claude/worktrees/<name>/…), REPO resolves to the worktree, which has
+# no venv — fall back to the main repo three levels up.
 PY="$REPO/venv/bin/python"
+[ -x "$PY" ] || PY="$(cd "$REPO/../../.." 2>/dev/null && pwd)/venv/bin/python"
+FLASK="$(dirname "$PY")/flask"
 
 port_up(){ [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/swagger/" 2>/dev/null)" = 200 ]; }
 port_pids(){
@@ -43,6 +48,12 @@ pids="$(port_pids)"
 [ -n "$pids" ] && { echo "Stopping :$PORT -> $(echo "$pids" | tr '\n' ' ')"; echo "$pids" | xargs -r kill -9 2>/dev/null; sleep 1; }
 
 cd "$APP_DIR" || { echo "ERROR: KAREN_APP_DIR not found: $APP_DIR"; exit 1; }
+
+# Apply pending migrations before serving — dev's only schema path since
+# db.create_all() was retired (pre-staging parity with flask db upgrade).
+echo "Applying migrations (flask db upgrade)…"
+"$FLASK" --app main db upgrade 2>&1 | tail -n 2
+
 echo "Starting backend from: $APP_DIR (reloader off)"
 setsid nohup "$PY" -c "from main import app; app.run(host='0.0.0.0', port=$PORT, debug=False, use_reloader=False, threaded=True)" >"$LOG" 2>&1 &
 disown 2>/dev/null || true

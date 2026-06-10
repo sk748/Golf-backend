@@ -48,15 +48,16 @@ def create_app(config_filename=None):
     )
 
     db.init_app(app)
-    Migrate(app, db)   # production: flask db migrate / flask db upgrade
+    Migrate(app, db)   # all envs: flask db upgrade (no create_all anywhere)
     limiter.init_app(app)
     register_all()
 
-    # ── Development: auto-create all tables on startup ────────────────────────
-    # Production relies on Flask-Migrate (flask db upgrade) instead.
-    if app.debug:
-        with app.app_context():
-            db.create_all()
+    # ── Schema management: Flask-Migrate everywhere ───────────────────────────
+    # Dev no longer auto-creates tables on startup; every environment applies
+    # schema via `flask db upgrade` (the dev restart script runs it before
+    # starting the server). create_all retired 2026-06-10 pre-staging, after
+    # verifying the migration chain builds a schema equivalent to the
+    # create_all-built dev DB (tables/columns/types + enum label sets).
 
     # ── Security headers on every response ───────────────────────────────────
     def _add_security_headers(response):
