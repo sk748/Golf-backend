@@ -17,7 +17,7 @@ not `CLAUDE.md`, which stays locked.
 | 2 | Scoring, rounds & handicap (scorecard, /scores/sync, handicap history) | 🟡 |
 | 3 | Juniors: profiles, progress, band-conditional evaluations + sign-off | 🟡 |
 | 4 | Coaching: attendance, weekly schedule, session requests | ⬜ |
-| 5 | Tournaments (backend live; shared read-only list+detail shipped) | 🟡 |
+| 5 | Tournaments (full lifecycle: create→RSVP/approve→scores→leaderboard/bracket→results; external results; series standings) | ✅ |
 | 6 | Ship: states, a11y, responsive, prod build | ⬜ |
 | 7+ | Deferred (billing/participant groups, series polish, notifications, bulk import) | ⏸️ |
 
@@ -178,8 +178,26 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
   in edit mode, and a **status lifecycle control** on the detail page (Open/Close/Start/
   Complete + Cancel) — closes the score-entry seam (advancing to `in_progress` is now
   self-service). Client-side validation (backend is permissive). Verified live end-to-end.
-- **Next tournament passes (not built):** match-play **bracket** (generate-bracket / bracket
-  view / advance winners); **external results** (log + feed junior stats); **series standings**.
+- ✅ **Match-play bracket shipped** (`e4b2c8e`): `/tournaments/:id/bracket` (all roles
+  view); admin/coach management panel — confirm `registered` entries, seed toggle
+  (handicap/random), **generate bracket** (≥2 confirmed), inline **record result**
+  (winner + result text, `in_progress` only); winners advance automatically backend-side.
+  Rounds labelled Final/Semifinals/…. Privacy: club-wide `/api/juniors` name lookup gated
+  to admin/coach; parent/player see `Golfer #id`. Bracket backend (generate → advance →
+  record → validation) verified via app-context smoke.
+- ✅ **External results shipped** (`8f5fa8a`): `/tournaments/external` (admin/coach) —
+  log/edit/delete off-club events (Faldo / US Kids / JGF / Karen Open / other); reusable
+  read-only **CompetitionHistory** card (competitions played + best gross + combined
+  internal/external list) added to the player progress page and parent child page (reads
+  only the backend-scoped `/api/juniors/:id/competitions`). Aggregation (count, best-gross
+  min, date window) verified via app-context smoke.
+- ✅ **Series / order-of-merit shipped** (`d4cac94`): `/series` + `/series/:id` (all roles
+  view standings; admin create/edit/delete + points-scheme editor — `points_scheme`
+  travels as the raw JSON string the backend stores); series picker on the tournament
+  form; "Series standings" link on the detail page. Standings backend (completed-only
+  aggregation, points/events, ranks, 404, null scheme) verified via app-context smoke.
+- **Phase 5 mapped passes are all shipped.** Remaining for the phase is polish only
+  (Phase 6 states/a11y/responsive sweep covers it).
 
 ### Next up (other)
 - Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
