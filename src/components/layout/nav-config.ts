@@ -72,23 +72,27 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
     tournaments,
+    series,
     externalResults,
   ],
   committee: [
     dashboard,
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
     tournaments,
+    series,
   ],
   parent: [
     dashboard,
     { to: '/my-child', label: 'My child', icon: TrendingUp },
     { to: '/sessions', label: 'Coaching', icon: CalendarPlus },
     tournaments,
+    series,
   ],
   player: [
     dashboard,
     { to: '/progress', label: 'Progress', icon: BarChart3 },
     { to: '/achievements', label: 'Achievements', icon: Trophy },
     tournaments,
+    series,
   ],
 };
