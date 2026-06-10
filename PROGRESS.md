@@ -15,23 +15,20 @@ not `CLAUDE.md`, which stays locked.
 | 0 | Project scaffold + auth foundation (api client, RequireRole, login/register) | ✅ |
 | 1 | Role shell + admin foundation (RoleNav, role-routed dashboard, user mgmt, course reference) | 🟡 |
 | 2 | Scoring, rounds & handicap (scorecard, /scores/sync, handicap history) | 🟡 |
-| 3 | Juniors: profiles, progress, band-conditional evaluations + sign-off | 🟡 |
+| 3 | Juniors: profiles, progress, band-conditional evaluations + sign-off | ✅ |
 | 4 | Coaching: attendance, weekly schedule, session requests | ⬜ |
 | 5 | Tournaments (full lifecycle: create→RSVP/approve→scores→leaderboard/bracket→results; external results; series standings) | ✅ |
 | 6 | Ship: states, a11y, responsive, prod build | ⬜ |
 | 7+ | Deferred (billing/participant groups, series polish, notifications, bulk import) | ⏸️ |
 
-**Roles shipped:** admin ✅ · player ✅ · coach 🟡 · committee ✅ · parent ✅.
-admin and player are done end-to-end; committee is complete; parent is now
-complete end-to-end (session-request submit + child-name display verified
-against the merged backend — the two backend fixes landed in merge `7454e09`);
-coach is complete except the "my juniors" widget, whose backend
-(admin→coach assignment) now exists but has no UI yet.
+**Roles shipped:** admin ✅ · player ✅ · coach ✅ · committee ✅ · parent ✅.
+All five roles are complete end-to-end: coach gained the "My juniors" widget
+(`ce8b938`) and the band-conditional evaluation creation form (`3cf9df7`);
+admin gained the coach-assignment page; parent/player verified earlier.
 
-Phases 1–3 are 🟡 because the work done so far is **role-sliced, not
-phase-complete**: the admin slice of Phase 1 and the player-facing slices of
-Phases 2–3 are built; the coach/committee/parent slices of those same phases
-are not. See notes below for exactly what's in and what's out.
+Phases 1–2 stay 🟡 only because some cross-role polish from their definitions
+(e.g. broader scorecard entry surfaces) is folded into the Phase 6 sweep; the
+functional slices every role needs are built. See notes below.
 
 ---
 
@@ -199,8 +196,30 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
 - **Phase 5 mapped passes are all shipped.** Remaining for the phase is polish only
   (Phase 6 states/a11y/responsive sweep covers it).
 
+### Coach assignment — done
+- ✅ **Admin assign UI + coach "My juniors" widget** (`ce8b938`): `/coach-assignments`
+  (admin) — all-juniors table with per-row coach select (assign/unassign inline),
+  summary strip, coach filter; CoachDashboard "My juniors" card via
+  `useCoachJuniors(user.id)`. Live-verified incl. the 403 (other coach's roster)
+  and 400 (assigning a non-coach) guards.
+
+### Phase 3 — coach evaluation creation (core smart-frontend piece) — done
+- ✅ **Band-conditional evaluation form** (`3cf9df7`): `/evaluations/new` (admin+coach) —
+  golfer+month picker, duplicate guard (existing row → status + coach-sign, not the
+  form), exactly one band section by `report_template` (skills / practice scores /
+  competition incl. backend-computed month-stats prefill), Save draft / Save & sign,
+  specific 409 "already exists this month" handling. Backend hardening in the same
+  commit: POST `/api/evaluations` derives `coach_id` from the JWT for coach callers.
+  **Phase 3 remaining:** nothing structural — the coach slice (create+sign), committee
+  slice (counter-sign, summary), and parent read-only view all exist.
+
+### Pre-staging
+- ✅ **Dev `create_all` retired** (`d25d6c4`): `flask db upgrade` is the single schema
+  path everywhere; the restart script applies migrations before serving. Verified by
+  rebuilding a clean DB from the chain and diffing schemas.
+- Still open for staging: production env vars (DATABASE_URI / APP_SETTINGS / JWT
+  secret / FRONTEND_URL), rate-limiter storage backend, `VITE_API_BASE` build config.
+
 ### Next up (other)
-- Coach **"my juniors"** widget + admin **assign-coach** UI (backend live, no UI yet).
-- _(Later)_ Per-role **additional scope**, and the coach band-conditional **evaluation
-  creation form** + coach sign-off (Phase 3 core). Pre-staging: retire dev `create_all`
-  in favour of `flask db upgrade` (migrations baseline now exists).
+- Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (bundle ~1 MB
+  advisory), walk every role through once.
