@@ -417,12 +417,25 @@ def get_external_results():
 def post_external_result():
     caller = get_current_user()
     data = request.get_json() or {}
-    if has_role(caller, "parent"):
+    is_parent = has_role(caller, "parent")
+    if is_parent:
         junior = _get_junior(data.get("junior_id"))
         if not _junior_in_scope(caller, junior):
             return _err("FORBIDDEN", "Parents can only log results for their own child", 403)
-    r = c.create_external_result(data, logged_by=caller.id)
+    # Staff-logged results are verified at creation; parent-logged ones wait
+    # for staff verification (decision 11).
+    r = c.create_external_result(data, logged_by=caller.id, verified=not is_parent)
     return _data(c.external_schema.dump(r), 201)
+
+
+@tournaments_bp.route("/external-results/<int:rid>/verify", methods=["PUT"])
+@require_roles("admin", "coach")
+def verify_external_result_route(rid):
+    r = c.get_external_result(rid)
+    if r is None:
+        return _not_found("External result")
+    caller = get_current_user()
+    return _data(c.external_schema.dump(c.verify_external_result(r, caller.id)))
 
 
 @tournaments_bp.route("/external-results/<int:rid>", methods=["GET"])

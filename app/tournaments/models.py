@@ -285,10 +285,14 @@ class ExternalResult(TimestampMixin, db.Model):
     round_id = Column(Integer, ForeignKey("rounds.id"), nullable=True)
     logged_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     notes = Column(Text, nullable=True)
+    # Build-phase-2 decision 11: parents log results for their own child but a
+    # staff member verifies before the result feeds the junior's stats.
+    verified = Column(Boolean, nullable=False, default=False)
+    verified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     junior = relationship("JuniorProfile")
     round = relationship("Round")
-    logger = relationship("User")
+    logger = relationship("User", foreign_keys=[logged_by])
 
 
 # ── 5.8 series (optional / fast-follow) ────────────────────────────────────────

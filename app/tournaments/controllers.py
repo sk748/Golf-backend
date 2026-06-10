@@ -680,9 +680,13 @@ def get_external_result(rid):
     return db.session.get(ExternalResult, rid)
 
 
-def create_external_result(data, logged_by):
+def create_external_result(data, logged_by, verified=True):
+    """Staff-logged results are verified at creation; parent-logged ones wait
+    for a staff verification before feeding the junior's stats (decision 11)."""
     r = external_schema.load(data)
     r.logged_by = logged_by
+    r.verified = verified
+    r.verified_by = logged_by if verified else None
     db.session.add(r)
     db.session.commit()
     return r
@@ -690,10 +694,19 @@ def create_external_result(data, logged_by):
 
 def update_external_result(r, data):
     for k, v in data.items():
-        if k in {"id", "created_at", "updated_at", "logged_by"}:
+        if k in {"id", "created_at", "updated_at", "logged_by", "verified", "verified_by"}:
             continue
         setattr(r, k, v)
     db.session.commit()
+    return r
+
+
+def verify_external_result(r, verifier_id):
+    """Staff verification (idempotent)."""
+    if not r.verified:
+        r.verified = True
+        r.verified_by = verifier_id
+        db.session.commit()
     return r
 
 
@@ -733,15 +746,20 @@ def junior_competitions(junior_id, date_from=None, date_to=None):
         if sc and sc.gross_score is not None:
             best_gross = sc.gross_score if best_gross is None else min(best_gross, sc.gross_score)
 
+    # Externals are all LISTED (rows carry their verified flag) but only
+    # verified ones feed the stats (decision 11: parents log, staff verify).
     external = []
+    verified_external_count = 0
     for r in list_external_results(junior_id=junior_id, date_from=date_from, date_to=date_to):
         external.append(external_schema.dump(r))
-        if r.gross_score is not None:
-            best_gross = r.gross_score if best_gross is None else min(best_gross, r.gross_score)
+        if r.verified:
+            verified_external_count += 1
+            if r.gross_score is not None:
+                best_gross = r.gross_score if best_gross is None else min(best_gross, r.gross_score)
 
     return {
         "junior_id": junior_id,
-        "competitions_played": len(internal) + len(external),
+        "competitions_played": len(internal) + verified_external_count,
         "best_gross_score": best_gross,
         "internal": internal,
         "external": external,
