@@ -93,6 +93,17 @@ class Session(TimestampMixin, db.Model):
         SQLEnum(SessionStatus, values_callable=enum_values, name="session_status"),
         nullable=False,
     )
+    # Group-session publishing (build-phase-2 decision 4): a coach opens a
+    # session for booking with a capacity and eligibility requirements;
+    # students/parents book onto it and a coach/admin approves (one sign-off).
+    title = Column(String(255), nullable=True)  # focus, e.g. "Short game + putting"
+    open_for_booking = Column(Boolean, nullable=False, default=False)
+    max_attendance = Column(Integer, nullable=True)  # null = no cap
+    level_min = Column(Integer, nullable=True)
+    level_max = Column(Integer, nullable=True)
+    age_min = Column(Integer, nullable=True)
+    age_max = Column(Integer, nullable=True)
+    requirements = Column(Text, nullable=True)  # free text, e.g. "bring a putter"
 
     klass = relationship("Class", backref="sessions")
     coach = relationship("User", backref="sessions")

@@ -17,7 +17,8 @@ bookings_schema = SimpleModelSchema(BookingRequest, many=True)
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
 def list_sessions(coach_id=None, class_id=None, session_type=None,
-                  status=None, date_from=None, date_to=None):
+                  status=None, date_from=None, date_to=None,
+                  open_for_booking=None):
     q = Session.query
     if coach_id:
         q = q.filter_by(coach_id=coach_id)
@@ -31,6 +32,8 @@ def list_sessions(coach_id=None, class_id=None, session_type=None,
         q = q.filter(Session.date >= date_from)
     if date_to:
         q = q.filter(Session.date <= date_to)
+    if open_for_booking is not None:
+        q = q.filter_by(open_for_booking=open_for_booking)
     return q.order_by(Session.date, Session.start_time).all()
 
 
@@ -145,7 +148,8 @@ def delete_enrollment(e):
 
 # ── Booking Requests ──────────────────────────────────────────────────────────
 
-def list_booking_requests(parent_id=None, status=None, coach_id=None):
+def list_booking_requests(parent_id=None, status=None, coach_id=None,
+                          session_id=None, junior_id=None):
     q = BookingRequest.query
     if parent_id:
         q = q.filter_by(parent_id=parent_id)
@@ -153,6 +157,10 @@ def list_booking_requests(parent_id=None, status=None, coach_id=None):
         q = q.filter_by(status=status)
     if coach_id:
         q = q.filter_by(coach_id=coach_id)
+    if session_id:
+        q = q.filter_by(session_id=session_id)
+    if junior_id:
+        q = q.filter_by(junior_id=junior_id)
     return q.all()
 
 
@@ -177,3 +185,79 @@ def update_booking_request(b, data: dict):
 def delete_booking_request(b):
     db.session.delete(b)
     db.session.commit()
+
+
+# ── Group-session booking (build-phase-2 decision 4) ─────────────────────────
+# A coach publishes a session open_for_booking with capacity + eligibility;
+# students/parents book onto it; a coach/admin approves (one sign-off).
+# Capacity counts APPROVED bookings only — pending requests don't hold a spot.
+
+def approved_count(session_id: int) -> int:
+    return BookingRequest.query.filter_by(
+        session_id=session_id, status="approved"
+    ).count()
+
+
+def validate_session_booking(session, junior):
+    """Eligibility + availability checks for booking a junior onto a published
+    session. Returns an error string or None. The session's level/age bounds
+    are authoritative here (the UI only displays them)."""
+    from datetime import date as date_cls
+
+    if session is None:
+        return "Session not found"
+    if not session.open_for_booking:
+        return "This session is not open for booking"
+    if getattr(session.status, "value", session.status) != "scheduled":
+        return "This session is no longer scheduled"
+    if session.date < date_cls.today():
+        return "This session has already taken place"
+    if session.max_attendance is not None and approved_count(session.id) >= session.max_attendance:
+        return "This session is full"
+
+    if session.level_min is not None and junior.current_level < session.level_min:
+        return f"Open from level {session.level_min}"
+    if session.level_max is not None and junior.current_level > session.level_max:
+        return f"Open up to level {session.level_max}"
+    if (session.age_min is not None or session.age_max is not None) and junior.date_of_birth:
+        today = date_cls.today()
+        dob = junior.date_of_birth
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if session.age_min is not None and age < session.age_min:
+            return f"Minimum age is {session.age_min}"
+        if session.age_max is not None and age > session.age_max:
+            return f"Maximum age is {session.age_max}"
+
+    duplicate = BookingRequest.query.filter(
+        BookingRequest.session_id == session.id,
+        BookingRequest.junior_id == junior.id,
+        BookingRequest.status.in_(["pending", "approved"]),
+    ).first()
+    if duplicate is not None:
+        return "DUPLICATE"  # routes map this to a 409
+    return None
+
+
+def approve_booking(b, approver_notes=None):
+    """Approve a booking (one sign-off). Enforces session capacity at approval
+    time. Returns (booking, error_string)."""
+    if getattr(b.status, "value", b.status) == "approved":
+        return b, None  # idempotent
+    if b.session_id:
+        s = get_session(b.session_id)
+        if s is not None and s.max_attendance is not None:
+            if approved_count(s.id) >= s.max_attendance:
+                return None, "This session is already full"
+    b.status = "approved"
+    if approver_notes:
+        b.admin_notes = approver_notes
+    db.session.commit()
+    return b, None
+
+
+def decline_booking(b, approver_notes=None):
+    b.status = "declined"
+    if approver_notes:
+        b.admin_notes = approver_notes
+    db.session.commit()
+    return b
