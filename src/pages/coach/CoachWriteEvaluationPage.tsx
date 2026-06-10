@@ -938,7 +938,7 @@ function EvaluationForm({
                   Loading this month&apos;s recorded competition stats…
                 </p>
               ) : comps.isError ? (
-                <p className="text-xs text-slate" data-testid="eval-stats-error">
+                <p role="alert" className="text-xs text-slate" data-testid="eval-stats-error">
                   Recorded stats unavailable —{' '}
                   {errorMessage(comps.error, 'could not load them.')}
                 </p>

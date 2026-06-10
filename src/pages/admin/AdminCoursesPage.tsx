@@ -80,11 +80,11 @@ function TeeSetsCard({ tees }: { tees: CourseTee[] }) {
           <table className="w-full min-w-[34rem] text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wider text-slate">
-                <th className="px-5 py-3 font-semibold">Tee</th>
-                <th className="px-5 py-3 font-semibold">Gender</th>
-                <th className="px-5 py-3 text-right font-semibold">CR</th>
-                <th className="px-5 py-3 text-right font-semibold">Slope</th>
-                <th className="px-5 py-3 text-right font-semibold">Total yards</th>
+                <th scope="col" className="px-5 py-3 font-semibold">Tee</th>
+                <th scope="col" className="px-5 py-3 font-semibold">Gender</th>
+                <th scope="col" className="px-5 py-3 text-right font-semibold">CR</th>
+                <th scope="col" className="px-5 py-3 text-right font-semibold">Slope</th>
+                <th scope="col" className="px-5 py-3 text-right font-semibold">Total yards</th>
               </tr>
             </thead>
             <tbody>
@@ -185,9 +185,9 @@ function ScorecardNine({ title, holes }: { title: string; holes: Hole[] }) {
       <table className="w-full min-w-[40rem] text-left text-sm">
         <thead>
           <tr className="text-[11px] uppercase tracking-wider text-slate">
-            <th className="px-4 py-3 font-semibold">{title}</th>
+            <th scope="col" className="px-4 py-3 font-semibold">{title}</th>
             {HOLE_COLS.map((col) => (
-              <th key={col.key} className="px-4 py-3 text-right font-semibold">
+              <th key={col.key} scope="col" className="px-4 py-3 text-right font-semibold">
                 {col.label}
               </th>
             ))}
