@@ -36,6 +36,10 @@ interface CombinedRow {
   position: number | null;
   fieldSize: number | null;
   countsTowardHandicap: boolean;
+  // External rows logged by a parent start unverified; the backend lists them
+  // but excludes them from the hero stats until a coach verifies. Internal
+  // rows are never "unverified".
+  awaitingVerification: boolean;
 }
 
 function fromInternal(r: InternalCompetitionRow): CombinedRow {
@@ -53,6 +57,7 @@ function fromInternal(r: InternalCompetitionRow): CombinedRow {
     position: r.position,
     fieldSize: null,
     countsTowardHandicap: false,
+    awaitingVerification: false,
   };
 }
 
@@ -71,6 +76,7 @@ function fromExternal(r: ExternalResult): CombinedRow {
     position: r.position,
     fieldSize: r.field_size,
     countsTowardHandicap: r.counts_toward_handicap,
+    awaitingVerification: r.verified === false,
   };
 }
 
@@ -144,6 +150,10 @@ function CompetitionBody({
     ...data.external.map(fromExternal),
   ].sort((a, b) => b.sortKey - a.sortKey);
 
+  // The backend already excludes unverified externals from the hero stats; this
+  // flag only drives the explanatory hint below them.
+  const hasUnverified = rows.some((r) => r.awaitingVerification);
+
   return (
     <div className="px-5 py-5">
       {/* Hero stats */}
@@ -154,6 +164,11 @@ function CompetitionBody({
           value={data.best_gross_score == null ? '—' : String(data.best_gross_score)}
         />
       </div>
+      {hasUnverified ? (
+        <p className="mt-2 text-xs text-slate" data-testid="competition-unverified-hint">
+          Unverified results are listed but don&apos;t count yet.
+        </p>
+      ) : null}
 
       {/* Combined, date-sorted list */}
       {rows.length === 0 ? (
@@ -210,6 +225,11 @@ function CompetitionBody({
                       {row.countsTowardHandicap ? (
                         <Badge tone="gold" shape="pill">
                           Counts to HCP
+                        </Badge>
+                      ) : null}
+                      {row.awaitingVerification ? (
+                        <Badge tone="gold" shape="pill">
+                          Awaiting verification
                         </Badge>
                       ) : null}
                     </div>

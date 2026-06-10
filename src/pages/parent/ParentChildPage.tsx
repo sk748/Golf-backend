@@ -29,6 +29,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
+import { LogExternalResultCard } from '../tournaments/LogExternalResultCard';
 import {
   bandForLevel,
   childName,
@@ -692,6 +693,9 @@ function ChildDetail({
 
       {/* Competition history — internal + external events feeding best-gross. */}
       <CompetitionHistory juniorId={child.id} title="Competition history" />
+
+      {/* Parent-logged external results (start unverified; coach verifies). */}
+      <LogExternalResultCard juniorId={child.id} juniorName={name} />
     </div>
   );
 }

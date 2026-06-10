@@ -19,9 +19,15 @@
 //   POST   /api/external-results       { junior_id, event_name, event_type, date,
 //                                        holes?, gross_score?, position?, field_size?,
 //                                        counts_toward_handicap?, notes? } (admin/coach/parent)
+//          Verification: staff-logged results are created verified; PARENT-logged
+//          results start verified:false and need a staff verify before they count.
 //   PUT    /api/external-results/:id    (admin/coach) → updated
+//          (ignores verified/verified_by — use the verify endpoint for that)
+//   PUT    /api/external-results/:id/verify (admin/coach, idempotent) → verified result
 //   DELETE /api/external-results/:id    (admin/coach) → 204
 //   GET    /api/juniors/:id/competitions ?date_from&date_to → JuniorCompetitions
+//          (lists ALL externals with their `verified` flag, but the
+//          competitions_played / best_gross_score stats count ONLY verified ones)
 
 import {
   useMutation,
@@ -54,6 +60,8 @@ export interface ExternalResult {
   position: number | null;
   field_size: number | null;
   counts_toward_handicap: boolean;
+  verified: boolean;
+  verified_by: string | null;
   round_id: number | null;
   logged_by: string;
   notes: string | null;
@@ -172,6 +180,22 @@ export function useUpdateExternalResult(): UseMutationResult<
   return useMutation({
     mutationFn: ({ id, body }) =>
       api.put<ExternalResult>(`/api/external-results/${id}`, body),
+    onSuccess: () => invalidateExternal(qc),
+  });
+}
+
+// PUT /api/external-results/:id/verify — staff sign-off on a (parent-logged)
+// result (admin/coach, idempotent). Until verified, a result is listed but does
+// not count toward competitions_played / best_gross_score.
+export function useVerifyExternalResult(): UseMutationResult<
+  ExternalResult,
+  unknown,
+  number
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.put<ExternalResult>(`/api/external-results/${id}/verify`),
     onSuccess: () => invalidateExternal(qc),
   });
 }

@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
+  BadgeCheck,
   Loader2,
   Pencil,
   Plus,
@@ -36,6 +37,7 @@ import {
   useExternalResults,
   useLogExternalResult,
   useUpdateExternalResult,
+  useVerifyExternalResult,
   type ExternalEventType,
   type ExternalResult,
   type LogExternalResultInput,
@@ -128,6 +130,7 @@ function ExternalResultsScreen() {
   const names = useJuniorNames();
   const [juniorId, setJuniorId] = useState<number | ''>('');
   const [eventType, setEventType] = useState<string>('');
+  const [unverifiedOnly, setUnverifiedOnly] = useState(false);
 
   const filter = {
     juniorId: juniorId === '' ? undefined : juniorId,
@@ -207,12 +210,23 @@ function ExternalResultsScreen() {
                   </option>
                 ))}
               </select>
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white/5 px-3.5 py-3 text-sm font-semibold text-silver ring-1 ring-white/10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-white/20 bg-white/5 accent-gold"
+                  checked={unverifiedOnly}
+                  onChange={(e) => setUnverifiedOnly(e.target.checked)}
+                  data-testid="filter-unverified"
+                />
+                Unverified only
+              </label>
             </div>
           </div>
 
           <ResultsTable
             query={results}
             nameFor={names.nameFor}
+            unverifiedOnly={unverifiedOnly}
           />
         </GlassCard>
       </div>
@@ -238,9 +252,11 @@ function BackLink() {
 function ResultsTable({
   query,
   nameFor,
+  unverifiedOnly,
 }: {
   query: ReturnType<typeof useExternalResults>;
   nameFor: (id: number) => string;
+  unverifiedOnly: boolean;
 }) {
   if (query.isLoading) {
     return (
@@ -263,14 +279,19 @@ function ResultsTable({
     );
   }
 
-  const results = query.data ?? [];
+  // Client-side verification filter — the list endpoint has no verified param.
+  const results = (query.data ?? []).filter(
+    (r) => !unverifiedOnly || !r.verified,
+  );
   if (results.length === 0) {
     return (
       <p
         className="px-5 py-10 text-center text-sm text-slate"
         data-testid="external-list-empty"
       >
-        No external results logged yet.
+        {unverifiedOnly
+          ? 'No unverified results — everything here is verified.'
+          : 'No external results logged yet.'}
       </p>
     );
   }
@@ -322,6 +343,7 @@ function ResultRow({
 }) {
   const [editing, setEditing] = useState(false);
   const del = useDeleteExternalResult();
+  const verify = useVerifyExternalResult();
 
   if (editing) {
     return (
@@ -363,6 +385,11 @@ function ResultRow({
               Counts to HCP
             </Badge>
           ) : null}
+          {!result.verified ? (
+            <Badge tone="gold" shape="pill" data-testid={`external-unverified-${result.id}`}>
+              Unverified
+            </Badge>
+          ) : null}
         </div>
         {result.notes ? (
           <p className="mt-1 text-xs text-slate">{result.notes}</p>
@@ -378,6 +405,21 @@ function ResultRow({
       <td className="px-3 py-3 text-right font-mono text-silver">{position}</td>
       <td className="px-5 py-3">
         <div className="flex items-center justify-end gap-2">
+          {!result.verified ? (
+            <Button
+              size="sm"
+              disabled={verify.isPending}
+              onClick={() => verify.mutate(result.id)}
+              data-testid={`external-verify-${result.id}`}
+            >
+              {verify.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Verify
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"
@@ -410,6 +452,14 @@ function ResultRow({
             Delete
           </Button>
         </div>
+        {verify.isError ? (
+          <p
+            role="alert"
+            className="mt-2 text-right text-xs font-semibold text-red-400"
+          >
+            {errorMessage(verify.error, 'Could not verify.')}
+          </p>
+        ) : null}
         {del.isError ? (
           <p
             role="alert"
