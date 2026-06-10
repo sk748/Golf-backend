@@ -6,12 +6,22 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ChevronRight, Loader2, Search, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Loader2,
+  Search,
+  UserCheck,
+  Users,
+} from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import type { LevelBand, User } from '../../types/api';
+import { useAuth } from '../../auth/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { StatCard } from '../../components/ui/StatCard';
 import { fieldClass, labelClass } from '../auth/AuthShell';
@@ -21,10 +31,23 @@ import {
   type AssignableJunior,
 } from '../admin/coach-assignment.queries';
 import { useLevelBands } from '../committee/committee-evaluations.queries';
-import { ageFromDob } from './juniors.queries';
+import {
+  ageFromDob,
+  approvalStatusLabel,
+  approvalStatusTone,
+  useApproveJunior,
+} from './juniors.queries';
 
 const FILTER_ALL = 'all';
 const FILTER_UNASSIGNED = 'unassigned';
+
+// Signup-chain approval filter (client-side, build-phase-2 decisions 5+7).
+const APPROVAL_FILTER_OPTIONS = [
+  { value: FILTER_ALL, label: 'All statuses' },
+  { value: 'pending_staff', label: 'Pending club' },
+  { value: 'pending_parent', label: 'Pending parent' },
+  { value: 'active', label: 'Active' },
+] as const;
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -48,6 +71,7 @@ function coachName(coaches: User[], coachId: string | null): string {
 }
 
 export function JuniorsBrowserPage() {
+  const { user } = useAuth();
   const juniorsQuery = useAllJuniors();
   const coachesQuery = useCoachUsers();
   const bandsQuery = useLevelBands();
@@ -55,6 +79,11 @@ export function JuniorsBrowserPage() {
   const [search, setSearch] = useState('');
   const [bandFilter, setBandFilter] = useState<string>(FILTER_ALL);
   const [coachFilter, setCoachFilter] = useState<string>(FILTER_ALL);
+  const [approvalFilter, setApprovalFilter] = useState<string>(FILTER_ALL);
+
+  // Only admin/committee may activate pending_staff signups (the backend 403s
+  // a coach) — gate the inline Approve button accordingly.
+  const canApprove = user?.role === 'admin' || user?.role === 'committee';
 
   const juniors = useMemo(() => juniorsQuery.data ?? [], [juniorsQuery.data]);
   const coaches = coachesQuery.data ?? [];
@@ -67,11 +96,14 @@ export function JuniorsBrowserPage() {
       if (bandFilter !== FILTER_ALL && String(j.band_id) !== bandFilter) {
         return false;
       }
+      if (approvalFilter !== FILTER_ALL && j.approval_status !== approvalFilter) {
+        return false;
+      }
       if (coachFilter === FILTER_UNASSIGNED) return j.coach_id === null;
       if (coachFilter !== FILTER_ALL) return j.coach_id === coachFilter;
       return true;
     });
-  }, [juniors, search, bandFilter, coachFilter]);
+  }, [juniors, search, bandFilter, coachFilter, approvalFilter]);
 
   // Per-band counts for the summary strip (band_id → count).
   const bandCounts = useMemo(() => {
@@ -81,6 +113,12 @@ export function JuniorsBrowserPage() {
     }
     return counts;
   }, [juniors]);
+
+  // Signups waiting on the club (pending_staff) for the summary strip.
+  const pendingClubCount = useMemo(
+    () => juniors.filter((j) => j.approval_status === 'pending_staff').length,
+    [juniors],
+  );
 
   return (
     <div className="mx-auto max-w-6xl animate-fade-in-up">
@@ -96,13 +134,19 @@ export function JuniorsBrowserPage() {
         handicap history and the full intake record.
       </p>
 
-      {/* Summary strip: total + per-band counts */}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+      {/* Summary strip: total + pending club approvals + per-band counts */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 sm:gap-4">
         <StatCard
           icon={Users}
           value={juniorsQuery.isLoading ? '…' : juniors.length}
           label="Juniors"
           testId="juniors-stat-total"
+        />
+        <StatCard
+          icon={UserCheck}
+          value={juniorsQuery.isLoading ? '…' : pendingClubCount}
+          label="Pending club approval"
+          testId="juniors-stat-pending-club"
         />
         {bands.map((b: LevelBand) => (
           <StatCard
@@ -153,6 +197,25 @@ export function JuniorsBrowserPage() {
             {bands.map((b) => (
               <option key={b.id} value={String(b.id)}>
                 {b.name} ({b.band_label})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="juniors-filter-approval" className={labelClass}>
+            Approval
+          </label>
+          <select
+            id="juniors-filter-approval"
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className={fieldClass}
+            data-testid="juniors-filter-approval"
+          >
+            {APPROVAL_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -238,7 +301,12 @@ export function JuniorsBrowserPage() {
             No juniors match these filters.
           </GlassCard>
         ) : (
-          <JuniorList juniors={visible} coaches={coaches} bands={bands} />
+          <JuniorList
+            juniors={visible}
+            coaches={coaches}
+            bands={bands}
+            canApprove={canApprove}
+          />
         )}
       </div>
     </div>
@@ -251,6 +319,8 @@ interface JuniorListProps {
   juniors: AssignableJunior[];
   coaches: User[];
   bands: LevelBand[];
+  // admin/committee only — coaches never see the inline Approve control.
+  canApprove: boolean;
 }
 
 function bandBadge(bands: LevelBand[], bandId: number) {
@@ -262,7 +332,50 @@ function bandBadge(bands: LevelBand[], bandId: number) {
   ) : null;
 }
 
-function JuniorList({ juniors, coaches, bands }: JuniorListProps) {
+// Approval badge for a row — active juniors show nothing.
+function approvalBadge(j: AssignableJunior) {
+  const label = approvalStatusLabel(j.approval_status);
+  if (!label) return null;
+  return (
+    <Badge
+      tone={approvalStatusTone(j.approval_status)}
+      shape="pill"
+      data-testid={`junior-approval-${j.id}`}
+    >
+      {label}
+    </Badge>
+  );
+}
+
+// Inline "Approve" for a pending_staff row (own mutation instance per row so
+// pending/error state stays local). PUT /api/juniors/:id/approve → active.
+function ApproveControl({ juniorId }: { juniorId: number }) {
+  const approve = useApproveJunior();
+  return (
+    <span className="inline-flex flex-col items-start gap-1.5">
+      <Button
+        size="sm"
+        onClick={() => approve.mutate(juniorId)}
+        disabled={approve.isPending}
+        data-testid={`junior-approve-${juniorId}`}
+      >
+        {approve.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+        )}
+        Approve
+      </Button>
+      {approve.isError ? (
+        <span role="alert" className="text-xs font-semibold text-red-400">
+          {errorMessage(approve.error, 'Could not approve. Please try again.')}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function JuniorList({ juniors, coaches, bands, canApprove }: JuniorListProps) {
   return (
     <>
       {/* Desktop table */}
@@ -329,6 +442,10 @@ function JuniorList({ juniors, coaches, bands }: JuniorListProps) {
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <span className="inline-flex items-center gap-2">
+                      {approvalBadge(j)}
+                      {canApprove && j.approval_status === 'pending_staff' && (
+                        <ApproveControl juniorId={j.id} />
+                      )}
                       {j.tournament_ready && (
                         <Badge tone="gold" shape="pill">
                           Tournament ready
@@ -350,49 +467,56 @@ function JuniorList({ juniors, coaches, bands }: JuniorListProps) {
         </table>
       </GlassCard>
 
-      {/* Mobile cards */}
+      {/* Mobile cards. The profile link wraps only the name row (not the whole
+          card) so the inline Approve button isn't nested inside an anchor. */}
       <div className="space-y-3 md:hidden">
         {juniors.map((j) => {
           const age = ageFromDob(j.date_of_birth);
           return (
-            <Link
+            <GlassCard
               key={j.id}
-              to={`/juniors/${j.id}`}
-              className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50"
+              className="p-4 transition hover:bg-white/[0.06]"
               data-testid={`junior-row-${j.id}`}
             >
-              <GlassCard className="p-4 transition hover:bg-white/[0.06]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <Avatar name={juniorName(j)} className="h-9 w-9 text-sm" />
-                    <span className="truncate font-semibold text-silver">
-                      {juniorName(j)}
-                    </span>
+              <Link
+                to={`/juniors/${j.id}`}
+                className="flex items-center justify-between gap-3 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <Avatar name={juniorName(j)} className="h-9 w-9 text-sm" />
+                  <span className="truncate font-semibold text-silver">
+                    {juniorName(j)}
                   </span>
-                  <ChevronRight
-                    size={18}
-                    className="shrink-0 text-slate"
-                    aria-hidden="true"
-                  />
+                </span>
+                <ChevronRight
+                  size={18}
+                  className="shrink-0 text-slate"
+                  aria-hidden="true"
+                />
+              </Link>
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <Badge tone="azure">L{j.current_level}</Badge>
+                {bandBadge(bands, j.band_id)}
+                {approvalBadge(j)}
+                {j.tournament_ready && (
+                  <Badge tone="gold" shape="pill">
+                    Tournament ready
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-slate">
+                {age != null ? `Age ${age}` : 'Age —'} · Handicap{' '}
+                <span className="font-mono text-silver">
+                  {handicapLabel(j)}
+                </span>{' '}
+                · {coachName(coaches, j.coach_id)}
+              </p>
+              {canApprove && j.approval_status === 'pending_staff' && (
+                <div className="mt-3">
+                  <ApproveControl juniorId={j.id} />
                 </div>
-                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                  <Badge tone="azure">L{j.current_level}</Badge>
-                  {bandBadge(bands, j.band_id)}
-                  {j.tournament_ready && (
-                    <Badge tone="gold" shape="pill">
-                      Tournament ready
-                    </Badge>
-                  )}
-                </div>
-                <p className="mt-2 text-xs text-slate">
-                  {age != null ? `Age ${age}` : 'Age —'} · Handicap{' '}
-                  <span className="font-mono text-silver">
-                    {handicapLabel(j)}
-                  </span>{' '}
-                  · {coachName(coaches, j.coach_id)}
-                </p>
-              </GlassCard>
-            </Link>
+              )}
+            </GlassCard>
           );
         })}
       </div>

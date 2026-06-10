@@ -30,6 +30,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import { LogExternalResultCard } from '../tournaments/LogExternalResultCard';
+import { AddChildCard } from './AddChildCard';
 import { EditChildDetailsCard } from './EditChildDetailsCard';
 import {
   bandForLevel,
@@ -467,6 +468,15 @@ function ChildDetail({
                     Tournament ready
                   </Badge>
                 ) : null}
+                {child.approval_status === 'pending_staff' ? (
+                  <Badge
+                    tone="azure"
+                    shape="pill"
+                    data-testid={`child-pending-staff-${child.id}`}
+                  >
+                    Awaiting club approval
+                  </Badge>
+                ) : null}
               </div>
             </div>
           </div>
@@ -746,24 +756,35 @@ export function ParentChildPage() {
           {errorMessage(children.error, "Could not load your child's details.")}
         </p>
       ) : kids.length === 0 ? (
-        <GlassCard className="p-8 text-center" data-testid="child-empty">
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15">
-            <Users size={24} className="text-emerald-400" aria-hidden />
-          </span>
-          <h2 className="mt-4 text-lg font-black text-silver">No child linked yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-slate">
-            Once your child is enrolled and linked to your account, their full
-            progress and reports will appear here.
-          </p>
-          <Link
-            to="/dashboard"
-            className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-azure hover:gap-2"
-          >
-            Back to dashboard
-          </Link>
-        </GlassCard>
+        <div className="space-y-6">
+          <GlassCard className="p-8 text-center" data-testid="child-empty">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15">
+              <Users size={24} className="text-emerald-400" aria-hidden />
+            </span>
+            <h2 className="mt-4 text-lg font-black text-silver">No child linked yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-slate">
+              Create your child&apos;s account below, or — if they signed up
+              themselves with your membership number — approve them from your
+              dashboard. Their full progress and reports will appear here.
+            </p>
+            <Link
+              to="/dashboard"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-azure hover:gap-2"
+            >
+              Back to dashboard
+            </Link>
+          </GlassCard>
+
+          {/* Empty-state action: create the child's account right here. */}
+          <AddChildCard defaultOpen />
+        </div>
       ) : (
         <>
+          {/* Add another child — collapsed, next to the child switcher. */}
+          <div className="mb-6">
+            <AddChildCard />
+          </div>
+
           {/* Child switcher (only when more than one) */}
           {kids.length > 1 ? (
             <div

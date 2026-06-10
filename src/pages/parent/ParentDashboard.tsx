@@ -17,6 +17,7 @@ import {
   Sparkles,
   Trophy,
   TrendingUp,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -50,6 +51,89 @@ import {
   useMyEntries,
   type TournamentEntry,
 } from '../tournaments/tournament-entries.queries';
+import { useApproveJunior } from '../juniors/juniors.queries';
+
+// ── Signup approvals (build-phase-2 decisions 5+7) ───────────────────────────
+// Children who registered themselves with this parent's membership number sit
+// at approval_status 'pending_parent' until the parent consents here (the
+// approve moves them to 'pending_staff' for club activation). Reads come from
+// the existing children query — no extra fetch.
+
+function SignupApprovalRow({ child }: { child: ParentChild }) {
+  const approve = useApproveJunior();
+  const name = childName(child);
+
+  return (
+    <li
+      className="glass-light rounded-xl p-3.5"
+      data-testid={`signup-approval-${child.id}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar name={name} className="h-9 w-9 text-sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-silver">{name}</p>
+            <p className="text-xs text-slate">Signed up and waiting for you</p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          onClick={() => approve.mutate(child.id)}
+          disabled={approve.isPending}
+          data-testid={`signup-approve-${child.id}`}
+        >
+          {approve.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+          )}
+          Approve
+        </Button>
+      </div>
+
+      {approve.isError ? (
+        <p
+          role="alert"
+          className="mt-2.5 rounded-lg bg-red-500/15 p-2.5 text-xs text-red-400"
+        >
+          {approve.error instanceof ApiError
+            ? approve.error.message
+            : 'Something went wrong. Please try again.'}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function SignupApprovalsCard({ pending }: { pending: ParentChild[] }) {
+  return (
+    <GlassCard
+      className="animate-fade-in-up mt-6 p-5 sm:p-6"
+      data-testid="signup-approvals-card"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold/15">
+          <UserCheck size={16} className="text-gold" aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-sm font-bold text-silver">
+            New account{pending.length > 1 ? 's' : ''} to approve
+          </h2>
+          <p className="text-xs text-slate">
+            Your child signed up with your membership number — approve to send
+            it to the club for activation.
+          </p>
+        </div>
+      </div>
+
+      <ul className="mt-4 flex flex-col gap-2.5" data-testid="signup-approvals-list">
+        {pending.map((child) => (
+          <SignupApprovalRow key={child.id} child={child} />
+        ))}
+      </ul>
+    </GlassCard>
+  );
+}
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -134,6 +218,15 @@ function ChildCard({
               {band ? (
                 <Badge tone="slate" shape="pill">
                   {band.name}
+                </Badge>
+              ) : null}
+              {child.approval_status === 'pending_staff' ? (
+                <Badge
+                  tone="azure"
+                  shape="pill"
+                  data-testid={`child-pending-staff-${child.id}`}
+                >
+                  Awaiting club approval
                 </Badge>
               ) : null}
             </div>
@@ -508,6 +601,13 @@ export function ParentDashboard() {
         on in the junior programme — progress, handicap, and your coaching
         requests, all in one place.
       </p>
+
+      {/* Signup approvals — children waiting on this parent's consent. */}
+      {kids.some((k) => k.approval_status === 'pending_parent') ? (
+        <SignupApprovalsCard
+          pending={kids.filter((k) => k.approval_status === 'pending_parent')}
+        />
+      ) : null}
 
       {/* Children */}
       <div className="mt-6">

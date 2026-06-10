@@ -22,7 +22,46 @@ import type { AssignableJunior } from '../admin/coach-assignment.queries';
 import {
   CHILD_AVAILABILITY_OPTIONS,
   CHILD_EXPERIENCE_OPTIONS,
+  type JuniorApprovalStatus,
 } from '../parent/parent-children.queries';
+
+// ── Signup-chain approval (build-phase-2 decisions 5+7) ──────────────────────
+// PUT /api/juniors/:id/approve (no body) advances one step:
+//   pending_parent --linked parent--> pending_staff --admin/committee--> active
+// Wrong role/step → 403, already active → 409 (backend message surfaces via
+// ApiError). Shared hook: the parent approval queue AND the staff browser both
+// import from here. Invalidates every juniors variant (['juniors'] prefix
+// covers ['juniors','mine'] and ['juniors','all']).
+export function useApproveJunior(): UseMutationResult<
+  AssignableJunior,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (juniorId: number) =>
+      api.put<AssignableJunior>(`/api/juniors/${juniorId}/approve`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['juniors'] });
+    },
+  });
+}
+
+// Staff-facing badge copy/tone for a junior's approval state. Active rows show
+// nothing (null label) — only in-flight signups get a badge.
+export function approvalStatusLabel(
+  status: JuniorApprovalStatus | undefined,
+): string | null {
+  if (status === 'pending_parent') return 'Awaiting parent';
+  if (status === 'pending_staff') return 'Awaiting club';
+  return null;
+}
+
+export function approvalStatusTone(
+  status: JuniorApprovalStatus | undefined,
+): 'gold' | 'azure' {
+  return status === 'pending_parent' ? 'gold' : 'azure';
+}
 
 // ── Progress (staff read of /api/juniors/:id/progress) ───────────────────────
 // Mirrors the response shape typed for the parent page (ChildProgress in

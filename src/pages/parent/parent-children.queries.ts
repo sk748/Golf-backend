@@ -16,6 +16,12 @@ import {
 } from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
+import type { User } from '../../types/api';
+
+// Signup-chain approval state (build-phase-2 decisions 5+7). Every junior row
+// carries it: pending_parent (child self-registered, parent must consent) →
+// pending_staff (awaiting club activation) → active.
+export type JuniorApprovalStatus = 'pending_parent' | 'pending_staff' | 'active';
 
 // ── Child profile ────────────────────────────────────────────────────────────
 // GET /api/juniors -> the parent's own child/children. The documented
@@ -38,6 +44,8 @@ export interface ParentChild {
   availability: string;
   medical_conditions?: string | null;
   golf_goals?: string | null;
+  // Signup chain: pending_parent → pending_staff → active.
+  approval_status: JuniorApprovalStatus;
   created_at: string;
   updated_at: string;
   // Optional, defensively read — the backend may embed the child's identity.
@@ -74,6 +82,39 @@ export function useMyChildren(): UseQueryResult<ParentChild[]> {
   return useQuery({
     queryKey: ['juniors', 'mine'],
     queryFn: () => api.get<ParentChild[]>('/api/juniors'),
+  });
+}
+
+// ── Create a child account (parent-initiated signup) ─────────────────────────
+// POST /api/parents/me/children — a parent creates their child's player login
+// + junior profile in one go. Parent consent is implicit, so the junior starts
+// at pending_staff (club activates). STANDARD {data} envelope + structured
+// {error:{code,message}} errors (NOT the auth shape) — ApiError.message just
+// works. Returns the created child User; the parent stays signed in.
+export interface CreateChildInput {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name?: string;
+  date_of_birth: string; // ISO YYYY-MM-DD — required by the backend
+  gender: string; // 'male' | 'female'
+  phone?: string;
+}
+
+export function useCreateChildAccount(): UseMutationResult<
+  User,
+  Error,
+  CreateChildInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateChildInput) =>
+      api.post<User>('/api/parents/me/children', input),
+    onSuccess: () => {
+      // Broad prefix: the new pending_staff child must also reach the staff
+      // browser's approval queue cache (['juniors','all']), not just 'mine'.
+      void queryClient.invalidateQueries({ queryKey: ['juniors'] });
+    },
   });
 }
 

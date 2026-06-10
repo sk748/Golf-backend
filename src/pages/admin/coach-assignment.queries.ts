@@ -13,6 +13,7 @@ import {
 
 import { api } from '../../lib/api';
 import type { User } from '../../types/api';
+import type { JuniorApprovalStatus } from '../parent/parent-children.queries';
 
 // A junior row as served by GET /api/juniors and GET /api/coaches/:id/juniors.
 // The backend embeds the child's name as `full_name` (may be absent — callers
@@ -39,6 +40,9 @@ export interface AssignableJunior {
   medical_conditions: string | null;
   golf_goals: string | null;
   tournament_ready: boolean;
+  // Signup chain (build-phase-2 decisions 5+7): pending_parent → pending_staff
+  // → active. Staff surfaces badge non-active rows; admin/committee approve.
+  approval_status: JuniorApprovalStatus;
 }
 
 // GET /api/juniors — every junior in the programme (admin/coach/committee).
