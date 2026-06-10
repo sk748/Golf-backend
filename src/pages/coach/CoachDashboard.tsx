@@ -25,6 +25,7 @@ import {
   useCoachJuniors,
   type AssignableJunior,
 } from '../admin/coach-assignment.queries';
+import { usePendingBookings } from '../coaching/group-sessions.queries';
 import {
   currentWeekStart,
   dayLabel,
@@ -66,9 +67,14 @@ export function CoachDashboard() {
   const coachSign = useCoachSign();
   const { nameFor } = useGolferNames();
   const myJuniors = useCoachJuniors(coachId);
+  const pendingBookings = usePendingBookings();
 
   const sessions: CoachSession[] = schedule.data ?? [];
   const pending = evals.data ?? [];
+  // Bookings this coach can act on (their own sessions / unassigned requests).
+  const myPendingBookings = (pendingBookings.data ?? []).filter(
+    (b) => !b.coach_id || b.coach_id === coachId,
+  );
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -288,6 +294,56 @@ export function CoachDashboard() {
                   testId="eval-sign-error"
                 />
               </div>
+            )}
+          </div>
+        </GlassCard>
+
+        {/* ── Pending session bookings (count + link only) ─────────────── */}
+        <GlassCard
+          className="animate-fade-in-up stagger-3 p-5"
+          data-testid="pending-bookings-card"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">
+              Pending session bookings
+            </h2>
+            <Link
+              to="/coach-sessions"
+              className="text-xs font-medium text-azure hover:underline"
+              data-testid="dashboard-review-bookings"
+            >
+              Review bookings
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-slate">
+            Booking requests waiting on your approval.
+          </p>
+          <div className="mt-4">
+            {pendingBookings.isLoading ? (
+              <Loader2
+                size={18}
+                className="animate-spin text-azure"
+                data-testid="pending-bookings-loading"
+              />
+            ) : pendingBookings.isError ? (
+              <ErrorPanel
+                message={errorMessage(
+                  pendingBookings.error,
+                  'Could not load pending bookings.',
+                )}
+                testId="pending-bookings-error"
+              />
+            ) : (
+              <p
+                className={
+                  myPendingBookings.length > 0
+                    ? 'text-2xl font-black text-gold'
+                    : 'text-2xl font-black text-silver'
+                }
+                data-testid="pending-bookings-count"
+              >
+                {myPendingBookings.length}
+              </p>
             )}
           </div>
         </GlassCard>

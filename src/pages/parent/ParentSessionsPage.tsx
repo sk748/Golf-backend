@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ArrowRight,
   CalendarPlus,
   CheckCircle2,
   Clock,
@@ -377,6 +378,33 @@ export function ParentSessionsPage() {
         Request extra one-to-one time with a coach for your child, and keep track
         of where each request stands.
       </p>
+
+      {/* Group sessions CTA — coached group sessions are booked from their own
+          page; this freeform request flow stays for one-to-one time. */}
+      <GlassCard
+        className="animate-fade-in-up stagger-1 mt-6 flex flex-wrap items-center justify-between gap-4 p-5"
+        data-testid="group-sessions-cta"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+            <Users size={18} className="text-emerald-400" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-silver">
+              Group sessions are open for booking
+            </p>
+            <p className="mt-0.5 text-xs text-slate">
+              Browse upcoming coached group sessions and book your child a place.
+            </p>
+          </div>
+        </div>
+        <Link to="/book-session" data-testid="browse-group-sessions">
+          <Button type="button" variant="secondary" size="sm">
+            Browse group sessions
+            <ArrowRight size={14} aria-hidden />
+          </Button>
+        </Link>
+      </GlassCard>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         {/* Form */}

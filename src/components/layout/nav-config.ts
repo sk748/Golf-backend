@@ -70,6 +70,18 @@ const verifyRounds: NavItem = {
   icon: ShieldCheck,
 };
 
+// Group training sessions — coach publishes + approves; parents/players book.
+const groupSessions: NavItem = {
+  to: '/coach-sessions',
+  label: 'Group sessions',
+  icon: CalendarPlus,
+};
+const bookSession: NavItem = {
+  to: '/book-session',
+  label: 'Book session',
+  icon: CalendarPlus,
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
@@ -77,6 +89,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
+    groupSessions,
     logRound,
     verifyRounds,
     tournaments,
@@ -88,6 +101,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
+    groupSessions,
     logRound,
     verifyRounds,
     tournaments,
@@ -113,6 +127,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/progress', label: 'Progress', icon: BarChart3 },
     { to: '/achievements', label: 'Achievements', icon: Trophy },
     logRound,
+    bookSession,
     tournaments,
     series,
   ],

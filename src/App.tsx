@@ -28,6 +28,8 @@ import { TournamentBracketPage } from './pages/tournaments/TournamentBracketPage
 import { TournamentExternalResultsPage } from './pages/tournaments/TournamentExternalResultsPage';
 import { LogRoundPage } from './pages/scoring/LogRoundPage';
 import { VerifyRoundsPage } from './pages/scoring/VerifyRoundsPage';
+import { CoachSessionsPage } from './pages/coaching/CoachSessionsPage';
+import { BookSessionPage } from './pages/coaching/BookSessionPage';
 import { SeriesListPage } from './pages/tournaments/SeriesListPage';
 import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
 
@@ -120,6 +122,24 @@ export function App() {
           element={
             <RequireRole roles={['admin', 'coach', 'committee']}>
               <VerifyRoundsPage />
+            </RequireRole>
+          }
+        />
+        {/* Group training sessions — coach publishes + approves; parents and
+            players book onto published sessions. */}
+        <Route
+          path="/coach-sessions"
+          element={
+            <RequireRole roles={['admin', 'coach']}>
+              <CoachSessionsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/book-session"
+          element={
+            <RequireRole roles={['parent', 'player']}>
+              <BookSessionPage />
             </RequireRole>
           }
         />
