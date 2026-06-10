@@ -91,6 +91,15 @@ def promote_junior(junior, evaluation):
         return None, "Promotion needs a coach-signed AND committee-signed evaluation"
     if junior.current_level >= 9:
         return None, "Already at the top level"
+    # An evaluation promotes from the level it was written at — this both
+    # blocks re-using one evaluation for multiple promotions and rejects a
+    # stale evaluation written before the junior last moved.
+    if evaluation.current_level != junior.current_level:
+        return None, (
+            "That evaluation was written at level "
+            f"{evaluation.current_level}; the golfer is now at level "
+            f"{junior.current_level}"
+        )
     update_junior(junior, {"current_level": junior.current_level + 1})
     return junior, None
 

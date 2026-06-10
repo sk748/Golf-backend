@@ -63,6 +63,36 @@ export function useCoachSign(): UseMutationResult<unknown, Error, number> {
   });
 }
 
+// ── Promotion (level up, traceable to a counter-signed evaluation) ────────────
+// POST /api/juniors/:id/promote body {evaluation_id} (admin/coach). The backend
+// enforces the full rule — coach-signed AND committee-signed AND recommends
+// move_next_level AND belongs to that junior AND level < 9 — and returns a 400
+// VALIDATION_ERROR with a precise message otherwise. Success returns the junior
+// with the NEW current_level + band_id. Invalidates the juniors + evaluations
+// prefixes so rosters, guards and queues all refetch.
+export interface PromoteJuniorInput {
+  juniorId: number;
+  evaluationId: number;
+}
+
+export function usePromoteJunior(): UseMutationResult<
+  JuniorProfile,
+  Error,
+  PromoteJuniorInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ juniorId, evaluationId }: PromoteJuniorInput) =>
+      api.post<JuniorProfile>(`/api/juniors/${juniorId}/promote`, {
+        evaluation_id: evaluationId,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['juniors'] });
+      void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
+    },
+  });
+}
+
 // ── Golfer name resolution ────────────────────────────────────────────────────
 // Evaluations and enrollments carry junior_id only (the backend serializes table
 // columns, no joined name). To label golfers we join /api/juniors (junior_id ->

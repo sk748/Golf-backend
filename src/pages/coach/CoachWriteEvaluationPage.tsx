@@ -20,6 +20,7 @@ import {
   Loader2,
   PenLine,
   Save,
+  TrendingUp,
   UserRound,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -39,6 +40,7 @@ import {
   useGolferNames,
   useJuniorCompetitionsForMonth,
   useJuniors,
+  usePromoteJunior,
   type CreateEvaluationInput,
 } from './coach-evaluations.queries';
 import {
@@ -405,6 +407,7 @@ export function CoachWriteEvaluationPage() {
             evaluation={existing}
             golferName={nameFor(existing.junior_id)}
             coachId={coachId}
+            junior={junior}
           />
         ) : junior ? (
           <EvaluationForm
@@ -431,14 +434,44 @@ function ExistingEvaluationCard({
   evaluation,
   golferName,
   coachId,
+  junior,
 }: {
   evaluation: Evaluation;
   golferName: string;
   coachId?: string;
+  junior?: JuniorProfile;
 }) {
   const sign = useCoachSign();
+  const promote = usePromoteJunior();
+  // Set on success so the card celebrates the new level and the button goes
+  // away (the invalidated juniors query would otherwise re-offer L(n+2)).
+  const [promotedTo, setPromotedTo] = useState<number | null>(null);
+
   const isMine = coachId != null && String(evaluation.coach_id) === String(coachId);
   const canSign = isMine && !evaluation.coach_signed;
+
+  // Promotion: fully counter-signed + recommends moving up + room to move.
+  // The backend re-checks all of this (plus eval↔junior linkage) on POST.
+  const canPromote =
+    promotedTo == null &&
+    junior != null &&
+    junior.current_level < 9 &&
+    evaluation.coach_signed &&
+    evaluation.committee_signed &&
+    evaluation.recommendation === 'move_next_level';
+  const nextLevel = junior ? junior.current_level + 1 : null;
+
+  const confirmPromote = () => {
+    if (!junior || nextLevel == null) return;
+    const ok = window.confirm(
+      `Promote ${golferName} to Level ${nextLevel}? This is recorded against the ${formatMonth(evaluation.report_month)} evaluation.`,
+    );
+    if (!ok) return;
+    promote.mutate(
+      { juniorId: junior.id, evaluationId: evaluation.id },
+      { onSuccess: (updated) => setPromotedTo(updated.current_level) },
+    );
+  };
 
   return (
     <GlassCard className="p-5 sm:p-6" data-testid="eval-existing">
@@ -520,6 +553,50 @@ function ExistingEvaluationCard({
             )}
             {sign.isPending ? 'Signing…' : 'Sign this evaluation'}
           </Button>
+        </div>
+      ) : null}
+
+      {promotedTo != null ? (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <p
+            className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-300"
+            data-testid="eval-promote-success"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+            Promoted to Level {promotedTo}! A great month for {golferName} —
+            onwards and upwards.
+          </p>
+        </div>
+      ) : canPromote ? (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          {promote.isError ? (
+            <p
+              className="mb-3 flex items-center gap-2 rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-400"
+              role="alert"
+              data-testid="eval-promote-error"
+            >
+              <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+              {errorMessage(promote.error, 'Could not promote. Please try again.')}
+            </p>
+          ) : null}
+          <Button
+            variant="gold"
+            size="md"
+            disabled={promote.isPending}
+            onClick={confirmPromote}
+            data-testid="eval-promote"
+          >
+            {promote.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <TrendingUp className="h-4 w-4" aria-hidden />
+            )}
+            {promote.isPending ? 'Promoting…' : `Promote to L${nextLevel}`}
+          </Button>
+          <p className="mt-2 text-xs text-slate">
+            Counter-signed and recommended to move up — promoting records the
+            level change against this evaluation.
+          </p>
         </div>
       ) : null}
     </GlassCard>

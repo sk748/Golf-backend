@@ -7,7 +7,13 @@
 // conditional (not every child has one) — gate display on the value, never a
 // placeholder number.
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
 
@@ -30,6 +36,8 @@ export interface ParentChild {
   tournament_ready: boolean;
   experience: string;
   availability: string;
+  medical_conditions?: string | null;
+  golf_goals?: string | null;
   created_at: string;
   updated_at: string;
   // Optional, defensively read — the backend may embed the child's identity.
@@ -66,6 +74,50 @@ export function useMyChildren(): UseQueryResult<ParentChild[]> {
   return useQuery({
     queryKey: ['juniors', 'mine'],
     queryFn: () => api.get<ParentChild[]>('/api/juniors'),
+  });
+}
+
+// ── Parent-editable child details ─────────────────────────────────────────────
+// PUT /api/juniors/:id — a parent may send ONLY these four family-owned fields
+// (availability, experience, medical_conditions, golf_goals); anything else is
+// a backend 403. Enums match the backend exactly. Invalidates the parent's
+// children query (['juniors', 'mine']) so the page re-reads the saved values.
+
+export const CHILD_AVAILABILITY_OPTIONS = [
+  { value: 'twice_weekly', label: 'Twice a week' },
+  { value: 'weekends_only', label: 'Weekends only' },
+  { value: 'more_than_twice', label: 'More than twice a week' },
+  { value: 'holidays_only', label: 'School holidays only' },
+] as const;
+
+export const CHILD_EXPERIENCE_OPTIONS = [
+  { value: 'beginner', label: 'New to golf' },
+  { value: 'lt_1yr', label: 'Less than a year' },
+  { value: '1_3yr', label: '1–3 years' },
+  { value: '4_6yr', label: '4–6 years' },
+  { value: '7_10yr', label: '7–10 years' },
+] as const;
+
+export interface UpdateChildDetailsInput {
+  juniorId: number;
+  availability: string;
+  experience: string;
+  medical_conditions: string | null;
+  golf_goals: string | null;
+}
+
+export function useUpdateChildDetails(): UseMutationResult<
+  ParentChild,
+  Error,
+  UpdateChildDetailsInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ juniorId, ...fields }: UpdateChildDetailsInput) =>
+      api.put<ParentChild>(`/api/juniors/${juniorId}`, fields),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['juniors', 'mine'] });
+    },
   });
 }
 

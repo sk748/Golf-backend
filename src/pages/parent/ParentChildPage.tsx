@@ -30,6 +30,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import { LogExternalResultCard } from '../tournaments/LogExternalResultCard';
+import { EditChildDetailsCard } from './EditChildDetailsCard';
 import {
   bandForLevel,
   childName,
@@ -696,6 +697,9 @@ function ChildDetail({
 
       {/* Parent-logged external results (start unverified; coach verifies). */}
       <LogExternalResultCard juniorId={child.id} juniorName={name} />
+
+      {/* Family-owned child details (availability, experience, medical, goals). */}
+      <EditChildDetailsCard child={child} />
     </div>
   );
 }
