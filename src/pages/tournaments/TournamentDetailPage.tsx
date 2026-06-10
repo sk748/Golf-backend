@@ -866,6 +866,20 @@ function BracketLink({ t }: { t: Tournament }) {
   );
 }
 
+// Tournaments that belong to a series link to its order-of-merit standings.
+// All roles can view standings; the series pages gate management to admin.
+function SeriesLink({ t }: { t: Tournament }) {
+  if (t.series_id == null) return null;
+  return (
+    <Link to={`/series/${t.series_id}`} data-testid="series-link">
+      <Button variant="ghost" size="md">
+        <ListOrdered className="h-4 w-4" aria-hidden />
+        Series standings
+      </Button>
+    </Link>
+  );
+}
+
 // ── Admin / coach controls: Edit link + status lifecycle ──────────────────────
 // The backend does NOT validate status transitions, so the UI only offers
 // sensible next steps. Lifecycle:
@@ -1093,6 +1107,7 @@ export function TournamentDetailPage() {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <ScoreEntryLink t={t} />
               <BracketLink t={t} />
+              <SeriesLink t={t} />
             </div>
           </div>
 

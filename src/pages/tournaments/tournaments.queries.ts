@@ -138,6 +138,7 @@ export interface TournamentInput {
   counts_toward_handicap?: boolean;
   max_entrants?: number | null;
   description?: string | null;
+  series_id?: number | null;
   age_min?: number | null;
   age_max?: number | null;
   level_min?: number | null;

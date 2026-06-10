@@ -8,6 +8,7 @@ import {
   Map,
   Medal,
   Globe,
+  ListOrdered,
   ScrollText,
   TrendingUp,
   Trophy,
@@ -45,6 +46,14 @@ const externalResults: NavItem = {
   icon: Globe,
 };
 
+// Series / order-of-merit — admin manages; all roles can reach standings from a
+// tournament that belongs to a series.
+const series: NavItem = {
+  to: '/series',
+  label: 'Series',
+  icon: ListOrdered,
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
@@ -52,6 +61,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     tournaments,
+    series,
     externalResults,
   ],
   coach: [

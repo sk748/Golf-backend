@@ -31,6 +31,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { useCoursesWithTees } from '../admin/admin-courses.queries';
+import { useSeriesList } from './series.queries';
 import type { CourseTee, CourseWithTees } from '../../types/api';
 import {
   divisionBasisLabel,
@@ -158,6 +159,7 @@ interface FormState {
   counts_toward_handicap: boolean;
   max_entrants: string;
   description: string;
+  series_id: string; // '' = none
   age_min: string;
   age_max: string;
   level_min: string;
@@ -179,6 +181,7 @@ const EMPTY_FORM: FormState = {
   counts_toward_handicap: false,
   max_entrants: '',
   description: '',
+  series_id: '',
   age_min: '',
   age_max: '',
   level_min: '',
@@ -201,6 +204,7 @@ function toFormState(t: Tournament): FormState {
     counts_toward_handicap: t.counts_toward_handicap,
     max_entrants: t.max_entrants != null ? String(t.max_entrants) : '',
     description: t.description ?? '',
+    series_id: t.series_id != null ? String(t.series_id) : '',
     age_min: t.age_min != null ? String(t.age_min) : '',
     age_max: t.age_max != null ? String(t.age_max) : '',
     level_min: t.level_min != null ? String(t.level_min) : '',
@@ -274,6 +278,10 @@ function buildPayload(form: FormState, editMode: boolean): TournamentInput {
   const teeId = parseIntOrUndef(form.tee_set_id);
   if (teeId !== undefined) payload.tee_set_id = teeId;
   else if (editMode) payload.tee_set_id = null;
+
+  const seriesId = parseIntOrUndef(form.series_id);
+  if (seriesId !== undefined) payload.series_id = seriesId;
+  else if (editMode) payload.series_id = null;
 
   if (form.end_date) payload.end_date = form.end_date;
   else if (editMode) payload.end_date = null;
@@ -379,6 +387,7 @@ export function TournamentFormPage() {
 
   const existing = useTournament(validEditId ? tournamentId : NaN);
   const coursesQuery = useCoursesWithTees();
+  const seriesQuery = useSeriesList();
 
   const createMutation = useCreateTournament();
   const updateMutation = useUpdateTournament();
@@ -641,6 +650,30 @@ export function TournamentFormPage() {
                 }
                 label="Write a WHS round per player"
               />
+            </Field>
+            <Field
+              label="Series"
+              htmlFor="series_id"
+              hint="Optional — completed results feed the series standings."
+            >
+              <select
+                id="series_id"
+                className={inputClass}
+                value={form.series_id}
+                disabled={seriesQuery.isLoading}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, series_id: e.target.value }))
+                }
+              >
+                <option value="" className="bg-navy">
+                  No series
+                </option>
+                {(seriesQuery.data ?? []).map((s) => (
+                  <option key={s.id} value={String(s.id)} className="bg-navy">
+                    {s.name} ({s.year})
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
 

@@ -24,6 +24,8 @@ import { TournamentEnterScoresPage } from './pages/tournaments/TournamentEnterSc
 import { TournamentFormPage } from './pages/tournaments/TournamentFormPage';
 import { TournamentBracketPage } from './pages/tournaments/TournamentBracketPage';
 import { TournamentExternalResultsPage } from './pages/tournaments/TournamentExternalResultsPage';
+import { SeriesListPage } from './pages/tournaments/SeriesListPage';
+import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
 
 export function App() {
   return (
@@ -95,6 +97,10 @@ export function App() {
             </RequireRole>
           }
         />
+        {/* Series / order-of-merit — all signed-in roles view standings;
+            create/edit/delete is gated to admin inside the pages. */}
+        <Route path="/series" element={<SeriesListPage />} />
+        <Route path="/series/:id" element={<SeriesDetailPage />} />
         <Route
           path="/achievements"
           element={
