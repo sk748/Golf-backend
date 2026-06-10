@@ -6,7 +6,7 @@ from app.evaluations.controllers import (
     list_evaluations, get_evaluation, create_evaluation, update_evaluation, delete_evaluation,
     coach_sign, committee_sign, get_evaluation_summary,
 )
-from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user
+from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
 from app.audit.service import record, junior_label
 
 evaluations_bp = Blueprint("evaluations_bp", __name__, url_prefix="/api")
@@ -63,6 +63,14 @@ def get_evaluations():
 @require_roles("admin", "coach")
 def post_evaluation():
     data = request.get_json() or {}
+    # The row's coach identity comes from the token, not the body: a coach
+    # always authors as themselves (whatever the body says); an admin may
+    # submit on a coach's behalf but defaults to their own id if unspecified.
+    caller = get_current_user()
+    if has_role(caller, "coach"):
+        data["coach_id"] = caller.id
+    else:
+        data.setdefault("coach_id", caller.id)
     try:
         ev = create_evaluation(data)
         return _data(evaluation_schema.dump(ev), 201)

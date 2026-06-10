@@ -16,6 +16,7 @@ import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
 import { CoachSchedulePage } from './pages/coach/CoachSchedulePage';
 import { CoachAttendancePage } from './pages/coach/CoachAttendancePage';
+import { CoachWriteEvaluationPage } from './pages/coach/CoachWriteEvaluationPage';
 import { CommitteeEvaluationsPage } from './pages/committee/CommitteeEvaluationsPage';
 import { ParentChildPage } from './pages/parent/ParentChildPage';
 import { ParentSessionsPage } from './pages/parent/ParentSessionsPage';
@@ -179,6 +180,14 @@ export function App() {
           element={
             <RequireRole roles={['committee']}>
               <CommitteeEvaluationsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/evaluations/new"
+          element={
+            <RequireRole roles={['admin', 'coach']}>
+              <CoachWriteEvaluationPage />
             </RequireRole>
           }
         />

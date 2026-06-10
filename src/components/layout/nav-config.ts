@@ -70,6 +70,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     dashboard,
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
+    { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
     tournaments,
     externalResults,
   ],
