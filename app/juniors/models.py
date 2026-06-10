@@ -41,6 +41,16 @@ class JuniorAvailability(str, Enum):
     holidays_only = "holidays_only"
 
 
+class JuniorApprovalStatus(str, Enum):
+    # Signup chain (build-phase-2 decisions 5+7): a junior self-registering
+    # with the parent's membership number starts pending_parent; the parent's
+    # approval (or a parent creating the account themselves — consent
+    # implicit) moves it to pending_staff; admin/committee approval activates.
+    pending_parent = "pending_parent"
+    pending_staff = "pending_staff"
+    active = "active"
+
+
 class LevelBand(TimestampMixin, db.Model):
     __tablename__ = "level_bands"
 
@@ -100,6 +110,11 @@ class JuniorProfile(TimestampMixin, db.Model):
     medical_conditions = Column(Text, nullable=True)
     golf_goals = Column(Text, nullable=True)
     tournament_ready = Column(Boolean, nullable=False, default=False)
+    approval_status = Column(
+        SQLEnum(JuniorApprovalStatus, values_callable=enum_values, name="junior_approval_status"),
+        nullable=False,
+        default=JuniorApprovalStatus.active,  # staff intake activates directly
+    )
 
     user = relationship("User", foreign_keys=[user_id], backref="junior_profile")
     parent = relationship("User", foreign_keys=[parent_id], backref="children")

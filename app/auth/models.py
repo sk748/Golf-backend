@@ -43,6 +43,9 @@ class User(db.Model):
     )
     handicap_index = Column(Numeric(4, 1), nullable=True)
     cdh_number = Column(String(100), nullable=True)
+    # Club membership number — the common code linking a junior signup to the
+    # parent member (build-phase-2 decisions 5+7). Unique when present.
+    membership_number = Column(String(50), unique=True, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(

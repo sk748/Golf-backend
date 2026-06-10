@@ -67,6 +67,26 @@ def register_user(data: dict):
     if User.query.filter_by(email=email).first():
         return None, "Email already registered"
 
+    # Signup chain (build-phase-2 decisions 5+7): the club membership number is
+    # the common code. A self-registering player MUST supply their parent's
+    # membership number — it links the junior to the parent, who then approves
+    # the signup before staff activate it. Parents may record their own number
+    # at registration so their children can link to them later.
+    parent = None
+    parent_number = (data.get("parent_membership_number") or "").strip()
+    if user_role == UserRole.player:
+        if not parent_number:
+            return None, "parent_membership_number is required — ask your parent for their club membership number"
+        parent = User.query.filter_by(
+            membership_number=parent_number, role=UserRole.parent
+        ).first()
+        if parent is None:
+            return None, "No parent account found with that membership number"
+
+    own_number = (data.get("membership_number") or "").strip() or None
+    if own_number and User.query.filter_by(membership_number=own_number).first():
+        return None, "That membership number is already registered"
+
     user = User(
         email=email,
         password_hash=User.generate_password_hash(password),
@@ -76,6 +96,7 @@ def register_user(data: dict):
         membership_type=membership_type,
         phone=data.get("phone"),
         cdh_number=data.get("kcc_id") or data.get("cdh_number"),
+        membership_number=own_number if user_role == UserRole.parent else None,
     )
     db.session.add(user)
     try:
@@ -84,18 +105,24 @@ def register_user(data: dict):
         db.session.rollback()
         return None, "Email already registered"
 
-    # Auto-create a JuniorProfile when a player registers with date_of_birth
+    # Auto-create a JuniorProfile when a player registers with date_of_birth.
+    # Self-registered juniors are linked to the parent and wait for the
+    # parent's approval (then staff approval) before becoming active.
     if user_role == UserRole.player and data.get("date_of_birth"):
-        _create_junior_profile(user, data)
+        _create_junior_profile(
+            user, data,
+            parent_id=parent.id if parent else None,
+            approval_status="pending_parent",
+        )
 
     return user, None
 
 
-def _create_junior_profile(user, data: dict):
+def _create_junior_profile(user, data: dict, parent_id=None, approval_status="active"):
     """
-    Creates a minimal JuniorProfile when a junior golfer self-registers.
-    parent_id is left null until a parent or admin links their account.
+    Creates a minimal JuniorProfile for a registering junior golfer.
     band_id is auto-resolved from current_level=1 (beginner default).
+    Self-registrations pass the resolved parent + 'pending_parent'.
     """
     from app.juniors.models import JuniorProfile, LevelBand, JuniorExperience, JuniorAvailability
     from datetime import date
@@ -123,19 +150,61 @@ def _create_junior_profile(user, data: dict):
 
     profile = JuniorProfile(
         user_id=user.id,
-        parent_id=None,
+        parent_id=parent_id,
         date_of_birth=dob,
         gender=gender,
         current_level=1,
         band_id=band.id,
         experience=experience,
         availability=availability,
+        approval_status=approval_status,
     )
     db.session.add(profile)
     try:
         db.session.commit()
     except Exception:
         db.session.rollback()  # don't fail the whole registration if profile creation fails
+
+
+def create_child_account(parent, data: dict):
+    """A parent creates their child's player account + junior profile
+    (build-phase-2 decision 5). Parent consent is implicit, so the junior
+    starts at pending_staff (admin/committee activate). Returns (user, err)."""
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    if not email or not password:
+        return None, "email and password are required"
+    pw_err = _validate_password(password)
+    if pw_err:
+        return None, pw_err
+    first_name = (data.get("first_name") or "").strip()
+    if not first_name:
+        return None, "first_name is required"
+    if not data.get("date_of_birth"):
+        return None, "date_of_birth is required"
+    if User.query.filter_by(email=email).first():
+        return None, "Email already registered"
+
+    user = User(
+        email=email,
+        password_hash=User.generate_password_hash(password),
+        first_name=first_name,
+        last_name=(data.get("last_name") or "").strip(),
+        role=UserRole.player,
+        membership_type=MembershipType.junior,
+        phone=data.get("phone"),
+    )
+    db.session.add(user)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return None, "Email already registered"
+
+    _create_junior_profile(
+        user, data, parent_id=parent.id, approval_status="pending_staff"
+    )
+    return user, None
 
 
 def login_user(email: str, password: str):

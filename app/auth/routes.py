@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.auth.controllers import (
     user_schema, users_schema,
-    register_user, login_user,
+    register_user, login_user, create_child_account,
     update_user_profile, list_users, get_user_by_id,
     create_user, update_user, delete_user,
 )
@@ -53,6 +53,25 @@ def register():
         status = 409 if "already" in err else 400
         return _err(err, status)
     return _build_auth_response(user)
+
+
+@user_v1.route("/parents/me/children", methods=["POST"])
+@require_roles("parent")
+def post_child_account():
+    """A parent creates their child's account + junior profile (consent
+    implicit -> junior starts pending_staff). Standard envelope, NOT the auth
+    token response — the parent stays signed in as themselves."""
+    caller = get_current_user()
+    user, err = create_child_account(caller, request.get_json() or {})
+    if err:
+        status = 409 if "already" in err else 400
+        return jsonify({"error": {"code": "VALIDATION_ERROR" if status == 400 else "CONFLICT", "message": err}}), status
+    record(
+        "junior account created by parent",
+        actor=caller, target_type="user", target_id=user.id,
+        target_label=_user_label(user),
+    )
+    return _data(user_schema.dump(user), 201)
 
 
 @user_v1.route("/auth/login", methods=["POST"])

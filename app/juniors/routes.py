@@ -72,6 +72,7 @@ def get_juniors():
         age_min=request.args.get("age_min", type=int),
         age_max=request.args.get("age_max", type=int),
         coach_id=request.args.get("coach_id"),
+        approval_status=request.args.get("approval_status"),
     )
     dumped = [_with_child_name(d, j) for d, j in zip(juniors_schema.dump(items), items)]
     return _data(dumped, count=len(items))
@@ -105,7 +106,7 @@ def get_my_feedback():
 
 
 @juniors_bp.route("/juniors", methods=["POST"])
-@require_roles("admin", "coach")
+@require_roles("admin", "coach", "committee")
 def post_junior():
     data = request.get_json() or {}
     try:
@@ -158,6 +159,37 @@ def put_junior(junior_id):
         return _data(_with_child_name(junior_schema.dump(update_junior(junior, data)), junior))
     except ValueError as exc:
         return _err("VALIDATION_ERROR", str(exc), 400)
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/approve", methods=["PUT"])
+@require_roles("admin", "committee", "parent")
+def approve_junior_route(junior_id):
+    """Signup approval chain (build-phase-2 decisions 5+7):
+    pending_parent --parent (own child)--> pending_staff
+    pending_staff  --admin/committee-----> active
+    Wrong state or wrong role for the current step -> 409/403."""
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    caller = get_current_user()
+    status = getattr(junior.approval_status, "value", junior.approval_status)
+
+    if status == "pending_parent":
+        # Only the linked parent consents at this step (admins use intake
+        # flows; the chain exists precisely so the parent confirms first).
+        if not has_role(caller, "parent") or str(junior.parent_id) != str(caller.id):
+            return _err("FORBIDDEN", "This signup is waiting for the parent's approval", 403)
+        junior.approval_status = "pending_staff"
+    elif status == "pending_staff":
+        if not has_role(caller, "admin", "committee"):
+            return _err("FORBIDDEN", "This signup is waiting for club approval", 403)
+        junior.approval_status = "active"
+    else:
+        return _err("CONFLICT", "This junior is already active", 409)
+
+    from app.database.database import db
+    db.session.commit()
+    return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
 @juniors_bp.route("/juniors/<int:junior_id>/promote", methods=["POST"])

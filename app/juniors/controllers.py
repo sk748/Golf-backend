@@ -33,12 +33,15 @@ def _resolve_band(data: dict):
 # ── Junior Profiles ────────────────────────────────────────────────────────
 
 def list_juniors(parent_id=None, band_id=None, current_level=None,
-                 age_min=None, age_max=None, coach_id=None):
+                 age_min=None, age_max=None, coach_id=None,
+                 approval_status=None):
     q = JuniorProfile.query
     if parent_id:
         q = q.filter_by(parent_id=parent_id)
     if coach_id:
         q = q.filter_by(coach_id=coach_id)
+    if approval_status:
+        q = q.filter_by(approval_status=approval_status)
     if band_id:
         q = q.filter_by(band_id=band_id)
     if current_level:
