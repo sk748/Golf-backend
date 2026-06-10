@@ -37,7 +37,9 @@ export function AppShell() {
         </NavLink>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3">
+      {/* min-h-0 lets the nav shrink inside the flex column so it scrolls
+          instead of pushing the sign-out block off-screen on long navs. */}
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
         {items.map((item) => (
           <NavLink
             key={item.to}
