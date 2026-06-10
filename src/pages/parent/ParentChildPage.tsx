@@ -28,6 +28,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
+import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import {
   bandForLevel,
   childName,
@@ -688,6 +689,9 @@ function ChildDetail({
           <MonthlyReportPanel juniorId={child.id} month={month} />
         </div>
       </GlassCard>
+
+      {/* Competition history — internal + external events feeding best-gross. */}
+      <CompetitionHistory juniorId={child.id} title="Competition history" />
     </div>
   );
 }

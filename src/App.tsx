@@ -23,6 +23,7 @@ import { TournamentDetailPage } from './pages/tournaments/TournamentDetailPage';
 import { TournamentEnterScoresPage } from './pages/tournaments/TournamentEnterScoresPage';
 import { TournamentFormPage } from './pages/tournaments/TournamentFormPage';
 import { TournamentBracketPage } from './pages/tournaments/TournamentBracketPage';
+import { TournamentExternalResultsPage } from './pages/tournaments/TournamentExternalResultsPage';
 
 export function App() {
   return (
@@ -84,6 +85,16 @@ export function App() {
         {/* Bracket — all signed-in roles can view; management controls are gated
             to admin/coach inside the page. */}
         <Route path="/tournaments/:id/bracket" element={<TournamentBracketPage />} />
+        {/* External results log — admin/coach record off-club events that feed a
+            junior's competitions-played / best-gross stats. */}
+        <Route
+          path="/tournaments/external"
+          element={
+            <RequireRole roles={['admin', 'coach']}>
+              <TournamentExternalResultsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/achievements"
           element={

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Map,
   Medal,
+  Globe,
   ScrollText,
   TrendingUp,
   Trophy,
@@ -36,6 +37,14 @@ const tournaments: NavItem = {
   icon: Medal,
 };
 
+// External results — admin/coach log off-club events (Faldo / US Kids / JGF …)
+// that feed a junior's competitions-played / best-gross stats.
+const externalResults: NavItem = {
+  to: '/tournaments/external',
+  label: 'External results',
+  icon: Globe,
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
@@ -43,12 +52,14 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     tournaments,
+    externalResults,
   ],
   coach: [
     dashboard,
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     tournaments,
+    externalResults,
   ],
   committee: [
     dashboard,

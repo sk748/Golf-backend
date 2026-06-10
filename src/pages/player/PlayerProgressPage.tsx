@@ -17,6 +17,7 @@ import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
+import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import type {
   JuniorProgress,
   LevelBand,
@@ -685,6 +686,13 @@ export function PlayerProgressPage() {
             )}
           </div>
         </GlassCard>
+
+        {/* 5) COMPETITION HISTORY — internal + external events, with best gross */}
+        {juniorId != null ? (
+          <div className="animate-fade-in-up stagger-3">
+            <CompetitionHistory juniorId={juniorId} title="Your competitions" />
+          </div>
+        ) : null}
       </div>
     );
   };
