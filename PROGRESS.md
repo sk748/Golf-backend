@@ -220,6 +220,42 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
 - Still open for staging: production env vars (DATABASE_URI / APP_SETTINGS / JWT
   secret / FRONTEND_URL), rate-limiter storage backend, `VITE_API_BASE` build config.
 
+### Build phase 2 decisions (Sam, 2026-06-10) — the UX-completion build
+Answers to the 14 decisions raised by the per-role UX gap evaluation:
+
+1. **Round entry:** player AND coach can enter practice rounds.
+2. **Verification:** player-entered rounds must be **verified by coach, admin, or
+   committee** before counting toward the handicap (coach-verifies-first model).
+3. **Counting:** per-round `counts` flag (practice-only vs counting).
+4. **Sessions:** coach OR admin approve (one sign-off). Sessions are **group
+   training sessions**: coach publishes a session with **max attendance, level/age
+   requirements, session type (e.g. short game + putting)** and other reasonable
+   requirements; multiple students can book the same slot if allowed.
+5. **Junior profiles:** parent is the primary creator at signup; admin AND
+   committee can also do in-person intake (committee acts for admin). **Parent
+   consent always required.** A student may self-register by entering the
+   **parent's club membership number**, which maps them to the parent → parent
+   approves → then admin/committee approve.
+6. **Promotion:** acts on a counter-signed `move_next_level` evaluation
+   ("Promote to L{n+1}" action), traceable to the evaluation.
+7. **Parent↔child linking:** at registration via the **club membership number**
+   as the common code (see #5 flow).
+8. **Series nav:** player, parent, coach, committee all get it (everyone).
+9. **Committee junior browser:** FULL profile visibility (incl. medical/goals).
+10. **Admin oversight:** evaluations list + coach schedules + attendance reports
+    + session-requests queue; clicking a player profile shows **that player's
+    dashboard view**. (Social features phase is scoped AFTER this build — keep
+    profile views social-ready.)
+11. **External results:** parents log for their own child; **staff verify**
+    (verified flag, backend change).
+12. **Account self-service:** none now.
+13. **Code-splitting:** at ship (Phase 6).
+14. **Guided tutorial:** finishing touches.
+
 ### Next up (other)
-- Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (bundle ~1 MB
-  advisory), walk every role through once.
+- Execute the build-phase-2 plan above (backend: rounds verification + counts
+  flag, group sessions, membership-number signup chain, external-results verify;
+  frontend: round entry + verify queue, session publish/book/approve, signup
+  flows, promotion action, committee browser, admin oversight, series nav).
+- Phase 6 ship pass after: states/a11y/responsive sweep, code-splitting, walk
+  every role through once.
