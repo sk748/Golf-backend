@@ -4,11 +4,13 @@ import {
   CalendarPlus,
   ClipboardCheck,
   ClipboardList,
+  Flag,
   LayoutDashboard,
   Map,
   Medal,
   Globe,
   ListOrdered,
+  ShieldCheck,
   UserCog,
   ScrollText,
   TrendingUp,
@@ -55,6 +57,19 @@ const series: NavItem = {
   icon: ListOrdered,
 };
 
+// Rounds — players log their own (pending until verified); staff log for any
+// junior and clear the verification queue.
+const logRound: NavItem = {
+  to: '/log-round',
+  label: 'Log round',
+  icon: Flag,
+};
+const verifyRounds: NavItem = {
+  to: '/verify-rounds',
+  label: 'Verify rounds',
+  icon: ShieldCheck,
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
@@ -62,6 +77,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
+    logRound,
+    verifyRounds,
     tournaments,
     series,
     externalResults,
@@ -71,6 +88,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
+    logRound,
+    verifyRounds,
     tournaments,
     series,
     externalResults,
@@ -78,6 +97,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   committee: [
     dashboard,
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
+    verifyRounds,
     tournaments,
     series,
   ],
@@ -92,6 +112,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     dashboard,
     { to: '/progress', label: 'Progress', icon: BarChart3 },
     { to: '/achievements', label: 'Achievements', icon: Trophy },
+    logRound,
     tournaments,
     series,
   ],

@@ -26,6 +26,8 @@ import { TournamentEnterScoresPage } from './pages/tournaments/TournamentEnterSc
 import { TournamentFormPage } from './pages/tournaments/TournamentFormPage';
 import { TournamentBracketPage } from './pages/tournaments/TournamentBracketPage';
 import { TournamentExternalResultsPage } from './pages/tournaments/TournamentExternalResultsPage';
+import { LogRoundPage } from './pages/scoring/LogRoundPage';
+import { VerifyRoundsPage } from './pages/scoring/VerifyRoundsPage';
 import { SeriesListPage } from './pages/tournaments/SeriesListPage';
 import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
 
@@ -103,6 +105,24 @@ export function App() {
             create/edit/delete is gated to admin inside the pages. */}
         <Route path="/series" element={<SeriesListPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
+        {/* Rounds — players log their own (pending until verified); staff log
+            for any junior (verified immediately); staff verify the queue. */}
+        <Route
+          path="/log-round"
+          element={
+            <RequireRole roles={['admin', 'coach', 'player']}>
+              <LogRoundPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/verify-rounds"
+          element={
+            <RequireRole roles={['admin', 'coach', 'committee']}>
+              <VerifyRoundsPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/achievements"
           element={

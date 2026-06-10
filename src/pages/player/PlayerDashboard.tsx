@@ -34,9 +34,14 @@ import {
 
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { useAuth } from '../../auth/useAuth';
 import type { Round } from '../../types/api';
+import {
+  isPendingRound,
+  isPracticeRound,
+} from '../scoring/round-entry.queries';
 import { LevelProgressCard } from './LevelProgressCard';
 import { RoundScorecardModal } from './RoundScorecardModal';
 import { useHandicapHistory, useRounds } from './player-games.queries';
@@ -636,6 +641,21 @@ export function PlayerDashboard() {
                         <span className="block text-xs text-slate">
                           {shortDate(round.date_played)}
                         </span>
+                        {/* Verification badges — status comes from the API. */}
+                        {(isPendingRound(round) || isPracticeRound(round)) && (
+                          <span className="mt-1 flex flex-wrap gap-1.5">
+                            {isPendingRound(round) && (
+                              <Badge tone="gold" className="px-1.5 py-0.5 text-[10px]">
+                                Awaiting verification
+                              </Badge>
+                            )}
+                            {isPracticeRound(round) && (
+                              <Badge tone="slate" className="px-1.5 py-0.5 text-[10px]">
+                                Practice
+                              </Badge>
+                            )}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-right">
                         <span className="block font-mono text-lg font-black text-silver">

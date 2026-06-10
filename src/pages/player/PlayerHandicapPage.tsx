@@ -27,6 +27,33 @@ import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../auth/useAuth';
 import type { Round } from '../../types/api';
 import { useHandicapHistory, useRounds } from './player-games.queries';
+import {
+  isPendingRound,
+  isPracticeRound,
+} from '../scoring/round-entry.queries';
+
+// Small verification/practice badge pair for a round row. Additive display of
+// the API's status / counts_toward_handicap fields — renders nothing for a
+// normal verified, counting round.
+function RoundFlags({ round }: { round: Round }) {
+  const pending = isPendingRound(round);
+  const practice = isPracticeRound(round);
+  if (!pending && !practice) return null;
+  return (
+    <span className="inline-flex flex-wrap gap-1.5">
+      {pending && (
+        <Badge tone="gold" className="px-1.5 py-0.5 text-[10px]">
+          Awaiting verification
+        </Badge>
+      )}
+      {practice && (
+        <Badge tone="slate" className="px-1.5 py-0.5 text-[10px]">
+          Practice
+        </Badge>
+      )}
+    </span>
+  );
+}
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#012349',
@@ -346,6 +373,9 @@ export function PlayerHandicapPage() {
                           <p className="mt-0.5 text-xs text-slate">
                             {fullDate(round.date_played)}
                           </p>
+                          <div className="mt-1">
+                            <RoundFlags round={round} />
+                          </div>
                         </div>
                         <span className="shrink-0 text-right">
                           <span className="block font-mono text-xl font-black text-silver">
@@ -416,7 +446,10 @@ export function PlayerHandicapPage() {
                             {fullDate(round.date_played)}
                           </td>
                           <td className="px-4 py-3 text-silver">
-                            {roundLabel(round)}
+                            <span className="inline-flex flex-wrap items-center gap-1.5">
+                              {roundLabel(round)}
+                              <RoundFlags round={round} />
+                            </span>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-right font-mono font-bold text-silver">
                             {round.gross_score}
