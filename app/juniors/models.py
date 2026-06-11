@@ -115,9 +115,12 @@ class JuniorProfile(TimestampMixin, db.Model):
         nullable=False,
         default=JuniorApprovalStatus.active,  # staff intake activates directly
     )
-    # Badge the junior chooses to show off in social spaces (chat). Must be one
-    # they've actually earned (enforced in the controller); null = none featured.
+    # Award the junior chooses to show off in social spaces (chat). Two sources
+    # (unify-later, Sam 2026-06-11): a staff-granted Badge (featured_badge_id) OR
+    # an auto-unlocked Achievement from the frontend catalog (featured_achievement_key).
+    # At most one is set; setting one clears the other (enforced in the controller).
     featured_badge_id = Column(Integer, ForeignKey("badges.id"), nullable=True)
+    featured_achievement_key = Column(String(80), nullable=True)
 
     user = relationship("User", foreign_keys=[user_id], backref="junior_profile")
     featured_badge = relationship("Badge", foreign_keys=[featured_badge_id])

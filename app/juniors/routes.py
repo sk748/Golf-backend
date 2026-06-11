@@ -17,7 +17,8 @@ from app.juniors.controllers import (
     list_level_benchmarks, get_level_benchmark, create_level_benchmark,
     update_level_benchmark, delete_level_benchmark,
     list_badges, get_badge, create_badge, update_badge, delete_badge,
-    list_junior_badges, award_badge, revoke_badge, set_featured_badge,
+    list_junior_badges, award_badge, revoke_badge,
+    set_featured_badge, set_featured_achievement,
 )
 from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, require_ownership, has_role
@@ -462,20 +463,36 @@ def delete_junior_badge(junior_id, badge_id):
 @juniors_bp.route("/juniors/<int:junior_id>/featured-badge", methods=["PUT"])
 @require_roles("admin", "coach", "committee", "player")
 def put_featured_badge(junior_id):
-    """A player picks which of their earned badges to show off in chat (staff
-    may set it too). {badge_id: int|null}; null clears. Players may only set
-    their own."""
+    """A player picks which award to show off in chat (staff may set it too).
+    Body is ONE of: {badge_id:int} (a staff-granted badge they hold),
+    {achievement_key:str} (an auto-unlocked achievement), or either field null
+    / {} to clear. Players may only set their own. Setting one source clears
+    the other."""
     junior = get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
     caller = get_current_user()
     if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
-        return _err("FORBIDDEN", "You can only set your own featured badge", 403)
+        return _err("FORBIDDEN", "You can only set your own featured award", 403)
     data = request.get_json() or {}
-    badge_id = data.get("badge_id")
-    if badge_id is not None and not isinstance(badge_id, int):
-        return _err("VALIDATION_ERROR", "badge_id must be an integer or null", 400)
-    updated, err = set_featured_badge(junior, badge_id)
+
+    if "achievement_key" in data:
+        key = data.get("achievement_key")
+        if key is not None and not isinstance(key, str):
+            return _err("VALIDATION_ERROR", "achievement_key must be a string or null", 400)
+        if isinstance(key, str) and len(key) > 80:
+            return _err("VALIDATION_ERROR", "achievement_key is too long", 400)
+        updated, err = set_featured_achievement(junior, key)
+    else:
+        badge_id = data.get("badge_id")
+        if badge_id is not None and not isinstance(badge_id, int):
+            return _err("VALIDATION_ERROR", "badge_id must be an integer or null", 400)
+        updated, err = set_featured_badge(junior, badge_id)
+
     if err:
         return _err("VALIDATION_ERROR", err, 400)
-    return _data({"junior_id": junior.id, "featured_badge_id": updated.featured_badge_id})
+    return _data({
+        "junior_id": junior.id,
+        "featured_badge_id": updated.featured_badge_id,
+        "featured_achievement_key": updated.featured_achievement_key,
+    })

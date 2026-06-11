@@ -303,17 +303,27 @@ TOMBSTONE = "This message was deleted"
 
 
 def featured_badge_for(user):
-    """The badge a player chose to show off, or None. Only players have a
-    junior profile, so only they ever surface a badge in chat."""
+    """The award a player chose to show off in chat, or None. Two sources:
+    a staff-granted badge -> {source:'badge', id, name, description}; an
+    auto-unlocked achievement -> {source:'achievement', key} (the frontend
+    resolves the key to a title/icon/description from its catalog). Only
+    players have a junior profile, so only they surface an award."""
     if role_value(user) != "player":
         return None
     profile = JuniorProfile.query.filter_by(user_id=user.id).first()
-    if profile is None or profile.featured_badge_id is None:
+    if profile is None:
         return None
-    badge = profile.featured_badge
-    if badge is None:
-        return None
-    return {"id": badge.id, "name": badge.name, "description": badge.description}
+    if profile.featured_badge_id is not None and profile.featured_badge is not None:
+        badge = profile.featured_badge
+        return {
+            "source": "badge",
+            "id": badge.id,
+            "name": badge.name,
+            "description": badge.description,
+        }
+    if profile.featured_achievement_key:
+        return {"source": "achievement", "key": profile.featured_achievement_key}
+    return None
 
 
 def serialize_message(msg, viewer, sender=None):

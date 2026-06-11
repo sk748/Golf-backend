@@ -321,15 +321,28 @@ def revoke_badge(junior_id: int, badge_id: int):
 
 
 def set_featured_badge(junior, badge_id):
-    """Choose which earned badge a junior shows off in chat. badge_id=None
-    clears it. Returns (junior, error) — the badge must be one they hold."""
+    """Feature a staff-granted badge (clears any featured achievement).
+    badge_id=None clears the featured award. The badge must be one held."""
     if badge_id is None:
         junior.featured_badge_id = None
+        junior.featured_achievement_key = None
         db.session.commit()
         return junior, None
     held = db.session.get(JuniorBadge, (junior.id, badge_id))
     if held is None:
         return None, "That badge has not been awarded to this junior"
     junior.featured_badge_id = badge_id
+    junior.featured_achievement_key = None
+    db.session.commit()
+    return junior, None
+
+
+def set_featured_achievement(junior, key):
+    """Feature an auto-unlocked achievement (clears any featured badge). The
+    achievement catalog lives in the frontend, so we trust the key for this
+    cosmetic choice (key=None clears)."""
+    junior.featured_achievement_key = key or None
+    if key:
+        junior.featured_badge_id = None
     db.session.commit()
     return junior, None
