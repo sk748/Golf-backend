@@ -61,6 +61,36 @@ def list_conversations():
     return _data(items, count=len(items))
 
 
+@messaging_bp.route("/messaging/contacts", methods=["GET"])
+@require_auth
+def list_contacts():
+    """Who the caller may open a DM with, per the matrix — players and parents
+    have no access to club-wide user lists, so target discovery happens here.
+    Players get their own coach + admins only; parents get staff only."""
+    user = get_current_user()
+    role = role_value(user)
+    query = User.query.filter(User.is_active.is_(True), User.id != user.id)
+    if role in ("admin", "coach"):
+        users = query.all()
+    elif role == "committee":
+        users = [u for u in query.all() if role_value(u) != "player"]
+    elif role == "parent":
+        users = [u for u in query.all() if role_value(u) in ("admin", "coach", "committee")]
+    else:  # player: own assigned coach + admins
+        profile = player_profile(user)
+        coach_id = str(profile.coach_id) if profile is not None and profile.coach_id else None
+        users = [
+            u for u in query.all()
+            if role_value(u) == "admin" or (coach_id is not None and str(u.id) == coach_id)
+        ]
+    items = [
+        {"user_id": str(u.id), "full_name": full_name(u), "role": role_value(u)}
+        for u in users
+    ]
+    items.sort(key=lambda c: (c["role"], c["full_name"]))
+    return _data(items, count=len(items))
+
+
 @messaging_bp.route("/conversations", methods=["POST"])
 @require_auth
 def post_conversation():
