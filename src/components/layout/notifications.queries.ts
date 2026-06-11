@@ -14,7 +14,9 @@ import { api } from '../../lib/api';
 
 // payload keys vary by type: first_contact {conversation_id, staff_name,
 // child_name}; message_held {message_id, conversation_id, sender_name};
-// message_flagged {message_id, conversation_id, flagged_by_name, reason}.
+// message_flagged {message_id, conversation_id, flagged_by_name, reason};
+// tournament_open {tournament_id, tournament_name, start_date, child_name?};
+// announcement {announcement_id, title}.
 export interface AppNotification {
   id: number;
   type: string;
@@ -80,6 +82,16 @@ export function notificationText(n: AppNotification): string {
       return `A message from ${s('sender_name') || 'a member'} was held for review`;
     case 'message_flagged':
       return `${s('flagged_by_name') || 'Someone'} flagged a message${s('reason') ? ` — “${s('reason')}”` : ''}`;
+    case 'tournament_open': {
+      const name = s('tournament_name') || 'A tournament';
+      const child = s('child_name');
+      // Parent variant names the child; player variant is about themselves.
+      return child
+        ? `${child} can now register for ${name}`
+        : `Registration is open for ${name} — you're eligible`;
+    }
+    case 'announcement':
+      return `New announcement: ${s('title') || 'see details'}`;
     default:
       return n.type.replace(/_/g, ' ');
   }
@@ -88,10 +100,19 @@ export function notificationText(n: AppNotification): string {
 // Where clicking a notification should take the user. Moderation events are
 // admin-only by construction (only admins receive them).
 export function notificationLink(n: AppNotification): string {
+  const p = n.payload ?? {};
   switch (n.type) {
     case 'message_held':
     case 'message_flagged':
       return '/moderation';
+    case 'tournament_open': {
+      const id = p.tournament_id;
+      return typeof id === 'number' || typeof id === 'string'
+        ? `/tournaments/${id}`
+        : '/tournaments';
+    }
+    case 'announcement':
+      return '/announcements';
     default:
       return '/messages';
   }

@@ -55,6 +55,58 @@ def _roles_contains(role):
     return func.concat(",", Announcement.roles, ",").like(f"%,{role},%")
 
 
+def _audience_user_ids(a):
+    """Resolve a published INTERNAL announcement's audience to the set of
+    recipient user ids for in-app notifications. This is the inverse of the
+    role-scoped feed in list_announcements (everyone / roles / a band's players
+    + their parents / a coach's group). External announcements are landing-page
+    only and never fan out here."""
+    audience = getattr(a.audience, "value", a.audience)
+
+    if audience == "everyone":
+        return {u.id for u in User.query.all()}
+
+    if audience == "roles":
+        names = {r.strip().lower() for r in (a.roles or "").split(",") if r.strip()}
+        if not names:
+            return set()
+        return {
+            u.id
+            for u in User.query.all()
+            if (getattr(u.role, "value", str(u.role))) in names
+        }
+
+    if audience == "band":
+        ids = set()
+        for j in JuniorProfile.query.filter_by(band_id=a.band_id).all():
+            ids.add(j.user_id)
+            if j.parent_id:
+                ids.add(j.parent_id)
+        return ids
+
+    if audience == "coach_group":
+        ids = {a.coach_id} if a.coach_id else set()
+        for j in JuniorProfile.query.filter_by(coach_id=a.coach_id).all():
+            ids.add(j.user_id)
+            if j.parent_id:
+                ids.add(j.parent_id)
+        return ids
+
+    return set()
+
+
+def _fanout_announcement(a, author_id):
+    """Raise one in-app notification per targeted user (excluding the author)
+    for a freshly published internal announcement, and commit them."""
+    from app.notifications.service import notify
+
+    recipients = _audience_user_ids(a) - {author_id}
+    for uid in recipients:
+        notify(uid, "announcement", {"announcement_id": a.id, "title": a.title})
+    if recipients:
+        db.session.commit()
+
+
 def _validate_content_and_targeting(data):
     """Shared validation for create + edit. Returns
     (title, body, audience, roles_csv, band_id, coach_id, error_response)."""
@@ -132,6 +184,12 @@ def post_announcement():
     )
     db.session.add(a)
     db.session.commit()
+    # A published internal announcement pings every targeted user's bell.
+    # External announcements are landing-page only and never ping the bell; the
+    # only drafts are committee-authored external ones, so publish_announcement
+    # (which only ever publishes external drafts) deliberately doesn't fan out.
+    if published and not is_external:
+        _fanout_announcement(a, user.id)
     return _data(_dump(a), 201)
 
 

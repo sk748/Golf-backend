@@ -57,7 +57,7 @@ export function NotificationBell() {
         {badge > 0 && (
           <span
             data-testid="notification-bell-count"
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-azure px-1 text-[10px] font-bold text-navy"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-navy"
           >
             {badge > 99 ? '99+' : badge}
           </span>

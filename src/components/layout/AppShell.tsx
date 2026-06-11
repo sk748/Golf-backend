@@ -22,7 +22,7 @@ function MessagesUnreadBadge() {
   return (
     <span
       data-testid="nav-messages-unread"
-      className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-azure px-1.5 text-xs font-bold text-navy"
+      className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white"
     >
       {unread > 99 ? '99+' : unread}
     </span>

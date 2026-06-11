@@ -169,6 +169,48 @@ def _validate_competition_type(value):
         raise ValueError(f"Invalid competition_type '{value}'. One of: {valid}")
 
 
+def _status_value(s):
+    return getattr(s, "value", s)
+
+
+def _notify_eligible_juniors(t):
+    """Fan out a 'tournament_open' notification to every eligible active junior
+    (the player's own login) and their parent — players + parents ONLY, since
+    staff already see the whole tournament list. Eligibility is checked against
+    the tournament's own rules (age/level/handicap) as at its start date, so a
+    junior is only pinged about events they can actually enter. One notification
+    per recipient (a parent with two eligible children is pinged once)."""
+    from app.juniors.models import JuniorApprovalStatus, JuniorProfile
+    from app.notifications.service import notify
+
+    juniors = JuniorProfile.query.filter_by(
+        approval_status=JuniorApprovalStatus.active
+    ).all()
+    base = {
+        "tournament_id": t.id,
+        "tournament_name": t.name,
+        "start_date": t.start_date.isoformat() if t.start_date else None,
+    }
+    seen = set()
+    for j in juniors:
+        ok, _reason = scoring.check_eligibility(t, j, t.start_date)
+        if not ok:
+            continue
+        child_name = None
+        if j.user is not None:
+            child_name = (j.user.first_name or "").strip() or None
+        # The player (junior's own login) — no child_name (it's about them).
+        if j.user_id and j.user_id not in seen:
+            notify(j.user_id, "tournament_open", base)
+            seen.add(j.user_id)
+        # The parent — name the child so a multi-child parent knows who.
+        if j.parent_id and j.parent_id not in seen:
+            notify(j.parent_id, "tournament_open", {**base, "child_name": child_name})
+            seen.add(j.parent_id)
+    if seen:
+        db.session.commit()
+
+
 def create_tournament(data):
     if "competition_type" in data:
         _validate_competition_type(data.get("competition_type"))
@@ -177,12 +219,16 @@ def create_tournament(data):
     t = tournament_schema.load(data)
     db.session.add(t)
     db.session.commit()
+    # A tournament created already open for registration pings eligible juniors.
+    if _status_value(t.status) == "registration_open":
+        _notify_eligible_juniors(t)
     return t
 
 
 def update_tournament(t, data):
     if "competition_type" in data:
         _validate_competition_type(data.get("competition_type"))
+    was_open = _status_value(t.status) == "registration_open"
     for k, v in data.items():
         if k in {"id", "created_at", "updated_at"}:
             continue
@@ -190,6 +236,10 @@ def update_tournament(t, data):
             v = None
         setattr(t, k, v)
     db.session.commit()
+    # Notify only on the transition INTO registration_open (not on every edit
+    # of an already-open event), so juniors aren't re-pinged.
+    if not was_open and _status_value(t.status) == "registration_open":
+        _notify_eligible_juniors(t)
     return t
 
 
