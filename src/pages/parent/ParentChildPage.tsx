@@ -30,6 +30,8 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import { LogExternalResultCard } from '../tournaments/LogExternalResultCard';
+import { CompetitionRequirementsCard } from '../../features/competition/CompetitionRequirementsCard';
+import { HandicapJourneyCard } from '../../features/handicap/HandicapJourneyCard';
 import { AddChildCard } from './AddChildCard';
 import { EditChildDetailsCard } from './EditChildDetailsCard';
 import {
@@ -701,6 +703,12 @@ function ChildDetail({
           <MonthlyReportPanel juniorId={child.id} month={month} />
         </div>
       </GlassCard>
+
+      {/* Competition requirements — mandatory/encouraged events for the band. */}
+      <CompetitionRequirementsCard juniorId={child.id} />
+
+      {/* Path to a first handicap (L4-5) — read-only for parents. */}
+      <HandicapJourneyCard juniorId={child.id} />
 
       {/* Competition history — internal + external events feeding best-gross. */}
       <CompetitionHistory juniorId={child.id} title="Competition history" />

@@ -18,6 +18,11 @@ import {
 } from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
+// Single source of truth for the competition taxonomy (also used by the
+// competition-requirements feature) — don't redefine it here.
+import type { CompetitionType } from '../../features/competition/competition';
+
+export type { CompetitionType };
 
 // ── Domain types (feature-local; canonical shape not in src/types/api.ts) ──────
 
@@ -55,6 +60,7 @@ export interface Tournament {
   handicap_min: number | null;
   handicap_max: number | null;
   handicap_required: boolean;
+  competition_type: CompetitionType | null;
   created_at: string;
   updated_at: string;
 }
@@ -146,6 +152,7 @@ export interface TournamentInput {
   handicap_min?: number | null;
   handicap_max?: number | null;
   handicap_required?: boolean;
+  competition_type?: CompetitionType | null;
 }
 
 export interface DivisionInput {

@@ -43,6 +43,10 @@ export interface AssignableJunior {
   // Signup chain (build-phase-2 decisions 5+7): pending_parent → pending_staff
   // → active. Staff surfaces badge non-active rows; admin/committee approve.
   approval_status: JuniorApprovalStatus;
+  // Participant type — the three programme entry routes (registered_junior |
+  // club_beginner | karen_academy). Staff-editable via PUT /api/juniors/:id;
+  // filter via GET /api/juniors?participant_type=. Default registered_junior.
+  participant_type: string | null;
 }
 
 // GET /api/juniors — every junior in the programme (admin/coach/committee).

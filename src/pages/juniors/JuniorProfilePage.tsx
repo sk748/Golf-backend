@@ -44,6 +44,13 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import {
+  ParticipantTypeBadge,
+  ParticipantTypeSelect,
+} from '../../features/participant/participant';
+import { CompetitionRequirementsCard } from '../../features/competition/CompetitionRequirementsCard';
+import { HandicapJourneyCard } from '../../features/handicap/HandicapJourneyCard';
+import { HandicapJourneyEditor } from '../../features/handicap/HandicapJourneyEditor';
+import {
   useAllJuniors,
   useCoachUsers,
   type AssignableJunior,
@@ -223,6 +230,7 @@ interface EditFormState {
   medicalConditions: string;
   golfGoals: string;
   tournamentReady: boolean;
+  participantType: string;
 }
 
 function formFromJunior(j: AssignableJunior): EditFormState {
@@ -241,6 +249,7 @@ function formFromJunior(j: AssignableJunior): EditFormState {
     medicalConditions: j.medical_conditions ?? '',
     golfGoals: j.golf_goals ?? '',
     tournamentReady: j.tournament_ready,
+    participantType: j.participant_type ?? 'registered_junior',
   };
 }
 
@@ -297,6 +306,7 @@ function StaffEditCard({ junior }: { junior: AssignableJunior }) {
             : form.medicalConditions.trim(),
         golf_goals: form.golfGoals.trim() === '' ? null : form.golfGoals.trim(),
         tournament_ready: form.tournamentReady,
+        participant_type: form.participantType,
       },
       { onSuccess: () => setSaved(true) },
     );
@@ -407,6 +417,24 @@ function StaffEditCard({ junior }: { junior: AssignableJunior }) {
                 placeholder="Curriculum focus…"
                 disabled={update.isPending}
                 data-testid="edit-curriculum"
+              />
+            </div>
+
+            {/* Participant type — staff-only field (parents get 403 on PUT) */}
+            <div className="sm:col-span-2">
+              <label className={formLabelClass} htmlFor="edit-participant-type">
+                Participant type
+              </label>
+              <p className="mt-0.5 text-xs text-slate">
+                Programme entry route — affects reporting and future billing.
+              </p>
+              <ParticipantTypeSelect
+                id="edit-participant-type"
+                value={form.participantType}
+                onChange={(v) => change('participantType', v)}
+                disabled={update.isPending}
+                className="mt-1.5"
+                data-testid="edit-participant-type"
               />
             </div>
 
@@ -677,8 +705,8 @@ function ProgressSection({
             {minSessions <= 0
               ? 'No band minimum recorded for this level.'
               : sessionsDone
-                ? `Reached this band's minimum of ${minSessions} sessions.`
-                : `${Math.max(0, minSessions - present)} more toward this band's minimum of ${minSessions}.`}
+                ? `Reached this band’s minimum of ${minSessions} sessions.`
+                : `${Math.max(0, minSessions - present)} more toward this band’s minimum of ${minSessions}.`}
           </p>
 
           {att ? (
@@ -891,11 +919,13 @@ function JuniorProfileBody({
   bands,
   coaches,
   canEdit,
+  role,
 }: {
   junior: AssignableJunior;
   bands: LevelBand[] | undefined;
   coaches: User[];
   canEdit: boolean;
+  role: string | undefined;
 }) {
   const name = juniorName(junior);
   const age = ageFromDob(junior.date_of_birth);
@@ -904,6 +934,9 @@ function JuniorProfileBody({
     ? coaches.find((c) => c.id === junior.coach_id)
     : undefined;
   const hasHandicap = junior.has_handicap && junior.handicap_index != null;
+
+  // HandicapJourneyEditor is only shown to coach and admin (committee is read-only).
+  const canEditHandicapJourney = role === 'coach' || role === 'admin';
 
   return (
     <div className="space-y-6">
@@ -928,6 +961,8 @@ function JuniorProfileBody({
                     Tournament ready
                   </Badge>
                 ) : null}
+                {/* Participant type badge — shows programme entry route */}
+                <ParticipantTypeBadge type={junior.participant_type} />
               </div>
               <p className="mt-1.5 text-xs text-slate">
                 {age != null ? `Age ${age}` : 'Age —'} ·{' '}
@@ -968,11 +1003,22 @@ function JuniorProfileBody({
       {/* 5) Progress vs band minimum */}
       <ProgressSection junior={junior} bands={bands} />
 
-      {/* 6) Handicap trend */}
+      {/* 6) Handicap trend (raw chart) */}
       <HandicapTrendSection junior={junior} />
+
+      {/* 6b) Handicap journey — path-to-handicap card (all staff) */}
+      <HandicapJourneyCard juniorId={junior.id} />
+
+      {/* 6c) Handicap journey editor — coach/admin only; committee is read-only */}
+      {canEditHandicapJourney ? (
+        <HandicapJourneyEditor juniorId={junior.id} />
+      ) : null}
 
       {/* 7) Competition history (hero stats live here — not duplicated above) */}
       <CompetitionHistory juniorId={junior.id} />
+
+      {/* 7b) Competition requirements (all staff) */}
+      <CompetitionRequirementsCard juniorId={junior.id} />
 
       {/* 8) Recent attendance */}
       <AttendanceSection junior={junior} />
@@ -1064,6 +1110,7 @@ export function JuniorProfilePage() {
             bands={bandsQuery.data}
             coaches={coachesQuery.data ?? []}
             canEdit={canEdit}
+            role={user?.role}
           />
         )}
       </div>

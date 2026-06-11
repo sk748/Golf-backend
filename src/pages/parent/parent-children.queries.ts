@@ -99,6 +99,10 @@ export interface CreateChildInput {
   date_of_birth: string; // ISO YYYY-MM-DD — required by the backend
   gender: string; // 'male' | 'female'
   phone?: string;
+  // NOTE: participant_type is intentionally NOT here — it's a staff-only
+  // programme classification (registered_junior / club_beginner / karen_academy)
+  // with downstream reporting/billing meaning. New children default to
+  // registered_junior; staff re-classify via PUT /api/juniors/:id.
 }
 
 export function useCreateChildAccount(): UseMutationResult<

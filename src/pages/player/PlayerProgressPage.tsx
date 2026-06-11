@@ -18,6 +18,9 @@ import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { CompetitionHistory } from '../tournaments/CompetitionHistory';
+import { BenchmarkTargets } from '../../features/benchmarks/BenchmarkTargets';
+import { CompetitionRequirementsCard } from '../../features/competition/CompetitionRequirementsCard';
+import { HandicapJourneyCard } from '../../features/handicap/HandicapJourneyCard';
 import type {
   JuniorProgress,
   LevelBand,
@@ -691,6 +694,27 @@ export function PlayerProgressPage() {
         {juniorId != null ? (
           <div className="animate-fade-in-up stagger-3">
             <CompetitionHistory juniorId={juniorId} title="Your competitions" />
+          </div>
+        ) : null}
+
+        {/* 6) BENCHMARK TARGETS — level targets for the player's current level */}
+        {juniorId != null ? (
+          <div className="animate-fade-in-up stagger-4">
+            <BenchmarkTargets level={currentLevel} />
+          </div>
+        ) : null}
+
+        {/* 7) COMPETITION REQUIREMENTS — what's needed to stay/move for this junior */}
+        {juniorId != null ? (
+          <div className="animate-fade-in-up stagger-4">
+            <CompetitionRequirementsCard juniorId={juniorId} />
+          </div>
+        ) : null}
+
+        {/* 8) HANDICAP JOURNEY — index history and milestones */}
+        {juniorId != null ? (
+          <div className="animate-fade-in-up stagger-4">
+            <HandicapJourneyCard juniorId={juniorId} />
           </div>
         ) : null}
       </div>

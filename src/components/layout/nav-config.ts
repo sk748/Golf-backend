@@ -19,6 +19,9 @@ import {
   TrendingUp,
   Trophy,
   Users,
+  CalendarRange,
+  Target,
+  Upload,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Role } from '../../types/api';
@@ -104,6 +107,13 @@ const announcements: NavItem = {
   label: 'Announcements',
   icon: Megaphone,
 };
+// Quarterly clinic timetable (group sessions by band + age group) — staff see
+// the whole schedule; players/parents see bookable clinics (scoped server-side).
+const timetable: NavItem = {
+  to: '/timetable',
+  label: 'Timetable',
+  icon: CalendarRange,
+};
 
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
@@ -118,7 +128,10 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/moderation', label: 'Moderation', icon: ShieldAlert },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
+    { to: '/admin/benchmarks', label: 'Benchmarks', icon: Target },
+    { to: '/import', label: 'Import juniors', icon: Upload },
     groupSessions,
+    timetable,
     logRound,
     verifyRounds,
     tournaments,
@@ -131,6 +144,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     announcements,
     juniors,
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
+    timetable,
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
     { to: '/evaluations/new', label: 'Evaluations', icon: ClipboardList },
     groupSessions,
@@ -147,6 +161,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     juniors,
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
     { to: '/schedule', label: 'Schedules', icon: CalendarDays },
+    timetable,
+    { to: '/import', label: 'Import juniors', icon: Upload },
     verifyRounds,
     tournaments,
     series,
@@ -157,6 +173,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     announcements,
     { to: '/my-child', label: 'My child', icon: TrendingUp },
     { to: '/sessions', label: 'Coaching', icon: CalendarPlus },
+    timetable,
     tournaments,
     series,
   ],
@@ -168,6 +185,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/achievements', label: 'Achievements', icon: Trophy },
     logRound,
     bookSession,
+    timetable,
     tournaments,
     series,
   ],

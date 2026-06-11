@@ -15,6 +15,9 @@ import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
 import { AdminModerationPage } from './pages/admin/AdminModerationPage';
+import { AdminBenchmarksPage } from './pages/admin/AdminBenchmarksPage';
+import { AdminImportPage } from './pages/admin/AdminImportPage';
+import { TimetablePage } from './pages/coaching/TimetablePage';
 import { MessagesPage } from './pages/messages/MessagesPage';
 import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage';
 import { CoachSchedulePage } from './pages/coach/CoachSchedulePage';
@@ -231,6 +234,30 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminCoursesPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/benchmarks"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminBenchmarksPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/import"
+          element={
+            <RequireRole roles={['admin', 'committee']}>
+              <AdminImportPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/timetable"
+          element={
+            <RequireRole roles={['admin', 'coach', 'committee', 'parent', 'player']}>
+              <TimetablePage />
             </RequireRole>
           }
         />

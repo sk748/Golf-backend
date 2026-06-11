@@ -18,6 +18,7 @@ import {
 
 import { ApiError } from '../../lib/api';
 import type { LevelBand, User } from '../../types/api';
+import { PARTICIPANT_TYPES } from '../../features/participant/participant';
 import { useAuth } from '../../auth/useAuth';
 import { Avatar } from '../../components/ui/Avatar';
 import { Badge } from '../../components/ui/Badge';
@@ -80,6 +81,7 @@ export function JuniorsBrowserPage() {
   const [bandFilter, setBandFilter] = useState<string>(FILTER_ALL);
   const [coachFilter, setCoachFilter] = useState<string>(FILTER_ALL);
   const [approvalFilter, setApprovalFilter] = useState<string>(FILTER_ALL);
+  const [participantFilter, setParticipantFilter] = useState<string>(FILTER_ALL);
 
   // Only admin/committee may activate pending_staff signups (the backend 403s
   // a coach) — gate the inline Approve button accordingly.
@@ -99,11 +101,17 @@ export function JuniorsBrowserPage() {
       if (approvalFilter !== FILTER_ALL && j.approval_status !== approvalFilter) {
         return false;
       }
+      if (
+        participantFilter !== FILTER_ALL &&
+        (j.participant_type ?? 'registered_junior') !== participantFilter
+      ) {
+        return false;
+      }
       if (coachFilter === FILTER_UNASSIGNED) return j.coach_id === null;
       if (coachFilter !== FILTER_ALL) return j.coach_id === coachFilter;
       return true;
     });
-  }, [juniors, search, bandFilter, coachFilter, approvalFilter]);
+  }, [juniors, search, bandFilter, coachFilter, approvalFilter, participantFilter]);
 
   // Per-band counts for the summary strip (band_id → count).
   const bandCounts = useMemo(() => {
@@ -214,6 +222,26 @@ export function JuniorsBrowserPage() {
             data-testid="juniors-filter-approval"
           >
             {APPROVAL_FILTER_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="juniors-filter-participant" className={labelClass}>
+            Participant
+          </label>
+          <select
+            id="juniors-filter-participant"
+            value={participantFilter}
+            onChange={(e) => setParticipantFilter(e.target.value)}
+            className={fieldClass}
+            data-testid="juniors-filter-participant"
+          >
+            <option value={FILTER_ALL}>All participants</option>
+            {PARTICIPANT_TYPES.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>

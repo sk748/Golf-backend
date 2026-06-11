@@ -50,6 +50,10 @@ import {
   type TournamentFormat,
   type TournamentInput,
 } from './tournaments.queries';
+import {
+  COMPETITION_TYPES,
+  type CompetitionType,
+} from '../../features/competition/competition';
 
 // ── Shared error helper ──────────────────────────────────────────────────────
 
@@ -160,6 +164,7 @@ interface FormState {
   max_entrants: string;
   description: string;
   series_id: string; // '' = none
+  competition_type: CompetitionType | ''; // '' = none/null
   age_min: string;
   age_max: string;
   level_min: string;
@@ -182,6 +187,7 @@ const EMPTY_FORM: FormState = {
   max_entrants: '',
   description: '',
   series_id: '',
+  competition_type: '',
   age_min: '',
   age_max: '',
   level_min: '',
@@ -205,6 +211,7 @@ function toFormState(t: Tournament): FormState {
     max_entrants: t.max_entrants != null ? String(t.max_entrants) : '',
     description: t.description ?? '',
     series_id: t.series_id != null ? String(t.series_id) : '',
+    competition_type: t.competition_type ?? '',
     age_min: t.age_min != null ? String(t.age_min) : '',
     age_max: t.age_max != null ? String(t.age_max) : '',
     level_min: t.level_min != null ? String(t.level_min) : '',
@@ -282,6 +289,9 @@ function buildPayload(form: FormState, editMode: boolean): TournamentInput {
   const seriesId = parseIntOrUndef(form.series_id);
   if (seriesId !== undefined) payload.series_id = seriesId;
   else if (editMode) payload.series_id = null;
+
+  if (form.competition_type) payload.competition_type = form.competition_type;
+  else if (editMode) payload.competition_type = null;
 
   if (form.end_date) payload.end_date = form.end_date;
   else if (editMode) payload.end_date = null;
@@ -671,6 +681,32 @@ export function TournamentFormPage() {
                 {(seriesQuery.data ?? []).map((s) => (
                   <option key={s.id} value={String(s.id)} className="bg-navy">
                     {s.name} ({s.year})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label="Competition type"
+              htmlFor="competition_type"
+              hint="Optional — tags this event for requirement tracking."
+            >
+              <select
+                id="competition_type"
+                className={inputClass}
+                value={form.competition_type}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    competition_type: e.target.value as CompetitionType | '',
+                  }))
+                }
+              >
+                <option value="" className="bg-navy">
+                  — none —
+                </option>
+                {COMPETITION_TYPES.map((o) => (
+                  <option key={o.value} value={o.value} className="bg-navy">
+                    {o.label}
                   </option>
                 ))}
               </select>

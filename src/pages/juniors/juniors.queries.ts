@@ -169,6 +169,8 @@ export interface UpdateJuniorStaffFields {
   medical_conditions?: string | null;
   golf_goals?: string | null;
   tournament_ready?: boolean;
+  // Staff-editable only (parents get 403 on PUT /api/juniors/:id for this field).
+  participant_type?: string;
 }
 
 export interface UpdateJuniorStaffInput extends UpdateJuniorStaffFields {
@@ -188,6 +190,35 @@ export function useUpdateJuniorStaff(): UseMutationResult<
       // Browser table + any roster variant, and the per-junior reads.
       void queryClient.invalidateQueries({ queryKey: ['juniors'] });
       void queryClient.invalidateQueries({ queryKey: ['junior'] });
+    },
+  });
+}
+
+// ── Staff junior creation ─────────────────────────────────────────────────────
+// POST /api/juniors — staff (admin/coach/committee) create a junior account
+// directly. Returns the created AssignableJunior row (standard {data} envelope).
+// Invalidates the shared ['juniors'] prefix so the browser table reloads.
+export interface CreateJuniorStaffInput {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name?: string;
+  date_of_birth: string; // ISO YYYY-MM-DD
+  gender: string; // 'male' | 'female'
+  participant_type?: string; // default 'registered_junior'
+}
+
+export function useCreateJuniorStaff(): UseMutationResult<
+  AssignableJunior,
+  Error,
+  CreateJuniorStaffInput
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateJuniorStaffInput) =>
+      api.post<AssignableJunior>('/api/juniors', input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['juniors'] });
     },
   });
 }
