@@ -1,4 +1,11 @@
-# Overnight run — checkpoint (2026-06-11, paced across 2 token windows)
+# Overnight run — ✅ ALL DONE (2026-06-11/12, paced across 2 token windows)
+
+FINAL STATE: Phase 1 demo seed ✅ · Phase 2 test suite ✅ (94 passed/0 failed) ·
+Phase 3 security review ✅ BOTH passes merged into docs/SECURITY_REVIEW.md
+(read-only; triage with Sam — top items: hole-scores unscoped C-1, rounds body
+forgery C-2+MA-1, evaluation sign-off forgery MA-2, sessions cluster H-5,
+Flask-Cors/gunicorn bumps DEP-1/2). Achievements issues remain parked in
+docs/ACHIEVEMENTS_AUDIT.md per Sam. Nothing fixed without him.
 
 Task (Sam, before bed): **"Both: demo seed then backend test suite."** Run to
 completion, paced so it spans the current token window + the next (reset ~1.5h
