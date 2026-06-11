@@ -55,28 +55,23 @@ def _roles_contains(role):
     return func.concat(",", Announcement.roles, ",").like(f"%,{role},%")
 
 
-@announcements_bp.route("/announcements", methods=["POST"])
-@require_roles("admin", "committee")
-def post_announcement():
-    """Create an announcement. Internal -> published immediately. External:
-    admin -> published directly; committee -> draft (admin publishes later)."""
-    user = get_current_user()
-    data = request.get_json() or {}
-
+def _validate_content_and_targeting(data):
+    """Shared validation for create + edit. Returns
+    (title, body, audience, roles_csv, band_id, coach_id, error_response)."""
     title = (data.get("title") or "").strip()
     body = (data.get("body") or "").strip()
     if not title or len(title) > 200:
-        return _err("VALIDATION_ERROR", "title is required (max 200 characters)", 400)
+        return (None,) * 6 + (_err("VALIDATION_ERROR", "title is required (max 200 characters)", 400),)
     if not body:
-        return _err("VALIDATION_ERROR", "body is required", 400)
+        return (None,) * 6 + (_err("VALIDATION_ERROR", "body is required", 400),)
 
     audience = data.get("audience") or "everyone"
     if audience not in {a.value for a in AnnouncementAudience}:
-        return _err(
+        return (None,) * 6 + (_err(
             "VALIDATION_ERROR",
             "audience must be one of: everyone, roles, band, coach_group",
             400,
-        )
+        ),)
 
     roles_csv = None
     band_id = None
@@ -86,22 +81,37 @@ def post_announcement():
         names = [r.strip().lower() for r in (raw.split(",") if isinstance(raw, str) else (raw or [])) if str(r).strip()]
         bad = [r for r in names if r not in VALID_ROLES]
         if not names or bad:
-            return _err(
+            return (None,) * 6 + (_err(
                 "VALIDATION_ERROR",
                 "roles must be a non-empty list/csv of valid role names "
                 "(admin, coach, committee, parent, player)",
                 400,
-            )
+            ),)
         roles_csv = ",".join(sorted(set(names)))
     elif audience == "band":
         band_id = data.get("band_id")
         if band_id is None or db.session.get(LevelBand, band_id) is None:
-            return _err("VALIDATION_ERROR", "band_id must reference an existing level band", 400)
+            return (None,) * 6 + (_err("VALIDATION_ERROR", "band_id must reference an existing level band", 400),)
     elif audience == "coach_group":
         coach_id = data.get("coach_id")
         coach = db.session.get(User, str(coach_id or ""))
         if coach is None or not has_role(coach, "coach"):
-            return _err("VALIDATION_ERROR", "coach_id must reference an existing coach", 400)
+            return (None,) * 6 + (_err("VALIDATION_ERROR", "coach_id must reference an existing coach", 400),)
+
+    return title, body, audience, roles_csv, band_id, coach_id, None
+
+
+@announcements_bp.route("/announcements", methods=["POST"])
+@require_roles("admin", "committee")
+def post_announcement():
+    """Create an announcement. Internal -> published immediately. External:
+    admin -> published directly; committee -> draft (admin publishes later)."""
+    user = get_current_user()
+    data = request.get_json() or {}
+
+    title, body, audience, roles_csv, band_id, coach_id, err = _validate_content_and_targeting(data)
+    if err:
+        return err
 
     is_external = bool(data.get("is_external", False))
     # Internal: live immediately. External: committee drafts, admin publishes.
@@ -174,6 +184,37 @@ def list_announcements():
 
     items = q.order_by(Announcement.created_at.desc(), Announcement.id.desc()).limit(50).all()
     return _data([_dump(a) for a in items], count=len(items))
+
+
+@announcements_bp.route("/announcements/<int:announcement_id>", methods=["PUT"])
+@require_roles("admin", "committee")
+def edit_announcement(announcement_id):
+    """Author or admin edits an announcement's content/targeting. Stamps
+    edited_at (the feed shows an 'edited' marker). Status/publish state is
+    unchanged here — publishing stays its own admin action; a committee member
+    can keep refining their own draft before an admin publishes it."""
+    user = get_current_user()
+    a = db.session.get(Announcement, announcement_id)
+    if a is None:
+        return _not_found("Announcement")
+    if not is_admin(user) and str(a.author_id) != str(user.id):
+        return _err("FORBIDDEN", "Only the author or an admin can edit an announcement", 403)
+
+    data = request.get_json() or {}
+    title, body, audience, roles_csv, band_id, coach_id, err = _validate_content_and_targeting(data)
+    if err:
+        return err
+
+    a.title = title
+    a.body = body
+    a.audience = AnnouncementAudience(audience)
+    a.roles = roles_csv
+    a.band_id = band_id
+    a.coach_id = coach_id
+    a.is_external = bool(data.get("is_external", a.is_external))
+    a.edited_at = utc_now()
+    db.session.commit()
+    return _data(_dump(a))
 
 
 @announcements_bp.route("/announcements/<int:announcement_id>/publish", methods=["PUT"])

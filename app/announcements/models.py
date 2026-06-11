@@ -55,6 +55,7 @@ class Announcement(TimestampMixin, db.Model):
     )
     published_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
+    edited_at = Column(DateTime(timezone=True), nullable=True)  # set when author/admin edits
 
     author = relationship("User", foreign_keys=[author_id])
     publisher = relationship("User", foreign_keys=[published_by])
