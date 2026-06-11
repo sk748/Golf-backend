@@ -115,8 +115,12 @@ class JuniorProfile(TimestampMixin, db.Model):
         nullable=False,
         default=JuniorApprovalStatus.active,  # staff intake activates directly
     )
+    # Badge the junior chooses to show off in social spaces (chat). Must be one
+    # they've actually earned (enforced in the controller); null = none featured.
+    featured_badge_id = Column(Integer, ForeignKey("badges.id"), nullable=True)
 
     user = relationship("User", foreign_keys=[user_id], backref="junior_profile")
+    featured_badge = relationship("Badge", foreign_keys=[featured_badge_id])
     parent = relationship("User", foreign_keys=[parent_id], backref="children")
     assigned_coach = relationship("User", foreign_keys=[coach_id], backref="assigned_juniors")
     band = relationship("LevelBand", backref="juniors")

@@ -268,6 +268,64 @@ def post_message(conversation_id):
     return _data(serialize_message(msg, user, sender=user), 201)
 
 
+@messaging_bp.route(
+    "/conversations/<int:conversation_id>/messages/<int:message_id>", methods=["PUT"]
+)
+@require_auth
+def edit_message(conversation_id, message_id):
+    """A sender edits their OWN message. The first body is preserved in
+    original_body (admins always see it); everyone sees an 'edited' marker. The
+    banned-word filter re-runs — you can't edit a blocked word back in. Held,
+    hidden, or already-deleted messages can't be edited."""
+    user = get_current_user()
+    msg = db.session.get(Message, message_id)
+    if msg is None or msg.conversation_id != conversation_id:
+        return _not_found("Message")
+    if str(msg.sender_id) != str(user.id):
+        return _err("FORBIDDEN", "You can only edit your own messages", 403)
+    if msg.deleted_at is not None:
+        return _err("CONFLICT", "A deleted message cannot be edited", 409)
+    if msg.status != MessageStatus.visible:
+        return _err("CONFLICT", "This message cannot be edited", 409)
+
+    data = request.get_json() or {}
+    body = data.get("body")
+    if not isinstance(body, str) or not body.strip():
+        return _err("VALIDATION_ERROR", "body is required", 400)
+    body = body.strip()
+    if len(body) > MAX_BODY_LENGTH:
+        return _err("VALIDATION_ERROR", f"body must be at most {MAX_BODY_LENGTH} characters", 400)
+    if check_banned(body):
+        return _err("VALIDATION_ERROR", "That edit contains a word that isn't allowed", 400)
+
+    if msg.original_body is None:
+        msg.original_body = msg.body  # keep the very first version for the record
+    msg.body = body
+    msg.edited_at = utc_now()
+    db.session.commit()
+    return _data(serialize_message(msg, user, sender=msg.sender))
+
+
+@messaging_bp.route(
+    "/conversations/<int:conversation_id>/messages/<int:message_id>", methods=["DELETE"]
+)
+@require_auth
+def delete_message(conversation_id, message_id):
+    """A sender soft-deletes their OWN message: everyone then sees a 'message
+    deleted' tombstone, but the body is retained for admins (nothing is truly
+    scrubbed). Idempotent."""
+    user = get_current_user()
+    msg = db.session.get(Message, message_id)
+    if msg is None or msg.conversation_id != conversation_id:
+        return _not_found("Message")
+    if str(msg.sender_id) != str(user.id):
+        return _err("FORBIDDEN", "You can only delete your own messages", 403)
+    if msg.deleted_at is None:
+        msg.deleted_at = utc_now()
+        db.session.commit()
+    return _data(serialize_message(msg, user, sender=msg.sender))
+
+
 @messaging_bp.route("/conversations/<int:conversation_id>/read", methods=["PUT"])
 @require_auth
 def mark_conversation_read(conversation_id):

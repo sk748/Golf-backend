@@ -226,6 +226,51 @@ def unread_count(conversation_id, user_id, last_read_at):
     return q.count()
 
 
+def recent_unread_messages(user_id, cap=10):
+    """Latest unread visible messages across a user's memberships, newest
+    first — feeds the notification bell's message list and the live toast."""
+    rows = (
+        db.session.query(Message)
+        .join(
+            ConversationMember,
+            ConversationMember.conversation_id == Message.conversation_id,
+        )
+        .filter(
+            ConversationMember.user_id == user_id,
+            Message.sender_id != user_id,
+            Message.status == MessageStatus.visible,
+            Message.deleted_at.is_(None),
+            or_(
+                ConversationMember.last_read_at.is_(None),
+                Message.created_at > ConversationMember.last_read_at,
+            ),
+        )
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(cap)
+        .all()
+    )
+    out = []
+    for m in rows:
+        conv = db.session.get(Conversation, m.conversation_id)
+        member_users = (
+            db.session.query(User)
+            .join(ConversationMember, ConversationMember.user_id == User.id)
+            .filter(ConversationMember.conversation_id == m.conversation_id)
+            .all()
+        )
+        viewer = db.session.get(User, user_id)
+        preview = (m.body[:80] + "…") if len(m.body) > 80 else m.body
+        out.append({
+            "message_id": m.id,
+            "conversation_id": m.conversation_id,
+            "conversation_name": conversation_display_name(conv, member_users, viewer),
+            "sender_name": full_name(m.sender),
+            "preview": preview,
+            "created_at": _iso(m.created_at),
+        })
+    return out
+
+
 def total_unread_messages(user_id):
     """Total unread visible messages across all of a user's memberships
     (the bell-feed counter)."""
@@ -254,21 +299,54 @@ def _iso(dt):
     return dt.isoformat() if isinstance(dt, datetime) else dt
 
 
+TOMBSTONE = "This message was deleted"
+
+
+def featured_badge_for(user):
+    """The badge a player chose to show off, or None. Only players have a
+    junior profile, so only they ever surface a badge in chat."""
+    if role_value(user) != "player":
+        return None
+    profile = JuniorProfile.query.filter_by(user_id=user.id).first()
+    if profile is None or profile.featured_badge_id is None:
+        return None
+    badge = profile.featured_badge
+    if badge is None:
+        return None
+    return {"id": badge.id, "name": badge.name, "description": badge.description}
+
+
 def serialize_message(msg, viewer, sender=None):
     sender = sender or msg.sender
-    return {
+    is_admin = role_value(viewer) == "admin"
+    deleted = msg.deleted_at is not None
+    # Non-admins see a tombstone for deleted messages; admins keep the body
+    # (and edited messages always retain their original for admins).
+    if deleted and not is_admin:
+        body = TOMBSTONE
+    else:
+        body = msg.body
+    out = {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
         "sender": {
             "user_id": sender.id,
             "full_name": full_name(sender),
             "role": role_value(sender),
+            "featured_badge": featured_badge_for(sender),
         },
-        "body": msg.body,
+        "body": body,
         "status": msg.status.value if hasattr(msg.status, "value") else msg.status,
+        "edited": msg.edited_at is not None,
+        "edited_at": _iso(msg.edited_at),
+        "deleted": deleted,
         "created_at": _iso(msg.created_at),
         "own": str(msg.sender_id) == str(viewer.id),
     }
+    # Admins get the full history so nothing is ever truly scrubbed.
+    if is_admin and (msg.edited_at is not None or deleted):
+        out["original_body"] = msg.original_body if msg.original_body is not None else msg.body
+    return out
 
 
 def serialize_flag(flag):

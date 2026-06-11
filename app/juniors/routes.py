@@ -1,6 +1,9 @@
+from datetime import date
+
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import IntegrityError
 
+from app.database.database import db
 from app.juniors.models import JuniorProfile
 from app.juniors.controllers import (
     junior_schema, juniors_schema,
@@ -14,7 +17,7 @@ from app.juniors.controllers import (
     list_level_benchmarks, get_level_benchmark, create_level_benchmark,
     update_level_benchmark, delete_level_benchmark,
     list_badges, get_badge, create_badge, update_badge, delete_badge,
-    list_junior_badges, award_badge, revoke_badge,
+    list_junior_badges, award_badge, revoke_badge, set_featured_badge,
 )
 from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, require_ownership, has_role
@@ -434,11 +437,16 @@ def get_junior_badges():
 @juniors_bp.route("/junior-badges", methods=["POST"])
 @require_roles("admin", "coach")
 def post_junior_badge():
-    data = request.get_json() or {}
+    data = dict(request.get_json() or {})
+    # awarded_by is NOT NULL — stamp it from the JWT (the awarding staff member)
+    # rather than trusting the body; default the date to today if omitted.
+    data["awarded_by"] = get_current_user().id
+    data.setdefault("awarded_date", date.today().isoformat())
     try:
         jb = award_badge(data)
         return _data(junior_badge_schema.dump(jb), 201)
     except IntegrityError:
+        db.session.rollback()
         return _err("CONFLICT", "Badge already awarded to this junior", 409)
 
 
@@ -449,3 +457,25 @@ def delete_junior_badge(junior_id, badge_id):
     if jb is None:
         return _not_found("Junior badge")
     return "", 204
+
+
+@juniors_bp.route("/juniors/<int:junior_id>/featured-badge", methods=["PUT"])
+@require_roles("admin", "coach", "committee", "player")
+def put_featured_badge(junior_id):
+    """A player picks which of their earned badges to show off in chat (staff
+    may set it too). {badge_id: int|null}; null clears. Players may only set
+    their own."""
+    junior = get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    caller = get_current_user()
+    if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
+        return _err("FORBIDDEN", "You can only set your own featured badge", 403)
+    data = request.get_json() or {}
+    badge_id = data.get("badge_id")
+    if badge_id is not None and not isinstance(badge_id, int):
+        return _err("VALIDATION_ERROR", "badge_id must be an integer or null", 400)
+    updated, err = set_featured_badge(junior, badge_id)
+    if err:
+        return _err("VALIDATION_ERROR", err, 400)
+    return _data({"junior_id": junior.id, "featured_badge_id": updated.featured_badge_id})

@@ -5,9 +5,12 @@ Conversations are either DMs (exactly two members, who-may-message-whom is
 enforced by the role matrix in controllers.can_dm) or groups. Each coach's
 roster auto-creates two groups — "players" and "parents" — whose membership
 syncs lazily with the coach's current junior assignments
-(junior_profiles.coach_id). Messages are IMMUTABLE: there are no user
-edit/delete endpoints; an admin can only hide a message (status change, the
-original body is retained for the record).
+(junior_profiles.coach_id).
+
+A sender may EDIT or DELETE their own message. Both are audited, not erased:
+an edit keeps the first body in `original_body` and stamps `edited_at`; a
+delete stamps `deleted_at` and shows everyone a tombstone while the real body
+is retained for admins. An admin can additionally hide a message (moderation).
 """
 from enum import Enum
 
@@ -102,6 +105,13 @@ class Message(TimestampMixin, db.Model):
     held_reason = Column(String(255), nullable=True)
     moderated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     moderated_at = Column(DateTime(timezone=True), nullable=True)
+    # Edit/delete audit trail (sender-driven). original_body holds the FIRST
+    # body once an edit happens; edited_at/deleted_at mark the events. A deleted
+    # message keeps its body in the row — only the serializer tombstones it for
+    # non-admins.
+    original_body = Column(Text, nullable=True)
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     conversation = relationship("Conversation", backref="messages")
     sender = relationship("User", foreign_keys=[sender_id])

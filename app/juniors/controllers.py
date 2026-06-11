@@ -318,3 +318,18 @@ def revoke_badge(junior_id: int, badge_id: int):
         db.session.delete(jb)
         db.session.commit()
     return jb
+
+
+def set_featured_badge(junior, badge_id):
+    """Choose which earned badge a junior shows off in chat. badge_id=None
+    clears it. Returns (junior, error) — the badge must be one they hold."""
+    if badge_id is None:
+        junior.featured_badge_id = None
+        db.session.commit()
+        return junior, None
+    held = db.session.get(JuniorBadge, (junior.id, badge_id))
+    if held is None:
+        return None, "That badge has not been awarded to this junior"
+    junior.featured_badge_id = badge_id
+    db.session.commit()
+    return junior, None

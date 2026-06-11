@@ -37,11 +37,16 @@ def get_notifications():
     unread_notifications = Notification.query.filter_by(
         user_id=user.id, read=False
     ).count()
-    from app.messaging.controllers import total_unread_messages
+    from app.messaging.controllers import (
+        recent_unread_messages, total_unread_messages,
+    )
     return _data({
         "items": [notification_schema.dump(n) for n in items],
         "unread_notifications": unread_notifications,
         "unread_messages": total_unread_messages(user.id),
+        # Latest unread message previews — the bell lists these and the live
+        # toast pops the newest. Keyed by message_id so the client can dedupe.
+        "recent_messages": recent_unread_messages(user.id, cap=10),
     })
 
 
