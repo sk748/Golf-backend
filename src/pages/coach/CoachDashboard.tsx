@@ -33,6 +33,7 @@ import {
   sessionISODate,
   sessionTimeLabel,
 } from './coach-dates';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -411,6 +412,11 @@ export function CoachDashboard() {
             )}
           </div>
         </GlassCard>
+      </div>
+
+      {/* ── Club announcements ──────────────────────────────────────────── */}
+      <div className="animate-fade-in-up stagger-3 mt-6">
+        <AnnouncementsWidget />
       </div>
     </div>
   );

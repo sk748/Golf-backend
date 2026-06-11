@@ -45,6 +45,7 @@ import {
 import { LevelProgressCard } from './LevelProgressCard';
 import { RoundScorecardModal } from './RoundScorecardModal';
 import { useHandicapHistory, useRounds } from './player-games.queries';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 import { useAchievements } from '../../features/achievements/use-achievements';
 import { AchievementIcon } from '../../features/achievements/AchievementIcon';
 import type { EvaluatedAchievement } from '../../features/achievements/catalog';
@@ -727,6 +728,11 @@ export function PlayerDashboard() {
             </GlassCard>
           )}
         </div>
+      </div>
+
+      {/* ── 6) Club announcements ────────────────────────────────────────── */}
+      <div className="mt-6">
+        <AnnouncementsWidget />
       </div>
 
       {/* Scorecard modal */}

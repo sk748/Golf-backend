@@ -52,6 +52,7 @@ import {
   type TournamentEntry,
 } from '../tournaments/tournament-entries.queries';
 import { useApproveJunior } from '../juniors/juniors.queries';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 
 // ── Signup approvals (build-phase-2 decisions 5+7) ───────────────────────────
 // Children who registered themselves with this parent's membership number sit
@@ -737,6 +738,11 @@ export function ParentDashboard() {
           isError={requests.isError}
           error={requests.error}
         />
+      </div>
+
+      {/* Club announcements */}
+      <div className="mt-6">
+        <AnnouncementsWidget className="p-5 sm:p-6" />
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { StatCard } from '../../components/ui/StatCard';
 import type { Role } from '../../types/api';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 import { useAdminStats, useRecentActivity } from './admin-dashboard.queries';
 
 // Normalize any thrown value into a user-facing message.
@@ -285,6 +286,11 @@ export function AdminDashboard() {
             )}
           </div>
         </GlassCard>
+      </div>
+
+      {/* ── F) Club announcements ────────────────────────────────────────── */}
+      <div className="animate-fade-in-up stagger-3 mt-6">
+        <AnnouncementsWidget />
       </div>
     </div>
   );

@@ -23,10 +23,22 @@ export interface AppNotification {
   created_at: string;
 }
 
+// A latest-unread-message preview — newest-first, capped at 10 by the backend.
+// Feeds the bell's "Messages" section and the live MessageToast.
+export interface RecentMessage {
+  message_id: number;
+  conversation_id: number;
+  conversation_name: string;
+  sender_name: string;
+  preview: string;
+  created_at: string;
+}
+
 export interface NotificationsSummary {
   items: AppNotification[];
   unread_notifications: number;
   unread_messages: number;
+  recent_messages: RecentMessage[];
 }
 
 export function useNotificationsSummary(): UseQueryResult<NotificationsSummary> {

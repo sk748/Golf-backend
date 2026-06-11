@@ -1,10 +1,13 @@
 // One open conversation: ascending message bubbles (10s poll), the persistent
-// kid-simple disclaimer, and the composer. Messages are immutable — no edit or
-// delete anywhere. Every message can be reported to the club (hover/tap flag,
-// optional reason), including by oversight-viewing parents. Oversight threads
-// (a parent reading their child's chat) have NO composer — a quiet read-only
-// banner instead. A 'held' message is visible only to its sender (and admin);
-// its bubble carries a quiet "Held for review by the club" note.
+// kid-simple disclaimer, and the composer. A sender may EDIT or DELETE their
+// own message — each behind a confirm step; everyone else's messages stay
+// immutable. An edited message shows a quiet "(edited)" marker; a deleted one
+// renders as a muted tombstone. Admins get a "View original" disclosure on
+// edited/deleted messages for moderation. Every visible message can be reported
+// to the club (hover/tap flag, optional reason), including by oversight-viewing
+// parents. Oversight threads (a parent reading their child's chat) have NO
+// composer — a quiet read-only banner instead. A 'held' message is visible only
+// to its sender (and admin); its bubble carries a quiet "Held for review" note.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -16,14 +19,19 @@ import {
   Flag,
   Loader2,
   MessageSquare,
+  Pencil,
   Send,
+  Trash2,
   Users,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { useAuth } from '../../auth/useAuth';
+import { FeaturedAwardChip } from '../../features/achievements/FeaturedAwardChip';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import {
   CHAT_DISCLAIMER,
   MAX_MESSAGE_LENGTH,
@@ -32,6 +40,8 @@ import {
   isNewDay,
   messageTimeLabel,
   oversightChildName,
+  useDeleteMessage,
+  useEditMessage,
   useFlagMessage,
   useMarkRead,
   useMessages,
@@ -109,27 +119,207 @@ function FlagPanel({
   );
 }
 
+// ── Inline edit editor — replaces the bubble while editing one's own message ──
+
+function EditEditor({
+  message,
+  onCancel,
+  onSaved,
+}: {
+  message: ChatMessage;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const edit = useEditMessage();
+  const [body, setBody] = useState(message.body);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const trimmed = body.trim();
+  const unchanged = trimmed === message.body.trim();
+
+  function submit() {
+    if (!trimmed || unchanged || edit.isPending) return;
+    edit.mutate(
+      {
+        conversationId: message.conversation_id,
+        messageId: message.id,
+        body: trimmed,
+      },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false);
+          onSaved();
+        },
+        // On error keep the editor open; the inline message shows below.
+        onError: () => setConfirmOpen(false),
+      },
+    );
+  }
+
+  return (
+    <div
+      className="mt-1 w-full max-w-[85%] sm:max-w-[70%]"
+      data-testid={`edit-editor-${message.id}`}
+    >
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (trimmed && !unchanged) setConfirmOpen(true);
+          }
+          if (e.key === 'Escape') onCancel();
+        }}
+        rows={2}
+        maxLength={MAX_MESSAGE_LENGTH}
+        autoFocus
+        aria-label="Edit your message"
+        className="max-h-40 min-h-16 w-full resize-none rounded-xl border border-white/10 bg-navy px-3.5 py-2.5 text-sm text-silver outline-none transition-colors focus:border-azure"
+        data-testid={`edit-input-${message.id}`}
+      />
+      {edit.isError ? (
+        <p className="mt-1 text-xs text-red-400" role="alert" data-testid={`edit-error-${message.id}`}>
+          {errorMessage(edit.error, 'Could not save your edit.')}
+        </p>
+      ) : null}
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          disabled={!trimmed || unchanged || edit.isPending}
+          onClick={() => setConfirmOpen(true)}
+          data-testid={`edit-save-${message.id}`}
+        >
+          {edit.isPending ? (
+            <Loader2 size={14} className="animate-spin" aria-hidden />
+          ) : null}
+          Save
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        {body.length > MAX_MESSAGE_LENGTH - 200 ? (
+          <span className="ml-auto text-[10px] text-slate">
+            {MAX_MESSAGE_LENGTH - body.length} left
+          </span>
+        ) : null}
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Edit this message?"
+        message="Your new wording replaces the message and it’s marked as edited."
+        confirmLabel="Save changes"
+        busy={edit.isPending}
+        onConfirm={submit}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </div>
+  );
+}
+
+// ── Admin "view original" disclosure — moderation/audit affordance ────────────
+
+function AdminOriginal({ message }: { message: ChatMessage }) {
+  const [open, setOpen] = useState(false);
+  if (message.original_body == null) return null;
+  return (
+    <div className={cn('mt-1', message.own ? 'pr-2' : 'pl-2')}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-[10px] font-semibold text-slate underline-offset-2 hover:text-azure hover:underline"
+        data-testid={`admin-original-toggle-${message.id}`}
+      >
+        {open ? 'Hide original' : 'View original'}
+      </button>
+      {open ? (
+        <p
+          className="mt-1 max-w-xs whitespace-pre-wrap break-words rounded-lg border border-white/10 bg-navy px-2.5 py-2 text-xs italic text-slate"
+          data-testid={`admin-original-${message.id}`}
+        >
+          {message.original_body}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // ── One message bubble ────────────────────────────────────────────────────────
 
 function MessageBubble({
   message,
   showSender,
+  isAdmin,
+  editing,
   flagging,
   flagged,
+  onEditStart,
+  onEditCancel,
+  onEditSaved,
   onFlagStart,
   onFlagDone,
   onFlagCancel,
+  showAward,
 }: {
   message: ChatMessage;
   showSender: boolean;
+  showAward: boolean;
+  isAdmin: boolean;
+  editing: boolean;
   flagging: boolean;
   flagged: boolean;
+  onEditStart: () => void;
+  onEditCancel: () => void;
+  onEditSaved: () => void;
   onFlagStart: () => void;
   onFlagDone: () => void;
   onFlagCancel: () => void;
 }) {
   const own = message.own;
   const held = message.status === 'held';
+  const deleted = message.deleted;
+
+  const del = useDeleteMessage();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  // A deleted message is a tombstone for everyone, including its sender: no
+  // body actions, no flag, no edit. Admins still get the audit disclosure.
+  if (deleted) {
+    return (
+      <div
+        className={cn('group flex flex-col', own ? 'items-end' : 'items-start')}
+        data-testid={`message-${message.id}`}
+      >
+        <div className="max-w-[85%] sm:max-w-[70%]">
+          <p
+            className="rounded-2xl border border-white/5 bg-white/[0.03] px-3.5 py-2.5 text-sm italic text-slate"
+            data-testid={`tombstone-${message.id}`}
+          >
+            {message.body || 'This message was deleted'}
+          </p>
+        </div>
+        {isAdmin ? <AdminOriginal message={message} /> : null}
+      </div>
+    );
+  }
+
+  // While editing, swap the bubble for the inline editor (own messages only).
+  if (editing) {
+    return (
+      <div
+        className={cn('flex flex-col', own ? 'items-end' : 'items-start')}
+        data-testid={`message-${message.id}`}
+      >
+        <EditEditor
+          message={message}
+          onCancel={onEditCancel}
+          onSaved={onEditSaved}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -155,8 +345,18 @@ function MessageBubble({
           )}
         >
           {showSender && !own ? (
-            <p className="mb-0.5 text-[11px] font-bold text-azure">
+            <p className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-azure">
               {message.sender.full_name}
+              {message.sender.featured_badge ? (
+                <FeaturedAwardChip award={message.sender.featured_badge} />
+              ) : null}
+            </p>
+          ) : showAward && message.sender.featured_badge ? (
+            // The name isn't repeated here (DMs, own messages, or a continued
+            // run), but the award still gets one quiet chip on the run's first
+            // bubble so it travels with the sender.
+            <p className="mb-0.5">
+              <FeaturedAwardChip award={message.sender.featured_badge} />
             </p>
           ) : null}
           <p className="whitespace-pre-wrap break-words text-sm">
@@ -164,25 +364,60 @@ function MessageBubble({
           </p>
           <p
             className={cn(
-              'mt-1 text-right text-[10px]',
+              'mt-1 flex items-center justify-end gap-1 text-[10px]',
               own ? 'text-white/60' : 'text-slate',
             )}
           >
+            {message.edited ? (
+              <span data-testid={`edited-marker-${message.id}`}>(edited)</span>
+            ) : null}
             {messageTimeLabel(message.created_at)}
           </p>
         </div>
 
-        {/* Report — quiet, hover-revealed on desktop, always reachable on touch */}
-        <button
-          type="button"
-          onClick={onFlagStart}
-          aria-label="Report this message"
-          title="Report this message"
-          data-testid={`flag-btn-${message.id}`}
-          className="rounded-lg p-1.5 text-slate/70 transition-all hover:bg-white/5 hover:text-red-400 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+        {/* Actions — quiet, hover-revealed on desktop, always reachable on touch */}
+        <div
+          className={cn(
+            'flex items-center gap-0.5 transition-all focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100',
+          )}
         >
-          <Flag size={13} aria-hidden />
-        </button>
+          {/* Edit only on own VISIBLE messages — the backend 409s an edit to a
+              held/hidden message, so don't offer the affordance there. */}
+          {own && message.status === 'visible' ? (
+            <button
+              type="button"
+              onClick={onEditStart}
+              aria-label="Edit this message"
+              title="Edit this message"
+              data-testid={`edit-btn-${message.id}`}
+              className="rounded-lg p-1.5 text-slate/70 transition-colors hover:bg-white/5 hover:text-azure focus-visible:opacity-100"
+            >
+              <Pencil size={13} aria-hidden />
+            </button>
+          ) : null}
+          {own ? (
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              aria-label="Delete this message"
+              title="Delete this message"
+              data-testid={`delete-btn-${message.id}`}
+              className="rounded-lg p-1.5 text-slate/70 transition-colors hover:bg-white/5 hover:text-red-400 focus-visible:opacity-100"
+            >
+              <Trash2 size={13} aria-hidden />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onFlagStart}
+            aria-label="Report this message"
+            title="Report this message"
+            data-testid={`flag-btn-${message.id}`}
+            className="rounded-lg p-1.5 text-slate/70 transition-colors hover:bg-white/5 hover:text-red-400 focus-visible:opacity-100"
+          >
+            <Flag size={13} aria-hidden />
+          </button>
+        </div>
       </div>
 
       {held ? (
@@ -198,6 +433,8 @@ function MessageBubble({
         </p>
       ) : null}
 
+      {isAdmin ? <AdminOriginal message={message} /> : null}
+
       {flagging ? (
         <FlagPanel message={message} onDone={onFlagDone} onCancel={onFlagCancel} />
       ) : null}
@@ -210,6 +447,25 @@ function MessageBubble({
           Reported — thank you, the club will take a look.
         </p>
       ) : null}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this message?"
+        message="It’ll be replaced with a ‘message deleted’ note. Club admins can still review the original."
+        confirmLabel="Delete"
+        destructive
+        busy={del.isPending}
+        onConfirm={() =>
+          del.mutate(
+            {
+              conversationId: message.conversation_id,
+              messageId: message.id,
+            },
+            { onSuccess: () => setDeleteOpen(false) },
+          )
+        }
+        onCancel={() => setDeleteOpen(false)}
+      />
     </div>
   );
 }
@@ -295,10 +551,13 @@ export function MessageThread({
   currentUserId: string | undefined;
   onBack: () => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const messages = useMessages(conversation.id);
   const markRead = useMarkRead();
   const markReadMutate = markRead.mutate;
 
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [flaggingId, setFlaggingId] = useState<number | null>(null);
   const [flaggedIds, setFlaggedIds] = useState<Set<number>>(new Set());
 
@@ -326,8 +585,9 @@ export function MessageThread({
     if (el) el.scrollTop = el.scrollHeight;
   }, [conversation.id, lastId]);
 
-  // Reset transient flag UI when switching threads.
+  // Reset transient edit/flag UI when switching threads.
   useEffect(() => {
+    setEditingId(null);
     setFlaggingId(null);
     setFlaggedIds(new Set());
   }, [conversation.id]);
@@ -430,9 +690,23 @@ export function MessageThread({
                       isGroup &&
                       (!prev || prev.sender.user_id !== m.sender.user_id)
                     }
+                    // One award chip per sender's consecutive run, in any
+                    // conversation type (groups also show it inline with the name).
+                    showAward={!prev || prev.sender.user_id !== m.sender.user_id}
+                    isAdmin={isAdmin}
+                    editing={editingId === m.id}
                     flagging={flaggingId === m.id}
                     flagged={flaggedIds.has(m.id)}
-                    onFlagStart={() => setFlaggingId(m.id)}
+                    onEditStart={() => {
+                      setFlaggingId(null);
+                      setEditingId(m.id);
+                    }}
+                    onEditCancel={() => setEditingId(null)}
+                    onEditSaved={() => setEditingId(null)}
+                    onFlagStart={() => {
+                      setEditingId(null);
+                      setFlaggingId(m.id);
+                    }}
                     onFlagDone={() => {
                       setFlaggingId(null);
                       setFlaggedIds((s) => new Set(s).add(m.id));

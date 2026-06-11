@@ -40,6 +40,7 @@ export interface Announcement {
   published_by: string | null;
   published_at: string | null; // ISO timestamp
   created_at: string; // ISO timestamp
+  edited_at: string | null; // ISO timestamp — set when the post is edited
 }
 
 // GET /api/public/announcements — minimal public shape (published external only).
@@ -125,6 +126,21 @@ export function useCreateAnnouncement(): UseMutationResult<
   return useMutation({
     mutationFn: (input: CreateAnnouncementInput) =>
       api.post<Announcement>('/api/announcements', input),
+    onSuccess: invalidate,
+  });
+}
+
+// PUT /api/announcements/:id (author or admin). Same body shape as create;
+// re-validates targeting, stamps edited_at, and does NOT change status.
+export function useUpdateAnnouncement(): UseMutationResult<
+  Announcement,
+  Error,
+  { id: number; input: CreateAnnouncementInput }
+> {
+  const invalidate = useAnnouncementInvalidation();
+  return useMutation({
+    mutationFn: ({ id, input }) =>
+      api.put<Announcement>(`/api/announcements/${id}`, input),
     onSuccess: invalidate,
   });
 }

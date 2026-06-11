@@ -8,6 +8,7 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { RoleBadge } from '../ui/Badge';
 import { NAV_BY_ROLE } from './nav-config';
+import { MessageToast } from './MessageToast';
 import { NotificationBell } from './NotificationBell';
 import { useNotificationsSummary } from './notifications.queries';
 
@@ -144,6 +145,10 @@ export function AppShell() {
             <NotificationBell />
           </div>
         </header>
+
+        {/* Live message banners — portals to document.body, anchored top-right
+            below this header. Shares the bell's notifications poll. */}
+        <MessageToast />
 
         <main className="p-3 sm:p-6">
           <Outlet />

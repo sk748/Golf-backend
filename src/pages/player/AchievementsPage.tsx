@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Check, Loader2, Sparkles, UserPlus } from 'lucide-react';
+import { Check, Loader2, Pin, PinOff, Sparkles, UserPlus } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
@@ -13,6 +13,11 @@ import {
   type AchievementCategory,
   type EvaluatedAchievement,
 } from '../../features/achievements/catalog';
+import { useMyJunior } from './player-progress.queries';
+import {
+  featuredAwardOf,
+  useSetFeaturedAward,
+} from './featured-award.queries';
 
 // Top of the level meter — Level 9 is the peak of the junior pathway.
 const MAX_LEVEL = 9;
@@ -85,21 +90,36 @@ function StatePanel({
   );
 }
 
-function AchievementCard({ a }: { a: EvaluatedAchievement }) {
+function AchievementCard({
+  a,
+  featured,
+  onFeature,
+  onClear,
+  busy,
+}: {
+  a: EvaluatedAchievement;
+  // Featuring is only offered when we know the player's junior id.
+  featured: boolean;
+  onFeature: (() => void) | null;
+  onClear: (() => void) | null;
+  busy: boolean;
+}) {
   const hasProgress =
     !a.earned && a.progressNow != null && a.progressTarget != null;
+  // Only an EARNED achievement can be shown off in chat.
+  const canFeature = a.earned && onFeature != null && onClear != null;
 
   return (
     <GlassCard
       tone="light"
       className={cn(
         'flex flex-col items-center gap-2 p-4 text-center transition',
-        a.earned
-          ? 'ring-1 ring-gold/40'
-          : 'opacity-90',
+        a.earned ? 'ring-1 ring-gold/40' : 'opacity-90',
+        featured && 'ring-2 ring-gold shadow-lg shadow-gold/20',
       )}
       data-testid={`achievement-${a.id}`}
       data-earned={a.earned}
+      data-featured={featured}
     >
       <div className="relative">
         <AchievementIcon icon={a.icon} tier={a.tier} earned={a.earned} size="lg" />
@@ -131,6 +151,11 @@ function AchievementCard({ a }: { a: EvaluatedAchievement }) {
         <Badge tone={a.earned ? 'emerald' : 'slate'} shape="pill">
           {a.earned ? 'Earned' : 'Locked'}
         </Badge>
+        {featured && (
+          <Badge tone="gold" shape="pill" data-testid={`featured-badge-${a.id}`}>
+            Featured
+          </Badge>
+        )}
       </div>
 
       {hasProgress && (
@@ -140,6 +165,32 @@ function AchievementCard({ a }: { a: EvaluatedAchievement }) {
             {a.progressNow}/{a.progressTarget}
           </p>
         </div>
+      )}
+
+      {/* "Show off in chat" toggle — earned achievements only. */}
+      {canFeature && (
+        <button
+          type="button"
+          onClick={featured ? onClear : onFeature}
+          disabled={busy}
+          aria-pressed={featured}
+          data-testid={`feature-toggle-${a.id}`}
+          className={cn(
+            'mt-1 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors disabled:opacity-50',
+            featured
+              ? 'bg-gold/15 text-gold hover:bg-gold/25'
+              : 'text-slate hover:bg-white/5 hover:text-gold',
+          )}
+        >
+          {busy ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden />
+          ) : featured ? (
+            <PinOff size={12} aria-hidden />
+          ) : (
+            <Pin size={12} aria-hidden />
+          )}
+          {featured ? 'Clear' : 'Show off in chat'}
+        </button>
       )}
     </GlassCard>
   );
@@ -156,6 +207,19 @@ export function AchievementsPage() {
     error,
     noProfile,
   } = useAchievements();
+
+  // The player's own junior profile drives which achievement is featured and
+  // who we PUT the change for. The mutation invalidates the junior query so the
+  // active state here (and the chat chip) refreshes.
+  const junior = useMyJunior();
+  const juniorId = junior.data?.id;
+  const featuredKey = featuredAwardOf(junior.data).featured_achievement_key;
+  const setFeatured = useSetFeaturedAward();
+  const featuringId = setFeatured.isPending
+    ? (setFeatured.variables?.body && 'achievement_key' in setFeatured.variables.body
+        ? setFeatured.variables.body.achievement_key
+        : null)
+    : null;
 
   // ── States ──────────────────────────────────────────────────────────────
   if (isLoading) {
@@ -273,6 +337,12 @@ export function AchievementsPage() {
                 ? 'Incredible — you have unlocked them all. Legend!'
                 : `You're ${earnedPct}% of the way there. Keep going!`}
           </p>
+          {earnedCount > 0 && juniorId != null && (
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gold/80">
+              <Pin size={12} aria-hidden />
+              Tap “Show off in chat” on a badge to feature it next to your name.
+            </p>
+          )}
         </div>
       </GlassCard>
 
@@ -294,9 +364,35 @@ export function AchievementsPage() {
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {group.map((a) => (
-                  <AchievementCard key={a.id} a={a} />
-                ))}
+                {group.map((a) => {
+                  const isFeatured = featuredKey === a.id;
+                  return (
+                    <AchievementCard
+                      key={a.id}
+                      a={a}
+                      featured={isFeatured}
+                      busy={featuringId === a.id || (isFeatured && setFeatured.isPending)}
+                      onFeature={
+                        juniorId != null
+                          ? () =>
+                              setFeatured.mutate({
+                                juniorId,
+                                body: { achievement_key: a.id },
+                              })
+                          : null
+                      }
+                      onClear={
+                        juniorId != null
+                          ? () =>
+                              setFeatured.mutate({
+                                juniorId,
+                                body: { achievement_key: null },
+                              })
+                          : null
+                      }
+                    />
+                  );
+                })}
               </div>
             </section>
           );

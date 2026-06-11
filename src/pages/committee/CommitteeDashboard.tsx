@@ -28,6 +28,7 @@ import {
   formatMonth,
   monthOptions,
 } from './committee-format';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -203,6 +204,11 @@ export function CommitteeDashboard() {
 
         {/* ── Per-band summary widget ─────────────────────────────────────── */}
         <BandSummaryWidget />
+      </div>
+
+      {/* ── Club announcements ──────────────────────────────────────────── */}
+      <div className="animate-fade-in-up stagger-3 mt-6">
+        <AnnouncementsWidget />
       </div>
     </div>
   );

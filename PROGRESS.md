@@ -331,6 +331,30 @@ notification bell + Messages nav unread badge (60s poll). Built by three
 parallel subagents; api-contract-auditor PASS (no CRITICAL/HIGH; oversight
 mark-read 403 fixed pre-commit); tsc + lint + vite build green.
 
+### Social phase round 2 — refinements (Sam, 2026-06-11)
+Backend (each migration verified up/down/up on clean DB; live smoke; DB pristine):
+- **Rate-limit dev toggle** (`86c4f7e`): RATELIMIT_ENABLED off in dev/test, on in
+  prod (env-overridable). Auth throttle was locking developers out.
+- **Message edit/delete** (`dee1111`): sender edits (keeps original_body, re-runs
+  word filter, 'edited' marker to all) / soft-deletes (tombstone for all, body
+  retained for admins). Reverses v1 immutability but keeps the audit trail —
+  nothing scrubbed from admin view. Confirm step on both (Sam). Migration h9social2.
+- **Featured award** (`dee1111`+`57139e6`): a player shows off ONE award in chat —
+  an auto-unlocked achievement (catalog key) OR a staff badge; sender.featured_badge
+  is a tagged union; hover card shows details. Picker on the Achievements page.
+  Fixed award_badge (awarded_by NOT NULL was always failing). Migrations h9social2
+  (featured_badge_id) + i10featured (featured_achievement_key).
+- **Bell + toast** (`dee1111`): /api/notifications returns recent_messages; bell
+  badge = unread messages + events; dropdown has a Messages section; top-right
+  toast on new incoming messages (60s poll).
+- **Announcement edit** (`ba712bd`): PUT /api/announcements/:id (author/admin),
+  edited_at marker; confirm steps on post/publish/delete + edit. Migration j11annedit.
+- **Cleanup**: removed 4 leftover test users + 2 junk announcements; dev DB now =
+  5 seed users (one per role), zero social rows. Stray run_server.py/start-karen.sh
+  deleted. (Sam will seed fuller demo data later.)
+- Deferred/advanced-feature audit saved to `docs/DEFERRED_AND_ADVANCED_FEATURES.md`
+  — input for the pre-reorg planning decision.
+
 ### Next up (other)
 - **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — now that
   social surfaces exist, design the IA once).

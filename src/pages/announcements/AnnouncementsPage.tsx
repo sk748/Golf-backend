@@ -14,15 +14,18 @@ import {
   Globe,
   Loader2,
   Megaphone,
+  Pencil,
   Send,
   Trash2,
   Users,
+  X,
 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../auth/useAuth';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { useLevelBands } from '../committee/committee-evaluations.queries';
 import {
@@ -33,6 +36,7 @@ import {
   useCreateAnnouncement,
   useDeleteAnnouncement,
   usePublishAnnouncement,
+  useUpdateAnnouncement,
   type Announcement,
   type AnnouncementAudience,
   type CreateAnnouncementInput,
@@ -93,17 +97,22 @@ function AnnouncementCard({
   staff,
   canPublish,
   canDelete,
+  canEdit,
+  onEdit,
   audience,
 }: {
   a: Announcement;
   staff: boolean;
   canPublish: boolean;
   canDelete: boolean;
+  canEdit?: boolean;
+  onEdit?: (a: Announcement) => void;
   audience?: string; // staff-only audience summary
 }) {
   const publish = usePublishAnnouncement();
   const del = useDeleteAnnouncement();
   const isDraft = a.status === 'draft';
+  const [confirming, setConfirming] = useState<'publish' | 'delete' | null>(null);
 
   return (
     <GlassCard
@@ -140,16 +149,33 @@ function AnnouncementCard({
           {announcementDate(a.published_at ?? a.created_at)
             ? ` · ${announcementDate(a.published_at ?? a.created_at)}`
             : ''}
+          {a.edited_at ? (
+            <span className="text-slate/80" data-testid={`announcement-edited-${a.id}`}>
+              {' · edited'}
+            </span>
+          ) : null}
         </p>
 
-        {staff && (canPublish || canDelete) ? (
+        {staff && (canPublish || canDelete || canEdit) ? (
           <div className="flex items-center gap-2">
+            {canEdit && onEdit ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onEdit(a)}
+                data-testid={`edit-announcement-${a.id}`}
+              >
+                <Pencil size={14} aria-hidden />
+                Edit
+              </Button>
+            ) : null}
             {canPublish && isDraft ? (
               <Button
                 type="button"
                 size="sm"
                 disabled={publish.isPending}
-                onClick={() => publish.mutate(a.id)}
+                onClick={() => setConfirming('publish')}
                 data-testid={`publish-announcement-${a.id}`}
               >
                 {publish.isPending ? (
@@ -166,7 +192,7 @@ function AnnouncementCard({
                 variant="ghost"
                 size="sm"
                 disabled={del.isPending}
-                onClick={() => del.mutate(a.id)}
+                onClick={() => setConfirming('delete')}
                 data-testid={`delete-announcement-${a.id}`}
               >
                 {del.isPending ? (
@@ -191,6 +217,42 @@ function AnnouncementCard({
           {errorMessage(del.error, 'Could not delete this announcement.')}
         </p>
       ) : null}
+
+      <ConfirmDialog
+        open={confirming === 'publish'}
+        title="Publish to the public website?"
+        message={
+          <>
+            <span className="font-semibold text-silver">“{a.title}”</span> will go
+            live on the public landing page for anyone to read.
+          </>
+        }
+        confirmLabel="Publish"
+        cancelLabel="Not yet"
+        busy={publish.isPending}
+        onConfirm={() =>
+          publish.mutate(a.id, { onSuccess: () => setConfirming(null) })
+        }
+        onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmDialog
+        open={confirming === 'delete'}
+        title="Delete this announcement?"
+        message={
+          <>
+            <span className="font-semibold text-silver">“{a.title}”</span> will be
+            removed for everyone. This can’t be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        destructive
+        busy={del.isPending}
+        onConfirm={() =>
+          del.mutate(a.id, { onSuccess: () => setConfirming(null) })
+        }
+        onCancel={() => setConfirming(null)}
+      />
     </GlassCard>
   );
 }
@@ -202,25 +264,44 @@ const inputClass =
 
 const labelClass = 'text-xs font-bold uppercase tracking-wider text-slate';
 
+// Splits a 'roles' CSV back into the checkbox array the composer holds.
+function rolesFromCsv(csv: string | null): string[] {
+  return (csv ?? '')
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
 function Composer({
   isAdmin,
   bandOptions,
   coachOptions,
+  editing,
+  onCancelEdit,
+  onEdited,
 }: {
   isAdmin: boolean;
   bandOptions: { id: number; label: string }[];
   coachOptions: { id: string; label: string }[];
+  editing: Announcement | null;
+  onCancelEdit: () => void;
+  onEdited: () => void;
 }) {
   const create = useCreateAnnouncement();
+  const update = useUpdateAnnouncement();
+  const isEditing = editing !== null;
 
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [isExternal, setIsExternal] = useState(false);
-  const [audience, setAudience] = useState<AnnouncementAudience>('everyone');
-  const [roles, setRoles] = useState<string[]>([]);
-  const [bandId, setBandId] = useState<number | ''>('');
-  const [coachId, setCoachId] = useState('');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [body, setBody] = useState(editing?.body ?? '');
+  const [isExternal, setIsExternal] = useState(editing?.is_external ?? false);
+  const [audience, setAudience] = useState<AnnouncementAudience>(
+    editing?.audience ?? 'everyone',
+  );
+  const [roles, setRoles] = useState<string[]>(rolesFromCsv(editing?.roles ?? null));
+  const [bandId, setBandId] = useState<number | ''>(editing?.band_id ?? '');
+  const [coachId, setCoachId] = useState(editing?.coach_id ?? '');
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmingPost, setConfirmingPost] = useState(false);
 
   function toggleRole(role: string) {
     setRoles((prev) =>
@@ -242,8 +323,12 @@ function Composer({
     (effectiveAudience !== 'band' || bandId !== '') &&
     (effectiveAudience !== 'coach_group' || coachId !== '');
 
-  function handleSubmit() {
+  // External committee posts become a draft awaiting admin publish.
+  const sendsForApproval = isExternal && !isAdmin;
+
+  function doPost() {
     if (!valid) return;
+    setConfirmingPost(false);
     const input: CreateAnnouncementInput = {
       title: title.trim(),
       body: body.trim(),
@@ -255,6 +340,19 @@ function Composer({
     if (effectiveAudience === 'coach_group') input.coach_id = coachId;
 
     setNotice(null);
+
+    if (isEditing && editing) {
+      update.mutate(
+        { id: editing.id, input },
+        {
+          onSuccess: () => {
+            onEdited();
+          },
+        },
+      );
+      return;
+    }
+
     create.mutate(input, {
       onSuccess: (created) => {
         setTitle('');
@@ -273,9 +371,28 @@ function Composer({
     });
   }
 
+  const busy = create.isPending || update.isPending;
+
   return (
     <GlassCard className="p-5 sm:p-6" data-testid="announcement-composer">
-      <h2 className="text-lg font-bold text-silver">New announcement</h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-silver">
+          {isEditing ? 'Edit announcement' : 'New announcement'}
+        </h2>
+        {isEditing ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onCancelEdit}
+            disabled={busy}
+            data-testid="composer-cancel-edit"
+          >
+            <X size={14} aria-hidden />
+            Cancel edit
+          </Button>
+        ) : null}
+      </div>
 
       {/* Internal / external destination */}
       <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label="Destination">
@@ -465,19 +582,23 @@ function Composer({
         <Button
           type="button"
           fullWidth
-          disabled={!valid || create.isPending}
-          onClick={handleSubmit}
+          disabled={!valid || busy}
+          onClick={() => setConfirmingPost(true)}
           data-testid="composer-submit"
         >
-          {create.isPending ? (
+          {busy ? (
             <>
               <Loader2 size={16} className="animate-spin" aria-hidden />
-              Posting…
+              {isEditing ? 'Saving…' : 'Posting…'}
             </>
           ) : (
             <>
               <Send size={16} aria-hidden />
-              {isExternal && !isAdmin ? 'Send for approval' : 'Post announcement'}
+              {isEditing
+                ? 'Save changes'
+                : isExternal && !isAdmin
+                  ? 'Send for approval'
+                  : 'Post announcement'}
             </>
           )}
         </Button>
@@ -500,7 +621,45 @@ function Composer({
             {errorMessage(create.error, 'Could not post the announcement.')}
           </p>
         ) : null}
+        {update.isError ? (
+          <p
+            className="mt-3 rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+            role="alert"
+            data-testid="composer-edit-error"
+          >
+            {errorMessage(update.error, 'Could not save changes.')}
+          </p>
+        ) : null}
       </div>
+
+      <ConfirmDialog
+        open={confirmingPost}
+        title={
+          isEditing
+            ? 'Save changes to this announcement?'
+            : sendsForApproval
+              ? 'Send for admin approval?'
+              : isExternal
+                ? 'Publish to the public website?'
+                : 'Post this announcement?'
+        }
+        message={
+          isEditing
+            ? 'Your edits will replace the current announcement for everyone who can see it.'
+            : sendsForApproval
+              ? 'This public-website post will be sent to an admin for approval. It only appears on the landing page once an admin publishes it.'
+              : isExternal
+                ? 'This will go live on the public landing page straight away for anyone to read.'
+                : 'This will go live in the club feed straight away for everyone you’ve targeted.'
+        }
+        confirmLabel={
+          isEditing ? 'Save changes' : sendsForApproval ? 'Send for approval' : 'Post'
+        }
+        cancelLabel="Keep editing"
+        busy={busy}
+        onConfirm={doPost}
+        onCancel={() => setConfirmingPost(false)}
+      />
     </GlassCard>
   );
 }
@@ -536,12 +695,31 @@ function StaffView() {
 
   const items = feed.data ?? [];
 
+  // Which announcement (if any) is loaded into the composer for editing. We
+  // track the id and resolve the live row, so the form opens from fresh data.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const editing = items.find((a) => a.id === editingId) ?? null;
+
+  const canEditRow = (a: Announcement) =>
+    isAdmin || a.author_id === user?.id;
+
+  function startEdit(a: Announcement) {
+    setEditingId(a.id);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   return (
     <>
       <Composer
+        key={editing ? `edit-${editing.id}` : 'new'}
         isAdmin={isAdmin}
         bandOptions={bandOptions}
         coachOptions={coachOptions}
+        editing={editing}
+        onCancelEdit={() => setEditingId(null)}
+        onEdited={() => setEditingId(null)}
       />
 
       <div className="mt-8 flex items-baseline justify-between gap-3">
@@ -565,6 +743,8 @@ function StaffView() {
                   staff
                   canPublish={isAdmin}
                   canDelete={isAdmin || a.author_id === user?.id}
+                  canEdit={canEditRow(a)}
+                  onEdit={startEdit}
                   audience={audienceLabel(a, { bandName, coachName })}
                 />
               </li>

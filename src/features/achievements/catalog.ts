@@ -136,6 +136,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'cmp-20', title: 'Circuit Star', description: 'Play 20 competitions.', category: 'competition', tier: 'platinum', icon: Crown, unlocked: (s) => s.competitionsPlayed >= 20, progress: (s) => pct(s.competitionsPlayed, 20) },
 ];
 
+// Lookup by catalog id (the `achievement_key` the backend stores for a featured
+// award). Used by the chat chip to resolve a key -> title / icon / description.
+const ACHIEVEMENT_BY_ID: Record<string, AchievementDef> = Object.fromEntries(
+  ACHIEVEMENTS.map((a) => [a.id, a]),
+);
+
+export function achievementById(id: string): AchievementDef | undefined {
+  return ACHIEVEMENT_BY_ID[id];
+}
+
 export interface EvaluatedAchievement extends AchievementDef {
   earned: boolean;
   progressNow: number | null;

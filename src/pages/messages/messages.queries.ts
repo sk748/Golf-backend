@@ -4,10 +4,13 @@
 // ("Kofi Coach — Players"), and parent OVERSIGHT (a parent sees their child's
 // conversations read-only; the backend marks them oversight:true).
 //
-// Messages are immutable — there is deliberately no edit/delete here. A
-// message may come back status 'held' (visible only to its sender and admin)
-// until the club reviews it. Polling: the open thread refetches every 10s,
-// the conversation list every 30s; mutations invalidate.
+// A sender may edit or delete their OWN message (each behind a confirm step in
+// the UI); everyone else's messages stay immutable. An edit re-runs the
+// banned-word filter server-side; a delete is a soft-delete that leaves a
+// tombstone admins can still audit. A message may come back status 'held'
+// (visible only to its sender and admin) until the club reviews it. Polling:
+// the open thread refetches every 10s, the conversation list every 30s;
+// mutations invalidate.
 
 import {
   useMutation,
@@ -22,10 +25,20 @@ import type { Role } from '../../types/api';
 
 // ── Types (standard {data}/{data,count} envelope — the client unwraps) ───────
 
+// A player may "feature" one award (a staff-issued badge OR an earned
+// achievement) to show off next to their name in chat. The backend sends it on
+// the message SENDER as a tagged union; only players carry one.
+export type FeaturedAward =
+  | { source: 'badge'; id: number; name: string; description: string }
+  | { source: 'achievement'; key: string };
+
 export interface ConversationMember {
   user_id: string;
   full_name: string;
   role: Role;
+  // Present on message senders; null/absent when the player hasn't featured one
+  // (and always absent for non-player senders). Rendered as the chat award chip.
+  featured_badge?: FeaturedAward | null;
 }
 
 export interface LastMessage {
@@ -51,14 +64,23 @@ export interface Conversation {
 export type MessageStatus = 'visible' | 'held' | 'hidden';
 
 // GET /api/conversations/:id/messages item (ascending by created_at).
+// A message may be edited (a quiet "(edited)" marker) or soft-deleted (renders
+// as a tombstone; body is already replaced by the backend for non-admins). For
+// ADMIN viewers, edited/deleted messages additionally carry original_body — the
+// moderation/audit affordance.
 export interface ChatMessage {
   id: number;
   conversation_id: number;
   sender: ConversationMember;
   body: string;
   status: MessageStatus;
+  edited: boolean;
+  edited_at: string | null;
+  deleted: boolean;
   created_at: string;
   own: boolean;
+  // Admin viewers only, on edited/deleted messages.
+  original_body?: string | null;
 }
 
 // GET /api/messaging/contacts — exactly who the current user may DM (the
@@ -194,6 +216,54 @@ export function useFlagMessage(): UseMutationResult<
         `/api/messages/${messageId}/flag`,
         reason?.trim() ? { reason: reason.trim() } : undefined,
       ),
+  });
+}
+
+// PUT /api/conversations/:cid/messages/:mid {body} — edit your OWN message
+// (≤2000 chars). Re-runs the banned-word filter (400 if it trips), 409 if the
+// message is held/hidden/deleted, 403 if not yours. Returns the updated message.
+// Invalidates the thread (re-render) and the list (last-message preview).
+export function useEditMessage(): UseMutationResult<
+  ChatMessage,
+  Error,
+  { conversationId: number; messageId: number; body: string }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, messageId, body }) =>
+      api.put<ChatMessage>(
+        `/api/conversations/${conversationId}/messages/${messageId}`,
+        { body },
+      ),
+    onSuccess: (_msg, { conversationId }) => {
+      void qc.invalidateQueries({
+        queryKey: ['conversations', conversationId, 'messages'],
+      });
+      void qc.invalidateQueries({ queryKey: ['conversations'], exact: true });
+    },
+  });
+}
+
+// DELETE /api/conversations/:cid/messages/:mid — soft-delete your OWN message
+// (idempotent). Returns the updated message (deleted:true). Same invalidations:
+// the bubble becomes a tombstone and the list preview refreshes.
+export function useDeleteMessage(): UseMutationResult<
+  ChatMessage,
+  Error,
+  { conversationId: number; messageId: number }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, messageId }) =>
+      api.del<ChatMessage>(
+        `/api/conversations/${conversationId}/messages/${messageId}`,
+      ),
+    onSuccess: (_msg, { conversationId }) => {
+      void qc.invalidateQueries({
+        queryKey: ['conversations', conversationId, 'messages'],
+      });
+      void qc.invalidateQueries({ queryKey: ['conversations'], exact: true });
+    },
   });
 }
 
