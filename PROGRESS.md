@@ -395,6 +395,24 @@ pristine after.
 - Deferred to the UI/UX rework (Sam): modal/popup backdrops should not dim the
   page — see `ui-ux-rework-notes` memory.
 
+### Achievement celebrations (2026-06-11) — ✅ SHIPPED
+Confetti + a congratulations popup when a player earns an achievement (on sign-in
+if earned while away, or when they open the wall); most-recent unlock glows; the
+parent gets the same confetti + a bell notification. Covers BOTH the 37 auto
+catalog achievements AND staff-granted badges. Commit `0256295`; migration
+n15achunlock verified up/down/up; live-smoked (baseline silent → new unlock +
+badge award both notify player+parent); contract audit PASS; DB pristine after.
+- Catalog logic stays frontend; backend `achievement_unlocks` records first
+  unlock per (junior, key) with unlocked_at. First sync = silent baseline (no
+  confetti flood). `POST/GET /api/juniors/me/achievements[/sync]` (player-only).
+- Celebration is notification-driven (one `achievement` type for player + parent,
+  catalog + badge): `AchievementCelebrations` watches the existing 60s poll,
+  celebrate-once via localStorage, NON-dimming popup (per Sam's backdrop note).
+- New dependency: **canvas-confetti** (honours prefers-reduced-motion).
+- Audit MEDIUM fixed pre-commit: parent's notification always carries a
+  child_name label (robust to blank/imported names) so the FE never misroutes a
+  parent to the player-only wall.
+
 ### Next up (other)
 - **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — admin nav is
   now ~18 items; design the IA once now that all surfaces exist). Inspo pending
