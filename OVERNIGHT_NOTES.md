@@ -20,7 +20,41 @@ thread. **Standard logins all work** (admin/coach/committee/parent/player@kcc.te
 so the demo front door shows the full experience. Verified via API (admin stats,
 player handicap, tournaments). Committed.
 
-## Phase 2 — Backend pytest test suite — ⬜ TODO (do in the fresh window)
+## REVISED PLAN (Sam said "keep going" + "then run a thorough /security-review overnight")
+- Do Phase 2 (tests) NOW (still room in window) — there is ALREADY a pytest suite
+  (tests/conftest.py + test_audit/test_player_self/test_scoring/test_tournaments_api);
+  EXTEND it, don't reinvent. Fixtures: app/client/make_user/auth/make_junior/
+  make_tournament/make_entry.
+- Then Phase 3 = a THOROUGH SECURITY REVIEW overnight. NOTE: `/security-review` is
+  NOT a registered command/skill in this repo (only new-page, restart-servers) — so
+  it's a manual comprehensive security audit (authorized: our own codebase, defensive).
+  Output a docs/SECURITY_REVIEW.md with severity-ranked findings; do NOT fix without Sam.
+- A ScheduleWakeup (≈21:25) still pending from the earlier pacing; when it fires,
+  re-read this file + `git log` and continue whatever's unfinished (tests, then
+  security review). Pace across token windows.
+
+## Phase 3 — Security review — 🟡 IN PROGRESS (two passes)
+Thorough manual security audit (no /security-review command exists; our own code,
+defensive). READ-ONLY: findings only, no fixes without Sam.
+- Pass 1 (launched in window 1, background agent): authn/authz — JWT handling,
+  token lifetime/identity, role guards on EVERY route (grep for missing
+  @require_*), IDOR/scoping (juniors, rounds, evaluations, tournaments, messaging,
+  notifications, booking, handicap journeys), privilege escalation paths
+  (role changes, parent-child links, registration).
+- Pass 2 (after reset): injection/ORM safety (raw SQL, .filter text), input
+  validation (mass assignment via SimpleModelSchema.load!), secrets/config
+  (SECRET_KEY/JWT defaults, DATABASE_URI, debug, CORS/headers), rate limiting,
+  messaging safety pack (banned words bypass, flag flow), file/CSV import
+  (bulk import parsing), frontend (token storage, XSS via rendered content,
+  api client), dependency quick-scan.
+- Assemble docs/SECURITY_REVIEW.md severity-ranked; commit + converge; final
+  morning summary for Sam.
+
+## Phase 2 — Backend pytest test suite — ✅ DONE (commit 5bd36f6)
+7 new modules, ~51 tests; suite total 94 passed 0 failed. Covers auth envelope
+exceptions, junior-badges/progress scoping, evaluations sign-off + 409, badges
+catalog/award permissions + notify, achievements baseline/sync + notify,
+announcements fan-out/targeting/public, notifications feed/mark-read.
 Build a comprehensive, GREEN pytest suite for the API. No tests exist today
 (top pre-staging gap).
 - Infra: `tests/conftest.py` — app via `create_app()` with `config.TestingConfig`
