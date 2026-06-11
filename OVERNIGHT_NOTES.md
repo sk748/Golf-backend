@@ -36,7 +36,13 @@ player handicap, tournaments). Committed.
 ## Phase 3 — Security review — 🟡 IN PROGRESS (two passes)
 Thorough manual security audit (no /security-review command exists; our own code,
 defensive). READ-ONLY: findings only, no fixes without Sam.
-- Pass 1 (launched in window 1, background agent): authn/authz — JWT handling,
+- Pass 1 — ✅ DONE, merged into docs/SECURITY_REVIEW.md (commit 9bdf108).
+  2 Critical (hole-scores unscoped; POST /rounds arbitrary user_id), 5 High,
+  8 Medium. NEXT STEP WHEN RESUMED: run Pass 2 (spec below), append to
+  docs/SECURITY_REVIEW.md, commit + converge, write Sam's morning summary.
+  (The pending ScheduleWakeup prompt still says "Phase 2 tests" — that's stale;
+  tests are done. Follow THIS file.)
+- Pass 1 spec (done): authn/authz — JWT handling,
   token lifetime/identity, role guards on EVERY route (grep for missing
   @require_*), IDOR/scoping (juniors, rounds, evaluations, tournaments, messaging,
   notifications, booking, handicap journeys), privilege escalation paths
