@@ -285,7 +285,36 @@ run (findings fixed pre-commit), both branches converged per commit.
    approval queues on the parent dashboard + staff browser. Migration
    `f7signupchain`.
 
+### Social features phase decisions (Sam, 2026-06-11) — locked
+1. **DM matrix:** admin↔everyone; coach↔everyone; parent↔staff
+   (coach/admin/committee); player may *initiate* only to own assigned coach +
+   admin (staff can always initiate to a player). NO player↔player, NO
+   parent↔parent; committee cannot DM players.
+2. **Oversight:** parent has full read visibility into their child's DMs and
+   groups; admin sees ALL chats (dedicated oversight surface).
+3. **Groups:** each coach roster auto-creates TWO chats — coach+players and
+   coach+parents. Staff (admin/coach) can create ad-hoc groups. No per-session
+   threads in v1.
+4. **Messages are immutable.** No user edit/delete; admin can hide (original
+   retained for audit).
+5. **Safety pack:** flag button → admin review queue; TEXT-ONLY v1; banned-words
+   filter (matches are *held* for admin review, not posted); first-contact
+   notice to the parent when staff first DM their child; subtle persistent
+   disclaimer in every chat (visible to parents/admin; abuse → disciplinary
+   action; kid-simple wording, neither loud nor hidden).
+6. **Internal announcements:** role + group/band targeting; admin + committee
+   post, live immediately.
+7. **External announcements:** committee drafts, admin publishes → public
+   landing page.
+8. **Notifications:** nav unread badges + bell feed (messages, flags for admin,
+   first-contact notices, approval items). In-app only — no email.
+9. **Transport:** polling via TanStack `refetchInterval` (~10s open thread,
+   ~60s counts); SSE is the later upgrade path.
+
 ### Next up (other)
+- **Social features phase — in progress** (decisions above). Then the UI/UX
+  reorganisation pass (Sam: current nav/IA "hard to use" — redo AFTER social
+  adds its surfaces, so the IA is designed once).
 - Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (~1.16 MB
   bundle advisory), guided tutorial (parked for finishing touches), walk every
-  role through once. Then the social-features phase Sam scoped.
+  role through once.

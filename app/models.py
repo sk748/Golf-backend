@@ -18,6 +18,9 @@ from app.evaluations.models import Evaluation
 from app.attendance.models import Attendance
 from app.sessions.models import Session, Class, ClassEnrollment, BookingRequest
 from app.audit.models import AuditLog
+from app.messaging.models import Conversation, ConversationMember, Message, MessageFlag
+from app.announcements.models import Announcement
+from app.notifications.models import Notification
 
 __all__ = [
     "User", "UserRole", "MembershipType",
@@ -30,6 +33,9 @@ __all__ = [
     "Attendance",
     "Session", "Class", "ClassEnrollment", "BookingRequest",
     "AuditLog",
+    "Conversation", "ConversationMember", "Message", "MessageFlag",
+    "Announcement",
+    "Notification",
     "register_all",
 ]
 

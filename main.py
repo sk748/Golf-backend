@@ -27,6 +27,9 @@ from app.sessions.routes import sessions_bp
 from app.admin.routes import admin_bp
 from app.audit.routes import audit_bp
 from app.whs.routes import whs_v1
+from app.messaging.routes import messaging_bp
+from app.announcements.routes import announcements_bp
+from app.notifications.routes import notifications_bp
 
 def create_app(config_filename=None):
     if config_filename is None:
@@ -82,6 +85,9 @@ def create_app(config_filename=None):
     app.register_blueprint(admin_bp)         # /api/admin/*
     app.register_blueprint(audit_bp)         # /api/admin/audit-log
     app.register_blueprint(whs_v1)           # /api/whs/*
+    app.register_blueprint(messaging_bp)     # /api/conversations, /api/messages, /api/moderation, /api/flags
+    app.register_blueprint(announcements_bp) # /api/announcements, /api/public/announcements
+    app.register_blueprint(notifications_bp) # /api/notifications
 
     # Swagger UI — served only in non-production environments
     if os.environ.get("APP_SETTINGS") != "config.ProductionConfig":
