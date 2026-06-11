@@ -413,6 +413,21 @@ badge award both notify player+parent); contract audit PASS; DB pristine after.
   child_name label (robust to blank/imported names) so the FE never misroutes a
   parent to the player-only wall.
 
+### Staff badge-granting UI (2026-06-11) — ✅ SHIPPED
+The staff Badge system existed backend-only (no UI), so awards — and the
+celebration they fire — could never be triggered from the app. Added the UI.
+Commit `73b4c6c`; live-smoked; tsc/lint/build green; DB pristine.
+- **/admin/badges** (admin nav): badge-CATALOG manager — create/edit/delete badge
+  definitions (name, description, optional level_required); confirm-on-delete;
+  real empty state. Catalog CRUD stays admin-only.
+- **Recognition-badges card** on the staff junior profile (admin/coach/committee):
+  held badges + revoke, and an award picker over the catalog. Awarding fires the
+  confetti + player/parent notification (achievement-celebrations feature).
+- Backend: junior-badge **award + revoke now allow committee** too (was
+  admin/coach). Verified: committee award 201 / revoke 204 / catalog create 403.
+- NOTE: the 37 catalog achievements remain AUTO-unlocked from stats (no manual
+  grant — by design); Badges are the manually-awarded recognitions.
+
 ### Next up (other)
 - **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — admin nav is
   now ~18 items; design the IA once now that all surfaces exist). Inspo pending
