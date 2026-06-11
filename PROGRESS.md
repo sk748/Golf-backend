@@ -428,6 +428,34 @@ Commit `73b4c6c`; live-smoked; tsc/lint/build green; DB pristine.
 - NOTE: the 37 catalog achievements remain AUTO-unlocked from stats (no manual
   grant — by design); Badges are the manually-awarded recognitions.
 
+### Badges & achievements polish (2026-06-11) — ✅ SHIPPED
+Five gaps Sam raised. Commit `1c1c6c2`; migration o16seedbadges up/down/up; live-
+smoked; contract audit PASS; dev DB clean (7 seed badges, 0 awards/unlocks/notifs).
+- **Anti-gaming (close the data gate, no approval workflow):** catalog
+  achievements that read rounds/scoring now count ONLY `status==='verified'`
+  rounds — a self-logged pending score can't unlock / confetti / notify before a
+  coach signs off. Other inputs (levels, attendance, competitions, handicap) are
+  already staff-signed-off. (`Round.status` is on the payload but not the locked
+  type — widened locally; see locked-type drift below.)
+- **Seeded 7 starter recognition badges** (Most Improved, Sportsmanship, Coach's
+  Player of the Month, Practice Hero, Etiquette Star, Team Spirit, Comeback Award).
+- **Player wall** now lists held staff badges (was catalog-only).
+- **Parent portal** now shows the child's earned achievements + badges
+  (get_junior_progress returns them); **GET /api/junior-badges scoped** (staff
+  any / player→self / parent→own child; was unscoped).
+- **Confetti** palette widened to bright multi-colour.
+- Catalog achievements stay AUTO (no manual grant) — by design.
+
+### Deferred — locked-types sync pass (needs explicit unlock of src/types/api.ts)
+Known drift between the locked frontend types and the live backend, all worked
+around locally for now (no locked-file edits):
+- `Round` missing `status` (pending/verified) — widened locally in use-achievements.
+- `JuniorProgress` missing `achievements`/`badges` (now returned by
+  get_junior_progress) — parent's `ChildProgress` has them; the two share cache
+  key `['juniors',id,'progress']` (latent type divergence, never co-mounted).
+- `JuniorProfile` drift (pre-existing, noted earlier).
+Do these in one pass when src/types/api.ts is unlocked.
+
 ### Next up (other)
 - **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — admin nav is
   now ~18 items; design the IA once now that all surfaces exist). Inspo pending
