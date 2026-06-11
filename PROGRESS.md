@@ -355,9 +355,52 @@ Backend (each migration verified up/down/up on clean DB; live smoke; DB pristine
 - Deferred/advanced-feature audit saved to `docs/DEFERRED_AND_ADVANCED_FEATURES.md`
   — input for the pre-reorg planning decision.
 
+### Genuine-gaps build (plan fidelity, 2026-06-11) — ✅ SHIPPED
+Closed the divergences vs the Junior Development Plan (ref/ docs). Charging
+stays parked (type only). Backend `33f9020`, frontend `52fdb81`; migrations
+k12participant → l13compreq → m14handicap verified up/down/up; live smoke per
+wave; dev DB pristine (5 seed users, junior 1, 2 tournaments).
+- **A participant type**: junior_profiles.participant_type (registered_junior /
+  club_beginner / karen_academy); intake + STAFF-only edit (parents can't set)
+  + browser filter.
+- **C competition requirements**: tournament competition_type tag; per-band
+  mandatory/encouraged (KJC L6–8, Faldo L9+) + 2–3 rounds/month;
+  /api/juniors/:id/competition-requirements compliance card on player/coach/
+  committee/parent.
+- **B benchmark targets**: admin CRUD (/admin/benchmarks) + targets-vs-actuals
+  on player progress (plan's L6/7/8 numbers).
+- **D bulk intake import**: /import preview→confirm→commit (admin/committee);
+  CSV → parent-linked juniors at pending_staff; DOB required (sheet = age groups).
+- **E quarterly timetable**: /timetable groups clinics by band + age group;
+  L1–3 max-6 guidance.
+- **F L4–5 handicap journey**: app/handicap domain; coach plan editor + progress
+  (signed cards + avg vs 9h 60–65 / 18h 120–130; "meeting" = at-or-below max).
+- Tiered models (Haiku/Sonnet/Opus, no Fable); contract audit PASS; audit fixes
+  applied pre-commit (parent participant_type removed, import invalidates
+  ['juniors'], CompetitionType deduped).
+
+### Attention notifications (2026-06-11) — ✅ SHIPPED
+Extended the bell beyond messaging/moderation so users are notified of anything
+needing their attention. Reuses the notifications table (free-form type + JSON
+payload — no migration). Commit `32bebc7`; live-smoked (announcement → all
+targeted users minus author; tournament_open → eligible junior + parent); DB
+pristine after.
+- **tournament_open**: on transition into registration_open (create/edit), pings
+  every ELIGIBLE active junior (player) + parent — players/parents only.
+  Eligibility uses the tournament's own age/level/handicap rules.
+- **announcement**: a published INTERNAL announcement pings every targeted user
+  (everyone / roles / band players+parents / coach group), excluding the author.
+  External announcements stay landing-page only.
+- Unread counter bubbles (bell + Messages nav) are now **red**.
+- Deferred to the UI/UX rework (Sam): modal/popup backdrops should not dim the
+  page — see `ui-ux-rework-notes` memory.
+
 ### Next up (other)
-- **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — now that
-  social surfaces exist, design the IA once).
+- **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — admin nav is
+  now ~18 items; design the IA once now that all surfaces exist). Inspo pending
+  from Sam → split mobile vs desktop → optimisation cycle.
+- Pre-staging (Part 1) still parked: prod env/WSGI, rate-limit storage,
+  code-splitting (~1.3 MB bundle), tests, demo seed script.
 - Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (~1.16 MB
   bundle advisory), guided tutorial (parked for finishing touches), walk every
   role through once.
