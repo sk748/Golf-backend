@@ -463,7 +463,25 @@ def delete_badge_route(badge_id):
 @juniors_bp.route("/junior-badges", methods=["GET"])
 @require_auth
 def get_junior_badges():
-    items = list_junior_badges(junior_id=request.args.get("junior_id"))
+    """Staff (admin/coach/committee) may read any junior's badges; a player only
+    their own; a parent only their own child's. Prevents one family reading
+    another's recognitions."""
+    caller = get_current_user()
+    junior_id = request.args.get("junior_id")
+
+    if has_role(caller, "player"):
+        own = JuniorProfile.query.filter_by(user_id=caller.id).first()
+        if own is None:
+            return _data([], count=0)
+        junior_id = own.id  # force to self regardless of the query param
+    elif has_role(caller, "parent"):
+        if junior_id is None or not str(junior_id).isdigit():
+            return _err("VALIDATION_ERROR", "a numeric junior_id is required", 400)
+        child = db.session.get(JuniorProfile, int(junior_id))
+        if child is None or str(child.parent_id) != str(caller.id):
+            return _err("FORBIDDEN", "You can only view your own child's badges", 403)
+
+    items = list_junior_badges(junior_id=junior_id)
     return _data(junior_badges_schema.dump(items), count=len(items))
 
 

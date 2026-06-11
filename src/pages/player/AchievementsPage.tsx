@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { Check, Loader2, Pin, PinOff, Sparkles, UserPlus } from 'lucide-react';
+import { Award, Check, Loader2, Pin, PinOff, Sparkles, UserPlus } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { relativeTime } from '../../lib/time';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { useAchievements } from '../../features/achievements/use-achievements';
@@ -19,6 +20,7 @@ import {
   featuredAwardOf,
   useSetFeaturedAward,
 } from './featured-award.queries';
+import { useBadges, useJuniorBadges } from '../../features/badges/badges.queries';
 
 // Top of the level meter — Level 9 is the peak of the junior pathway.
 const MAX_LEVEL = 9;
@@ -203,6 +205,83 @@ function AchievementCard({
   );
 }
 
+// ── Recognition Badges ──────────────────────────────────────────────────────
+// Staff-granted manual recognitions (e.g. "Most Improved"). Rendered only when
+// the player holds at least one. Silently absent while loading or empty — we
+// never show a child a "no badges yet" message.
+
+function RecognitionBadgesSection({ juniorId }: { juniorId: number | undefined }) {
+  const catalog = useBadges();
+  const held = useJuniorBadges(juniorId);
+
+  // Don't render while either query is in flight, or if juniorId is unknown.
+  if (!catalog.data || !held.data || juniorId == null) return null;
+
+  // Join held badges to catalog for name/description.
+  const earnedBadges = held.data
+    .map((jb) => {
+      const def = catalog.data.find((b) => b.id === jb.badge_id);
+      if (!def) return null;
+      return { ...jb, name: def.name, description: def.description };
+    })
+    .filter((b): b is NonNullable<typeof b> => b !== null);
+
+  if (earnedBadges.length === 0) return null;
+
+  return (
+    <section
+      className="mt-6"
+      aria-label="Recognition badges"
+      data-testid="recognition-badges-section"
+    >
+      {/* Section heading — warm gold accent, clearly distinct from auto-achievements. */}
+      <div className="mb-3 flex items-center gap-2">
+        <Award size={18} className="text-gold" aria-hidden />
+        <h2 className="text-lg font-black text-gold">Recognition badges</h2>
+        <span className="ml-1 font-mono text-xs text-gold/60">
+          {earnedBadges.length}
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {earnedBadges.map((b) => (
+          <GlassCard
+            key={b.badge_id}
+            tone="light"
+            className="flex items-start gap-3 p-4 ring-1 ring-gold/40"
+            data-testid={`recognition-badge-${b.badge_id}`}
+          >
+            {/* Icon container with gold glow */}
+            <span
+              className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold/15 ring-1 ring-gold/30"
+              aria-hidden
+            >
+              <Award size={18} className="text-gold" />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold leading-snug text-silver">{b.name}</p>
+              {b.description && (
+                <p className="mt-0.5 text-xs leading-snug text-slate">
+                  {b.description}
+                </p>
+              )}
+              <p className="mt-1.5 text-[11px] text-gold/70">
+                Awarded {relativeTime(b.awarded_date)}
+              </p>
+            </div>
+
+            {/* "Staff award" pill — distinguishes these from auto-achievements. */}
+            <Badge tone="gold" shape="pill">
+              Staff award
+            </Badge>
+          </GlassCard>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function AchievementsPage() {
   const {
     achievements,
@@ -359,6 +438,9 @@ export function AchievementsPage() {
           )}
         </div>
       </GlassCard>
+
+      {/* ── Recognition badges (staff grants) ───────────────────────────── */}
+      <RecognitionBadgesSection juniorId={juniorId} />
 
       {/* ── The wall ─────────────────────────────────────────────────────── */}
       <div className="mt-8 flex flex-col gap-8">

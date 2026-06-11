@@ -209,6 +209,25 @@ def get_junior_progress(junior_id: int):
             "total": len(attendance_rows),
         },
         "benchmarks": benchmarks,
+        # Earned recognitions, so parents/staff viewing a junior see them too
+        # (the player's own wall derives the catalog set client-side). Catalog
+        # achievement titles/icons are resolved on the frontend from the key.
+        "achievements": [
+            {"key": u.achievement_key, "unlocked_at": u.unlocked_at.isoformat() if u.unlocked_at else None}
+            for u in sorted(
+                AchievementUnlock.query.filter_by(junior_id=junior_id).all(),
+                key=lambda u: (u.unlocked_at or datetime.min, u.id),
+            )
+        ],
+        "badges": [
+            {
+                "badge_id": jb.badge_id,
+                "name": jb.badge.name if jb.badge else None,
+                "description": jb.badge.description if jb.badge else None,
+                "awarded_date": jb.awarded_date.isoformat() if jb.awarded_date else None,
+            }
+            for jb in JuniorBadge.query.filter_by(junior_id=junior_id).all()
+        ],
     }, None
 
 

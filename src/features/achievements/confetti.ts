@@ -1,9 +1,20 @@
 import confetti from 'canvas-confetti';
 
-// KCC palette confetti — gold/azure/silver. A center pop plus two side cannons
-// reads as celebratory without being garish. Honours prefers-reduced-motion
-// (mixed ages, accessibility) by skipping the animation entirely.
-const COLORS = ['#E4B84B', '#F0D27A', '#4FA3E3', '#9FC6EC', '#FFFFFF'];
+// Bright, multi-colour confetti anchored by the KCC gold + azure. A center pop
+// plus two side cannons reads as a real celebration for the kids. Honours
+// prefers-reduced-motion (mixed ages, accessibility) by skipping it entirely.
+const COLORS = [
+  '#E4B84B', // KCC gold
+  '#F0D27A', // light gold
+  '#4FA3E3', // KCC azure
+  '#34D399', // emerald
+  '#F472B6', // pink
+  '#A78BFA', // violet
+  '#FB923C', // orange
+  '#FACC15', // yellow
+  '#22D3EE', // cyan
+  '#FFFFFF', // white sparkle
+];
 
 function prefersReducedMotion(): boolean {
   return (
@@ -17,9 +28,9 @@ export function fireAchievementConfetti(): void {
   if (prefersReducedMotion()) return;
 
   confetti({
-    particleCount: 90,
-    spread: 75,
-    startVelocity: 45,
+    particleCount: 130,
+    spread: 90,
+    startVelocity: 48,
     origin: { y: 0.6 },
     colors: COLORS,
     zIndex: 100,

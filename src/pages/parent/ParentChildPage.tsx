@@ -11,10 +11,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   ArrowRight,
+  Award,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
   Loader2,
+  Medal,
+  Sparkles,
   Target,
   TrendingUp,
   Trophy,
@@ -24,6 +27,12 @@ import {
 
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { relativeTime } from '../../lib/time';
+import {
+  achievementById,
+  TIER_LABEL,
+  type Tier,
+} from '../../features/achievements/catalog';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
@@ -42,6 +51,7 @@ import {
   useLevelBands,
   useMyChildren,
   type ChildEvaluation,
+  type ChildProgress,
   type ParentChild,
   type ParentLevelBand,
 } from './parent-children.queries';
@@ -111,6 +121,188 @@ function recommendationLabel(raw: string | undefined | null): string | null {
   if (v === 'move_next_level') return 'Ready to move up a level';
   if (v === 'continue_level') return 'Continue at this level';
   return raw;
+}
+
+// ── Tier styling helpers ──────────────────────────────────────────────────────
+
+const TIER_ICON_CLASS: Record<Tier, string> = {
+  bronze: 'text-amber-500',
+  silver: 'text-slate-300',
+  gold: 'text-gold',
+  platinum: 'text-azure',
+};
+
+const TIER_BG_CLASS: Record<Tier, string> = {
+  bronze: 'bg-amber-500/15',
+  silver: 'bg-slate-300/10',
+  gold: 'bg-gold/15',
+  platinum: 'bg-azure/15',
+};
+
+// ── Achievements & Badges card ────────────────────────────────────────────────
+// Reads earned data straight from the progress response already fetched on this
+// page — no new queries, no new endpoints. Shows only earned items; never a
+// "locked wall." Most-recent achievement first.
+
+function AchievementsBadgesCard({
+  progress,
+  name,
+}: {
+  progress: ChildProgress;
+  name: string;
+}) {
+  // Resolve catalog entries for each earned achievement key, newest first.
+  const earnedAchievements = useMemo(() => {
+    const raw = progress.achievements ?? [];
+    const sorted = [...raw].sort((a, b) => {
+      if (!a.unlocked_at && !b.unlocked_at) return 0;
+      if (!a.unlocked_at) return 1;
+      if (!b.unlocked_at) return -1;
+      return b.unlocked_at.localeCompare(a.unlocked_at);
+    });
+    return sorted
+      .map((a) => ({ raw: a, def: achievementById(a.key) }))
+      .filter((a): a is { raw: typeof a.raw; def: NonNullable<typeof a.def> } =>
+        a.def != null,
+      );
+  }, [progress.achievements]);
+
+  const badges = progress.badges ?? [];
+  const hasAnything = earnedAchievements.length > 0 || badges.length > 0;
+
+  return (
+    <GlassCard
+      className="animate-fade-in-up stagger-2 p-5 sm:p-6"
+      data-testid="child-achievements"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/15">
+          <Sparkles size={16} className="text-gold" aria-hidden />
+        </span>
+        <div>
+          <h2 className="text-sm font-bold text-silver">
+            Achievements &amp; badges
+          </h2>
+          {hasAnything ? (
+            <p className="text-xs text-slate">
+              {earnedAchievements.length > 0
+                ? `${earnedAchievements.length} achievement${earnedAchievements.length === 1 ? '' : 's'}`
+                : ''}
+              {earnedAchievements.length > 0 && badges.length > 0 ? ' · ' : ''}
+              {badges.length > 0
+                ? `${badges.length} badge${badges.length === 1 ? '' : 's'}`
+                : ''}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-6">
+        {/* Empty state — only when there's truly nothing. */}
+        {!hasAnything ? (
+          <p className="text-sm text-slate" data-testid="achievements-empty">
+            No achievements yet — they&apos;ll appear here as {name} earns them.
+          </p>
+        ) : null}
+
+        {/* Earned achievements grid */}
+        {earnedAchievements.length > 0 ? (
+          <div>
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate">
+              Achievements
+            </p>
+            <ul
+              className="grid gap-2.5 sm:grid-cols-2"
+              data-testid="achievements-list"
+            >
+              {earnedAchievements.map(({ raw, def }) => {
+                const Icon = def.icon;
+                const tier = def.tier as Tier;
+                return (
+                  <li
+                    key={raw.key}
+                    className="flex items-start gap-3 rounded-xl bg-white/5 p-3"
+                  >
+                    <span
+                      className={cn(
+                        'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                        TIER_BG_CLASS[tier],
+                      )}
+                      aria-hidden
+                    >
+                      <Icon size={16} className={TIER_ICON_CLASS[tier]} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold leading-snug text-silver">
+                        {def.title}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-snug text-slate">
+                        {def.description}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <Badge tone="gold" shape="pill">
+                          {TIER_LABEL[tier]}
+                        </Badge>
+                        {raw.unlocked_at ? (
+                          <span className="text-[11px] text-slate">
+                            {relativeTime(raw.unlocked_at)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* Staff-granted badges */}
+        {badges.length > 0 ? (
+          <div>
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate">
+              Coach recognitions
+            </p>
+            <ul className="flex flex-col gap-2.5" data-testid="badges-list">
+              {badges.map((b) => (
+                <li
+                  key={b.badge_id}
+                  className="flex items-start gap-3 rounded-xl bg-white/5 p-3"
+                >
+                  <span
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-azure/15"
+                    aria-hidden
+                  >
+                    {b.name?.toLowerCase().includes('medal') ? (
+                      <Medal size={16} className="text-azure" />
+                    ) : (
+                      <Award size={16} className="text-azure" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold leading-snug text-silver">
+                      {b.name ?? 'Recognition'}
+                    </p>
+                    {b.description ? (
+                      <p className="mt-0.5 text-xs leading-snug text-slate">
+                        {b.description}
+                      </p>
+                    ) : null}
+                    {b.awarded_date ? (
+                      <p className="mt-1 text-[11px] text-slate">
+                        {relativeTime(b.awarded_date)}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </GlassCard>
+  );
 }
 
 // ── Evaluations (read-only, from progress) ───────────────────────────────────
@@ -622,6 +814,12 @@ function ChildDetail({
               )}
             </div>
           </GlassCard>
+
+          {/* Achievements & badges — earned-only, celebratory. After evals,
+              before skill targets so it reads as recognition for real progress. */}
+          {progress.data ? (
+            <AchievementsBadgesCard progress={progress.data} name={name} />
+          ) : null}
 
           {/* Targets for the current level */}
           {progress.data?.benchmarks?.length ? (

@@ -198,6 +198,15 @@ export interface ChildProgress {
     putting_target: number;
     nine_hole_target: number;
   }[];
+  // Earned recognitions (catalog achievement titles/icons resolved on the FE
+  // from the key). Present so a parent sees their child's celebrations too.
+  achievements?: { key: string; unlocked_at: string | null }[];
+  badges?: {
+    badge_id: number;
+    name: string | null;
+    description: string | null;
+    awarded_date: string | null;
+  }[];
 }
 
 export function useChildProgress(

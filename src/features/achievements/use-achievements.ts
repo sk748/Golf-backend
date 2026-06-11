@@ -7,6 +7,7 @@ import {
   useMyFeedback,
 } from '../../pages/player/player-progress.queries';
 import { useRounds, useHandicapHistory } from '../../pages/player/player-games.queries';
+import type { Round } from '../../types/api';
 import {
   evaluateAchievements,
   type EvaluatedAchievement,
@@ -38,7 +39,15 @@ export function useAchievements(): AchievementsResult {
   const stats = useMemo<PlayerStats | null>(() => {
     if (!junior.data) return null;
 
-    const roundList = rounds.data ?? [];
+    // Anti-gaming: only VERIFIED rounds count toward rounds/scoring achievements.
+    // Player-entered scorecards start `pending` until a coach/admin/committee
+    // verifies them, so a self-logged fake score can't unlock an achievement
+    // (or fire confetti / notify the parent) before sign-off. `status` is on the
+    // API payload but not yet on the locked Round type — widen locally rather
+    // than edit src/types/api.ts (locked-type drift, flagged for the sync pass).
+    const roundList = (rounds.data ?? []).filter(
+      (r) => (r as Round & { status?: string }).status === 'verified',
+    );
     const grosses = roundList
       .map((r) => r.gross_score)
       .filter((g): g is number => typeof g === 'number');
