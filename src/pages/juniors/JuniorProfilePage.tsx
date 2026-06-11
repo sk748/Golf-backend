@@ -48,6 +48,7 @@ import {
   ParticipantTypeSelect,
 } from '../../features/participant/participant';
 import { CompetitionRequirementsCard } from '../../features/competition/CompetitionRequirementsCard';
+import { AwardBadgeCard } from '../../features/badges/AwardBadgeCard';
 import { HandicapJourneyCard } from '../../features/handicap/HandicapJourneyCard';
 import { HandicapJourneyEditor } from '../../features/handicap/HandicapJourneyEditor';
 import {
@@ -938,6 +939,10 @@ function JuniorProfileBody({
   // HandicapJourneyEditor is only shown to coach and admin (committee is read-only).
   const canEditHandicapJourney = role === 'coach' || role === 'admin';
 
+  // Recognition badges: admin, coach, and committee may award/revoke.
+  const canAwardBadges =
+    role === 'admin' || role === 'coach' || role === 'committee';
+
   return (
     <div className="space-y-6">
       {/* 1+2) Header + hero handicap */}
@@ -1019,6 +1024,12 @@ function JuniorProfileBody({
 
       {/* 7b) Competition requirements (all staff) */}
       <CompetitionRequirementsCard juniorId={junior.id} />
+
+      {/* 7c) Recognition badges — award/revoke (admin/coach/committee).
+          Awarding celebrates the player + notifies their parent. */}
+      {canAwardBadges ? (
+        <AwardBadgeCard juniorId={junior.id} juniorName={name} />
+      ) : null}
 
       {/* 8) Recent attendance */}
       <AttendanceSection junior={junior} />

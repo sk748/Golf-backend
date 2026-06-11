@@ -468,7 +468,7 @@ def get_junior_badges():
 
 
 @juniors_bp.route("/junior-badges", methods=["POST"])
-@require_roles("admin", "coach")
+@require_roles("admin", "coach", "committee")
 def post_junior_badge():
     data = dict(request.get_json() or {})
     # awarded_by is NOT NULL — stamp it from the JWT (the awarding staff member)
@@ -502,7 +502,7 @@ def post_junior_badge():
 
 
 @juniors_bp.route("/junior-badges/<int:junior_id>/<int:badge_id>", methods=["DELETE"])
-@require_roles("admin", "coach")
+@require_roles("admin", "coach", "committee")
 def delete_junior_badge(junior_id, badge_id):
     jb = revoke_badge(junior_id, badge_id)
     if jb is None:

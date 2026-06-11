@@ -16,6 +16,7 @@ import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
 import { AdminModerationPage } from './pages/admin/AdminModerationPage';
 import { AdminBenchmarksPage } from './pages/admin/AdminBenchmarksPage';
+import { AdminBadgesPage } from './pages/admin/AdminBadgesPage';
 import { AdminImportPage } from './pages/admin/AdminImportPage';
 import { TimetablePage } from './pages/coaching/TimetablePage';
 import { MessagesPage } from './pages/messages/MessagesPage';
@@ -242,6 +243,14 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminBenchmarksPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/badges"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminBadgesPage />
             </RequireRole>
           }
         />

@@ -1,4 +1,5 @@
 import {
+  Award,
   BarChart3,
   CalendarDays,
   CalendarPlus,
@@ -129,6 +130,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     { to: '/admin/benchmarks', label: 'Benchmarks', icon: Target },
+    { to: '/admin/badges', label: 'Badges', icon: Award },
     { to: '/import', label: 'Import juniors', icon: Upload },
     groupSessions,
     timetable,
