@@ -1,7 +1,7 @@
 from enum import Enum
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Column, Date, ForeignKey,
+    Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey,
     Integer, Numeric, String, Text, UniqueConstraint,
 )
 from sqlalchemy import Enum as SQLEnum
@@ -166,3 +166,30 @@ class JuniorBadge(TimestampMixin, db.Model):
     junior = relationship("JuniorProfile", backref="junior_badges")
     badge = relationship("Badge", backref="junior_badges")
     awarder = relationship("User")
+
+
+class AchievementUnlock(TimestampMixin, db.Model):
+    """First-time unlock of a frontend-catalog achievement (e.g. 'sc-100').
+
+    Catalog achievements are derived client-side from the player's stats, so the
+    backend has no predicates of its own — the player's app reports the keys it
+    has earned and we record the first time each is seen. This gives us a real
+    `unlocked_at` (for "most recent" ordering) and, crucially, a server-side
+    moment to congratulate the player and notify their parent. One row per
+    (junior, key)."""
+    __tablename__ = "achievement_unlocks"
+
+    id = Column(Integer, primary_key=True)
+    junior_id = Column(
+        Integer, ForeignKey("junior_profiles.id"), nullable=False, index=True
+    )
+    achievement_key = Column(String(80), nullable=False)
+    unlocked_at = Column(DateTime(timezone=True), nullable=False)
+
+    junior = relationship("JuniorProfile", backref="achievement_unlocks")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "junior_id", "achievement_key", name="uq_achievement_unlock"
+        ),
+    )

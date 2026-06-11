@@ -16,7 +16,9 @@ import { api } from '../../lib/api';
 // child_name}; message_held {message_id, conversation_id, sender_name};
 // message_flagged {message_id, conversation_id, flagged_by_name, reason};
 // tournament_open {tournament_id, tournament_name, start_date, child_name?};
-// announcement {announcement_id, title}.
+// announcement {announcement_id, title};
+// achievement {achievement_key? | badge_id?, title, child_name?} — child_name
+//   set means it's the PARENT's copy (their child earned it).
 export interface AppNotification {
   id: number;
   type: string;
@@ -92,6 +94,13 @@ export function notificationText(n: AppNotification): string {
     }
     case 'announcement':
       return `New announcement: ${s('title') || 'see details'}`;
+    case 'achievement': {
+      const title = s('title') || 'a new achievement';
+      const child = s('child_name');
+      return child
+        ? `${child} earned an achievement: ${title} 🎉`
+        : `Achievement unlocked: ${title} 🎉`;
+    }
     default:
       return n.type.replace(/_/g, ' ');
   }
@@ -113,6 +122,10 @@ export function notificationLink(n: AppNotification): string {
     }
     case 'announcement':
       return '/announcements';
+    case 'achievement':
+      // Parent's copy carries child_name → their child page; the player's own
+      // goes to their achievements wall.
+      return p.child_name ? '/my-child' : '/achievements';
     default:
       return '/messages';
   }

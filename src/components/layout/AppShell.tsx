@@ -11,6 +11,8 @@ import { NAV_BY_ROLE } from './nav-config';
 import { MessageToast } from './MessageToast';
 import { NotificationBell } from './NotificationBell';
 import { useNotificationsSummary } from './notifications.queries';
+import { AchievementCelebrations } from './AchievementCelebrations';
+import { PlayerAchievementSync } from '../../features/achievements/PlayerAchievementSync';
 
 // Unread-chat count on the Messages nav item. Its own component so the
 // notifications poll only runs once the shell is rendering for a signed-in
@@ -149,6 +151,12 @@ export function AppShell() {
         {/* Live message banners — portals to document.body, anchored top-right
             below this header. Shares the bell's notifications poll. */}
         <MessageToast />
+
+        {/* Confetti + congratulations popup when an achievement notification
+            arrives (player's own or, for a parent, their child's). The player
+            also drives the catalog-unlock sync that creates those notifications. */}
+        <AchievementCelebrations />
+        {user.role === 'player' && <PlayerAchievementSync />}
 
         <main className="p-3 sm:p-6">
           <Outlet />

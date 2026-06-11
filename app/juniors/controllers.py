@@ -5,7 +5,11 @@ import secrets
 from datetime import date, datetime, timedelta
 
 from app.database.database import db
-from app.juniors.models import JuniorProfile, JuniorParticipantType, LevelBand, LevelBenchmark, Badge, JuniorBadge
+from app.juniors.models import (
+    AchievementUnlock, Badge, JuniorBadge, JuniorParticipantType,
+    JuniorProfile, LevelBand, LevelBenchmark,
+)
+from app.utils.mixins import utc_now
 from app.utils.schemas import SimpleModelSchema
 
 junior_schema = SimpleModelSchema(JuniorProfile)
@@ -347,6 +351,94 @@ def revoke_badge(junior_id: int, badge_id: int):
         db.session.delete(jb)
         db.session.commit()
     return jb
+
+
+def sync_achievements(junior, items):
+    """Record any catalog achievements the player has newly earned.
+
+    `items` is a list of {key, title} the frontend evaluated as EARNED. We store
+    one row per (junior, key) the first time we see it. The FIRST sync for a
+    junior is treated as a silent baseline — a player who already qualified for a
+    dozen achievements before this feature shipped shouldn't get a dozen confetti
+    pops at once — so it records without congratulating. After that, each
+    genuinely-new unlock pings the player (a self "achievement" notification) and
+    their parent.
+
+    Returns (newly_keys, unlocked) where `unlocked` is the full
+    [{key, unlocked_at}] list ordered oldest→newest (drives the "most recent"
+    glow)."""
+    from app.notifications.service import notify
+
+    existing = {
+        u.achievement_key: u
+        for u in AchievementUnlock.query.filter_by(junior_id=junior.id).all()
+    }
+    baseline = len(existing) == 0
+
+    now = utc_now()
+    title_by_key = {}
+    newly = []
+    for it in items or []:
+        key = (str(it.get("key") or "")).strip()
+        if not key or key in existing:
+            continue
+        title_by_key[key] = str(it.get("title") or key)
+        row = AchievementUnlock(
+            junior_id=junior.id, achievement_key=key, unlocked_at=now
+        )
+        db.session.add(row)
+        existing[key] = row
+        newly.append(key)
+
+    celebrate = newly if not baseline else []
+    if celebrate:
+        # Always non-empty on the PARENT's copy: the frontend uses child_name's
+        # presence to tell a parent notification from a player's own, so a blank
+        # first name (possible for imported juniors) must still set a label.
+        child_name = (
+            (junior.user.first_name or "").strip() if junior.user else ""
+        ) or "Your child"
+        for key in celebrate:
+            payload = {"achievement_key": key, "title": title_by_key[key]}
+            notify(junior.user_id, "achievement", payload)
+            if junior.parent_id:
+                notify(
+                    junior.parent_id,
+                    "achievement",
+                    {**payload, "child_name": child_name},
+                )
+
+    db.session.commit()
+
+    rows = (
+        AchievementUnlock.query.filter_by(junior_id=junior.id)
+        .order_by(AchievementUnlock.unlocked_at, AchievementUnlock.id)
+        .all()
+    )
+    unlocked = [
+        {
+            "key": r.achievement_key,
+            "unlocked_at": r.unlocked_at.isoformat() if r.unlocked_at else None,
+        }
+        for r in rows
+    ]
+    return celebrate, unlocked
+
+
+def list_achievement_unlocks(junior):
+    """[{key, unlocked_at}] for a junior, oldest→newest."""
+    rows = (
+        AchievementUnlock.query.filter_by(junior_id=junior.id)
+        .order_by(AchievementUnlock.unlocked_at, AchievementUnlock.id)
+        .all()
+    )
+    return [
+        {
+            "key": r.achievement_key,
+            "unlocked_at": r.unlocked_at.isoformat() if r.unlocked_at else None,
+        }
+        for r in rows
+    ]
 
 
 def set_featured_badge(junior, badge_id):

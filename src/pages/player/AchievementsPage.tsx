@@ -6,6 +6,7 @@ import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { Badge } from '../../components/ui/Badge';
 import { useAchievements } from '../../features/achievements/use-achievements';
+import { useAchievementUnlocks } from '../../features/achievements/achievements.queries';
 import { AchievementIcon } from '../../features/achievements/AchievementIcon';
 import {
   CATEGORY_LABELS,
@@ -93,6 +94,7 @@ function StatePanel({
 function AchievementCard({
   a,
   featured,
+  recent,
   onFeature,
   onClear,
   busy,
@@ -100,6 +102,8 @@ function AchievementCard({
   a: EvaluatedAchievement;
   // Featuring is only offered when we know the player's junior id.
   featured: boolean;
+  // The most-recently unlocked achievement — gets a soft glow.
+  recent: boolean;
   onFeature: (() => void) | null;
   onClear: (() => void) | null;
   busy: boolean;
@@ -115,11 +119,14 @@ function AchievementCard({
       className={cn(
         'flex flex-col items-center gap-2 p-4 text-center transition',
         a.earned ? 'ring-1 ring-gold/40' : 'opacity-90',
+        // Soft glow on the most-recently unlocked achievement.
+        recent && 'ring-2 ring-gold/70 shadow-lg shadow-gold/30',
         featured && 'ring-2 ring-gold shadow-lg shadow-gold/20',
       )}
       data-testid={`achievement-${a.id}`}
       data-earned={a.earned}
       data-featured={featured}
+      data-recent={recent}
     >
       <div className="relative">
         <AchievementIcon icon={a.icon} tier={a.tier} earned={a.earned} size="lg" />
@@ -214,6 +221,13 @@ export function AchievementsPage() {
   const junior = useMyJunior();
   const juniorId = junior.data?.id;
   const featuredKey = featuredAwardOf(junior.data).featured_achievement_key;
+
+  // Most-recently unlocked achievement (server-recorded, newest by unlocked_at)
+  // — gets a soft glow on the wall. Unlocks come back oldest→newest.
+  const unlocks = useAchievementUnlocks();
+  const recentKey = unlocks.data?.length
+    ? unlocks.data[unlocks.data.length - 1].key
+    : null;
   const setFeatured = useSetFeaturedAward();
   const featuringId = setFeatured.isPending
     ? (setFeatured.variables?.body && 'achievement_key' in setFeatured.variables.body
@@ -371,6 +385,7 @@ export function AchievementsPage() {
                       key={a.id}
                       a={a}
                       featured={isFeatured}
+                      recent={recentKey === a.id}
                       busy={featuringId === a.id || (isFeatured && setFeatured.isPending)}
                       onFeature={
                         juniorId != null

@@ -19,6 +19,7 @@ from app.juniors.controllers import (
     list_badges, get_badge, create_badge, update_badge, delete_badge,
     list_junior_badges, award_badge, revoke_badge,
     set_featured_badge, set_featured_achievement,
+    sync_achievements, list_achievement_unlocks,
     preview_import, commit_import,
 )
 from app.utils.decorators import (
@@ -96,6 +97,35 @@ def get_my_junior():
     if junior is None:
         return _not_found("Junior profile")
     return _data(junior_schema.dump(junior))
+
+
+@juniors_bp.route("/juniors/me/achievements", methods=["GET"])
+@require_roles("player")
+def get_my_achievement_unlocks():
+    """The signed-in player's recorded catalog-achievement unlocks (with
+    timestamps) — drives the 'most recent' glow on the achievements wall."""
+    junior = JuniorProfile.query.filter_by(user_id=get_current_user().id).first()
+    if junior is None:
+        return _not_found("Junior profile")
+    return _data({"unlocked": list_achievement_unlocks(junior)})
+
+
+@juniors_bp.route("/juniors/me/achievements/sync", methods=["POST"])
+@require_roles("player")
+def sync_my_achievements():
+    """The player's app reports the catalog achievements it has earned
+    ({achievements: [{key, title}]}); we record any new ones and (after the
+    first baseline sync) congratulate the player + notify their parent. Returns
+    the keys newly unlocked this call plus the full unlocked list."""
+    junior = JuniorProfile.query.filter_by(user_id=get_current_user().id).first()
+    if junior is None:
+        return _not_found("Junior profile")
+    data = request.get_json(silent=True) or {}
+    items = data.get("achievements")
+    if items is not None and not isinstance(items, list):
+        return _err("VALIDATION_ERROR", "achievements must be a list", 400)
+    newly, unlocked = sync_achievements(junior, items or [])
+    return _data({"newly_unlocked": newly, "unlocked": unlocked})
 
 
 @juniors_bp.route("/juniors/me/feedback", methods=["GET"])
@@ -447,10 +477,28 @@ def post_junior_badge():
     data.setdefault("awarded_date", date.today().isoformat())
     try:
         jb = award_badge(data)
-        return _data(junior_badge_schema.dump(jb), 201)
     except IntegrityError:
         db.session.rollback()
         return _err("CONFLICT", "Badge already awarded to this junior", 409)
+    # Celebrate like a catalog achievement: ping the player and their parent so
+    # both get the confetti + congratulations (social-phase decision, both
+    # achievement sources celebrate).
+    from app.notifications.service import notify
+
+    junior = jb.junior or get_junior(jb.junior_id)
+    title = jb.badge.name if jb.badge else "a new badge"
+    if junior is not None:
+        payload = {"badge_id": jb.badge_id, "title": title}
+        notify(junior.user_id, "achievement", payload)
+        if junior.parent_id:
+            # Always non-empty on the parent's copy (see sync_achievements) so
+            # the frontend reliably treats it as a parent notification.
+            child_name = (
+                (junior.user.first_name or "").strip() if junior.user else ""
+            ) or "Your child"
+            notify(junior.parent_id, "achievement", {**payload, "child_name": child_name})
+        db.session.commit()
+    return _data(junior_badge_schema.dump(jb), 201)
 
 
 @juniors_bp.route("/junior-badges/<int:junior_id>/<int:badge_id>", methods=["DELETE"])
