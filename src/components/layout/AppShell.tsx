@@ -8,6 +8,25 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { RoleBadge } from '../ui/Badge';
 import { NAV_BY_ROLE } from './nav-config';
+import { NotificationBell } from './NotificationBell';
+import { useNotificationsSummary } from './notifications.queries';
+
+// Unread-chat count on the Messages nav item. Its own component so the
+// notifications poll only runs once the shell is rendering for a signed-in
+// user (the query key is shared with the bell, so TanStack dedupes the fetch).
+function MessagesUnreadBadge() {
+  const { data } = useNotificationsSummary();
+  const unread = data?.unread_messages ?? 0;
+  if (unread === 0) return null;
+  return (
+    <span
+      data-testid="nav-messages-unread"
+      className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-azure px-1.5 text-xs font-bold text-navy"
+    >
+      {unread > 99 ? '99+' : unread}
+    </span>
+  );
+}
 
 // App chrome for signed-in users: per-role sidebar + sticky top bar, with the
 // active page rendered into <Outlet/>. Each role gets its own nav (and, as we
@@ -57,6 +76,7 @@ export function AppShell() {
           >
             <item.icon size={18} />
             {item.label}
+            {item.to === '/messages' && <MessagesUnreadBadge />}
           </NavLink>
         ))}
       </nav>
@@ -120,6 +140,9 @@ export function AppShell() {
             <Menu size={20} />
           </button>
           <h1 className="text-lg font-bold text-silver">{title}</h1>
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
         </header>
 
         <main className="p-3 sm:p-6">

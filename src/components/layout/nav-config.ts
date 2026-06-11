@@ -10,6 +10,9 @@ import {
   Medal,
   Globe,
   ListOrdered,
+  Megaphone,
+  MessageSquare,
+  ShieldAlert,
   ShieldCheck,
   UserCog,
   ScrollText,
@@ -90,14 +93,29 @@ const bookSession: NavItem = {
   icon: CalendarPlus,
 };
 
+// Social phase — chat + club announcements, every role.
+const messages: NavItem = {
+  to: '/messages',
+  label: 'Messages',
+  icon: MessageSquare,
+};
+const announcements: NavItem = {
+  to: '/announcements',
+  label: 'Announcements',
+  icon: Megaphone,
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     dashboard,
+    messages,
+    announcements,
     { to: '/users', label: 'Users', icon: Users },
     juniors,
     { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
     { to: '/schedule', label: 'Schedules', icon: CalendarDays },
+    { to: '/moderation', label: 'Moderation', icon: ShieldAlert },
     { to: '/audit-log', label: 'Audit log', icon: ScrollText },
     { to: '/courses', label: 'Courses', icon: Map },
     groupSessions,
@@ -109,6 +127,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   coach: [
     dashboard,
+    messages,
+    announcements,
     juniors,
     { to: '/schedule', label: 'Schedule', icon: CalendarDays },
     { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
@@ -122,6 +142,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   committee: [
     dashboard,
+    messages,
+    announcements,
     juniors,
     { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
     { to: '/schedule', label: 'Schedules', icon: CalendarDays },
@@ -131,6 +153,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   parent: [
     dashboard,
+    messages,
+    announcements,
     { to: '/my-child', label: 'My child', icon: TrendingUp },
     { to: '/sessions', label: 'Coaching', icon: CalendarPlus },
     tournaments,
@@ -138,6 +162,8 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   player: [
     dashboard,
+    messages,
+    announcements,
     { to: '/progress', label: 'Progress', icon: BarChart3 },
     { to: '/achievements', label: 'Achievements', icon: Trophy },
     logRound,

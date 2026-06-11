@@ -311,10 +311,29 @@ run (findings fixed pre-commit), both branches converged per commit.
 9. **Transport:** polling via TanStack `refetchInterval` (~10s open thread,
    ~60s counts); SSE is the later upgrade path.
 
+### Social features phase — ✅ SHIPPED (2026-06-11)
+Backend (`9a5c373` + contacts `3ce697b`): app/messaging + app/announcements +
+app/notifications; DM matrix, roster groups ×2 per coach, immutable messages
+(held/hidden moderation, banned-word holds, flags), first-contact parent
+notices, targeted announcements (committee external → draft → admin publish;
+public landing endpoint), in-app notifications. Migration `g8social` verified
+up/down/up; 31/31 app-context smoke checks + live HTTP smoke, DB pristine.
+`GET /api/messaging/contacts` added for matrix-scoped DM target discovery
+(players/parents can never list club users).
+
+Frontend (this commit): `/messages` (all roles — list/thread/composer,
+10s/30s polling, subtle conduct disclaimer, flagging, parent oversight
+read-only threads, staff group creation), `/moderation` (admin — review queue
++ all-conversations browser, hide/release/resolve), `/announcements` (all
+roles — scoped feed; staff composer with everyone/roles/band/coach-group
+targeting; admin publish queue), public "Club News" on the landing page,
+notification bell + Messages nav unread badge (60s poll). Built by three
+parallel subagents; api-contract-auditor PASS (no CRITICAL/HIGH; oversight
+mark-read 403 fixed pre-commit); tsc + lint + vite build green.
+
 ### Next up (other)
-- **Social features phase — in progress** (decisions above). Then the UI/UX
-  reorganisation pass (Sam: current nav/IA "hard to use" — redo AFTER social
-  adds its surfaces, so the IA is designed once).
+- **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — now that
+  social surfaces exist, design the IA once).
 - Phase 6 ship pass: states/a11y/responsive sweep, code-splitting (~1.16 MB
   bundle advisory), guided tutorial (parked for finishing touches), walk every
   role through once.

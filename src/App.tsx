@@ -14,6 +14,9 @@ import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
+import { AdminModerationPage } from './pages/admin/AdminModerationPage';
+import { MessagesPage } from './pages/messages/MessagesPage';
+import { AnnouncementsPage } from './pages/announcements/AnnouncementsPage';
 import { CoachSchedulePage } from './pages/coach/CoachSchedulePage';
 import { CoachAttendancePage } from './pages/coach/CoachAttendancePage';
 import { CoachWriteEvaluationPage } from './pages/coach/CoachWriteEvaluationPage';
@@ -109,6 +112,10 @@ export function App() {
             create/edit/delete is gated to admin inside the pages. */}
         <Route path="/series" element={<SeriesListPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
+        {/* Social phase — every role chats (matrix enforced server-side) and
+            reads the club announcement feed. */}
+        <Route path="/messages" element={<MessagesPage />} />
+        <Route path="/announcements" element={<AnnouncementsPage />} />
         {/* Rounds — players log their own (pending until verified); staff log
             for any junior (verified immediately); staff verify the queue. */}
         <Route
@@ -200,6 +207,14 @@ export function App() {
           element={
             <RequireRole roles={['admin']}>
               <AdminCoachAssignmentsPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/moderation"
+          element={
+            <RequireRole roles={['admin']}>
+              <AdminModerationPage />
             </RequireRole>
           }
         />
