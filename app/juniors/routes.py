@@ -19,6 +19,7 @@ from app.juniors.controllers import (
     list_badges, get_badge, create_badge, update_badge, delete_badge,
     list_junior_badges, award_badge, revoke_badge,
     set_featured_badge, set_featured_achievement,
+    preview_import, commit_import,
 )
 from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, require_ownership, has_role
@@ -497,3 +498,53 @@ def put_featured_badge(junior_id):
         "featured_badge_id": updated.featured_badge_id,
         "featured_achievement_key": updated.featured_achievement_key,
     })
+
+
+# ── Bulk intake import (CSV → preview → commit) ──────────────────────────────
+# Staff upload the junior-development roster (CSV) to onboard many juniors at
+# once. The request body is the CSV itself: send raw text with Content-Type
+# text/csv, OR a JSON object {"csv": "<text>"}. Both are accepted.
+
+def _extract_csv():
+    """Read CSV text from a raw text/csv body or a JSON {csv: "..."} body.
+    Returns (csv_text, error_response). One of the two is always None."""
+    ctype = (request.content_type or "")
+    if "application/json" in ctype:
+        body = request.get_json(silent=True) or {}
+        text = body.get("csv")
+        if not isinstance(text, str) or not text.strip():
+            return None, _err("VALIDATION_ERROR", "JSON body must include a non-empty 'csv' string", 400)
+        return text, None
+    # default: treat the raw body as CSV (text/csv, or anything else)
+    text = request.get_data(as_text=True)
+    if not text or not text.strip():
+        return None, _err("VALIDATION_ERROR", "Request body is empty — send CSV as text/csv or JSON {csv}", 400)
+    return text, None
+
+
+@juniors_bp.route("/juniors/import/preview", methods=["POST"])
+@require_roles("admin", "committee")
+def import_preview():
+    """Parse + validate the uploaded CSV and report per-row results. No writes."""
+    csv_text, err = _extract_csv()
+    if err:
+        return err
+    try:
+        return _data(preview_import(csv_text))
+    except ValueError as exc:
+        return _err("VALIDATION_ERROR", str(exc), 400)
+
+
+@juniors_bp.route("/juniors/import/commit", methods=["POST"])
+@require_roles("admin", "committee")
+def import_commit():
+    """Re-parse the SAME CSV and create a player User + JuniorProfile
+    (pending_staff) per importable row. Error rows are skipped; each create is
+    isolated in a savepoint so one bad row can't abort the batch."""
+    csv_text, err = _extract_csv()
+    if err:
+        return err
+    try:
+        return _data(commit_import(csv_text))
+    except ValueError as exc:
+        return _err("VALIDATION_ERROR", str(exc), 400)

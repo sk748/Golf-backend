@@ -21,6 +21,7 @@ from app.audit.models import AuditLog
 from app.messaging.models import Conversation, ConversationMember, Message, MessageFlag
 from app.announcements.models import Announcement
 from app.notifications.models import Notification
+from app.handicap.models import HandicapJourney
 
 __all__ = [
     "User", "UserRole", "MembershipType",
@@ -36,6 +37,7 @@ __all__ = [
     "Conversation", "ConversationMember", "Message", "MessageFlag",
     "Announcement",
     "Notification",
+    "HandicapJourney",
     "register_all",
 ]
 

@@ -1,4 +1,8 @@
-from datetime import datetime, timedelta
+import csv
+import io
+import re
+import secrets
+from datetime import date, datetime, timedelta
 
 from app.database.database import db
 from app.juniors.models import JuniorProfile, JuniorParticipantType, LevelBand, LevelBenchmark, Badge, JuniorBadge
@@ -371,3 +375,497 @@ def set_featured_achievement(junior, key):
         junior.featured_badge_id = None
     db.session.commit()
     return junior, None
+
+
+# ── Bulk intake import (CSV → preview → commit) ──────────────────────────────
+#
+# Staff upload the "Junior Development Names V3" roster CSV to onboard many
+# juniors at once. Two endpoints share the parsing/validation in this section:
+#   POST /api/juniors/import/preview  → parse + validate, NO writes
+#   POST /api/juniors/import/commit   → re-parse the SAME csv + create rows
+#
+# The commit re-parses from scratch (never trusts client-sent parsed data) and
+# wraps each row in its own savepoint so one bad row can't abort the batch.
+
+# Header aliases: the real spreadsheet headers (left of →) map to canonical keys
+# we use internally. Matching is case-insensitive and ignores surrounding
+# whitespace; the first header whose normalized text contains one of these
+# substrings wins, so minor wording drift in the export still resolves.
+_HEADER_ALIASES = {
+    "junior_first_name": ["junior's first name", "first name"],
+    "junior_last_name": ["junior's surname", "surname", "last name"],
+    "junior_phone": ["junior's phone"],
+    "junior_email": ["junior's email"],
+    "parent_name": ["parent's name", "parent name"],
+    "parent_email": ["parent's email", "parent email", "email address"],
+    "parent_phone": ["parent's phone", "parent phone"],
+    "membership_number": ["membership number", "membership no", "membership"],
+    "curriculum": ["curriculum"],
+    "handicap_index": ["handicap index"],
+    "played_us_kids": ["played us kids", "us kids?"],
+    "us_kids_best_score": ["best us kids", "us kids score"],
+    "experience": ["how long", "playing golf"],
+    "availability": ["time dedication", "availability", "dedicate"],
+    "medical_flag": ["medical condition"],
+    "medical_details": ["details"],
+    "golf_goals": ["golf goals", "goals"],
+    "gender": ["gender", "sex"],
+    "current_level": ["current level", "level"],
+}
+
+# NOTE on "Email Address": in the V3 spreadsheet the leading "Email Address"
+# column is the responder (parent) email, so it is aliased to parent_email. An
+# explicit "Parent's Email" header, if present, takes precedence because it is
+# scanned first below.
+_PARENT_EMAIL_PRIORITY = ["parent's email", "parent email", "email address"]
+
+# experience free-text → JuniorExperience enum value. Keyed on substrings of the
+# spreadsheet's "how long playing golf" answers; first match wins.
+_EXPERIENCE_MAP = [
+    ("beginner", "beginner"),
+    ("less than", "lt_1yr"),
+    ("under 1", "lt_1yr"),
+    ("< 1", "lt_1yr"),
+    ("1-3", "1_3yr"), ("1 - 3", "1_3yr"), ("1 to 3", "1_3yr"),
+    ("4-6", "4_6yr"), ("4 - 6", "4_6yr"), ("4 to 6", "4_6yr"),
+    ("7-10", "7_10yr"), ("7 - 10", "7_10yr"), ("7 to 10", "7_10yr"),
+    ("more than 7", "7_10yr"),
+]
+
+# availability free-text → JuniorAvailability enum value.
+_AVAILABILITY_MAP = [
+    ("more than twice", "more_than_twice"),
+    ("twice", "twice_weekly"),
+    ("weekend", "weekends_only"),
+    ("saturday", "weekends_only"),
+    ("holiday", "holidays_only"),
+]
+
+_TRUE_WORDS = {"yes", "y", "true", "1"}
+_FALSE_WORDS = {"no", "n", "false", "0", ""}
+
+# Default level when the spreadsheet omits a level: intake is overwhelmingly
+# beginners, and band resolution for level 1 already exists in the seed data.
+_DEFAULT_LEVEL = 1
+
+# Synthesized placeholder email for kids without their own address:
+#   import+<slug>-<row>@karenjuniors.local
+# Deterministic per row so re-running preview/commit on the SAME csv produces
+# the SAME address; the .local TLD is non-routable so these never collide with
+# real mail. The junior/parent sets a real email + password later via reset.
+_SYNTH_EMAIL_DOMAIN = "karenjuniors.local"
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
+    return slug or "junior"
+
+
+def _synth_email(parent_key: str, name: str, row_number: int) -> str:
+    base = _slugify(parent_key or name)
+    return f"import+{base}-{row_number}@{_SYNTH_EMAIL_DOMAIN}"
+
+
+def _norm(s):
+    return (s or "").strip().lower()
+
+
+def _build_header_index(fieldnames):
+    """Map each canonical key → the actual CSV header that satisfies it.
+
+    Returns {canonical_key: actual_header}. parent_email is resolved with an
+    explicit priority order so "Parent's Email" beats the generic "Email
+    Address" responder column when both exist.
+    """
+    headers = [h for h in (fieldnames or []) if h is not None]
+    norm_headers = {h: _norm(h) for h in headers}
+    index = {}
+
+    # parent_email: honor priority order first
+    for pref in _PARENT_EMAIL_PRIORITY:
+        match = next((h for h in headers if norm_headers[h] == pref or pref in norm_headers[h]), None)
+        if match:
+            index["parent_email"] = match
+            break
+
+    for key, aliases in _HEADER_ALIASES.items():
+        if key in index:
+            continue
+        for alias in aliases:
+            match = next((h for h in headers if alias in norm_headers[h]), None)
+            if match:
+                index[key] = match
+                break
+    return index
+
+
+def _cell(row, header_index, key):
+    header = header_index.get(key)
+    if header is None:
+        return ""
+    return (row.get(header) or "").strip()
+
+
+def _parse_bool(text):
+    """Return True/False/None from a free-text yes/no cell."""
+    t = _norm(text)
+    if t in _TRUE_WORDS:
+        return True
+    if t in _FALSE_WORDS:
+        return False
+    return None
+
+
+def _map_experience(text):
+    t = _norm(text)
+    if not t:
+        return "beginner"  # default for blank intake answers
+    for needle, value in _EXPERIENCE_MAP:
+        if needle in t:
+            return value
+    return None  # present but unrecognized → caller flags an error
+
+
+def _map_availability(text):
+    t = _norm(text)
+    if not t:
+        return "weekends_only"  # default for blank intake answers
+    for needle, value in _AVAILABILITY_MAP:
+        if needle in t:
+            return value
+    return None  # present but unrecognized → caller flags an error
+
+
+def _map_gender(text):
+    t = _norm(text)
+    if t in ("male", "m", "boy"):
+        return "male"
+    if t in ("female", "f", "girl"):
+        return "female"
+    return None  # blank/unknown → default applied + warning by caller
+
+
+def _resolve_import_parent(membership_number, parent_email):
+    """Find the parent User by membership number first, then by email.
+    Returns (User|None, matched_by|None)."""
+    from app.auth.models import User, UserRole
+
+    if membership_number:
+        parent = User.query.filter_by(
+            membership_number=membership_number, role=UserRole.parent
+        ).first()
+        if parent:
+            return parent, "membership_number"
+    if parent_email:
+        parent = User.query.filter_by(email=parent_email, role=UserRole.parent).first()
+        if parent:
+            return parent, "email"
+        # An account with that email exists but isn't a parent — still useful to
+        # report, but we do not link a non-parent as the parent.
+    return None, None
+
+
+def _read_csv(text):
+    """Parse CSV text into (header_index, [row_dicts]). Raises ValueError on
+    empty/headerless input."""
+    if not text or not text.strip():
+        raise ValueError("CSV is empty")
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("CSV has no header row")
+    rows = list(reader)
+    header_index = _build_header_index(reader.fieldnames)
+    return header_index, rows
+
+
+def _parse_import_row(row, header_index, row_number):
+    """Validate + map one CSV row to junior intake fields.
+
+    Returns a dict: {row_number, parsed, parent_match, status, messages}.
+    No database writes. status is one of ok / warning / error.
+    """
+    from app.auth.models import User
+
+    messages = []
+    status = "ok"
+
+    def warn(msg):
+        nonlocal status
+        messages.append(msg)
+        if status == "ok":
+            status = "warning"
+
+    def fail(msg):
+        nonlocal status
+        messages.append(msg)
+        status = "error"
+
+    first_name = _cell(row, header_index, "junior_first_name")
+    last_name = _cell(row, header_index, "junior_last_name")
+    junior_email = _norm(_cell(row, header_index, "junior_email"))
+    parent_email = _norm(_cell(row, header_index, "parent_email"))
+    parent_name = _cell(row, header_index, "parent_name")
+    membership_number = _cell(row, header_index, "membership_number")
+
+    if not first_name:
+        fail("Junior's first name is required")
+
+    # Date of birth — the spreadsheet uses age groups, not an exact DOB, so a
+    # true DOB column is rarely present. We require an explicit date_of_birth
+    # cell to create the profile (DOB is NOT NULL); absent → error with guidance.
+    dob_cell = ""
+    for h, v in row.items():
+        if h and ("date of birth" in _norm(h) or _norm(h) == "dob"):
+            dob_cell = (v or "").strip()
+            break
+    dob = None
+    if dob_cell:
+        try:
+            dob = date.fromisoformat(dob_cell)
+        except ValueError:
+            fail(f"date_of_birth '{dob_cell}' is not ISO YYYY-MM-DD")
+    else:
+        fail("date_of_birth (ISO YYYY-MM-DD) is required — the age-group column is not a DOB")
+
+    # Gender — often absent on the intake sheet; default male + warn (matches
+    # the existing _create_junior_profile fallback behavior).
+    gender = _map_gender(_cell(row, header_index, "gender"))
+    if gender is None:
+        gender = "male"
+        warn("gender missing/unrecognized — defaulted to male")
+
+    # Experience
+    exp_raw = _cell(row, header_index, "experience")
+    experience = _map_experience(exp_raw)
+    if experience is None:
+        fail(f"experience '{exp_raw}' did not match a known option")
+        experience = "beginner"
+
+    # Availability
+    avail_raw = _cell(row, header_index, "availability")
+    availability = _map_availability(avail_raw)
+    if availability is None:
+        fail(f"availability '{avail_raw}' did not match a known option")
+        availability = "weekends_only"
+
+    # Current level — default to beginner (1) when absent.
+    level_cell = _cell(row, header_index, "current_level")
+    current_level = _DEFAULT_LEVEL
+    if level_cell:
+        try:
+            current_level = int(float(level_cell))
+        except ValueError:
+            warn(f"current_level '{level_cell}' unreadable — defaulted to {_DEFAULT_LEVEL}")
+            current_level = _DEFAULT_LEVEL
+    if not (1 <= current_level <= 9):
+        warn(f"current_level {current_level} out of range 1-9 — defaulted to {_DEFAULT_LEVEL}")
+        current_level = _DEFAULT_LEVEL
+
+    # Handicap
+    hcp_cell = _cell(row, header_index, "handicap_index")
+    handicap_index = None
+    has_handicap = False
+    if hcp_cell:
+        try:
+            handicap_index = float(hcp_cell)
+            has_handicap = True
+        except ValueError:
+            warn(f"handicap_index '{hcp_cell}' unreadable — imported without a handicap")
+
+    played_us_kids = _parse_bool(_cell(row, header_index, "played_us_kids"))
+    us_best_cell = _cell(row, header_index, "us_kids_best_score")
+    us_kids_best_score = None
+    if us_best_cell:
+        try:
+            us_kids_best_score = int(float(us_best_cell))
+        except ValueError:
+            warn(f"best US Kids score '{us_best_cell}' unreadable — skipped")
+
+    medical_flag = _parse_bool(_cell(row, header_index, "medical_flag"))
+    medical_details = _cell(row, header_index, "medical_details")
+    medical_conditions = medical_details or (None if medical_flag is not True else "(condition noted, no details given)")
+
+    # Email: synthesize a deterministic placeholder if the junior has none.
+    synthesized_email = False
+    if junior_email:
+        email = junior_email
+    else:
+        email = _synth_email(membership_number or parent_email, f"{first_name}-{last_name}", row_number)
+        synthesized_email = True
+        warn(f"no junior email — synthesized placeholder {email} (reset later)")
+
+    # Parent resolution
+    parent, matched_by = _resolve_import_parent(membership_number, parent_email)
+    parent_match = None
+    if parent:
+        parent_match = {
+            "user_id": parent.id,
+            "name": f"{parent.first_name} {parent.last_name}".strip(),
+            "matched_by": matched_by,
+        }
+    else:
+        if membership_number or parent_email:
+            warn("no matching parent account found — junior imported unlinked")
+        else:
+            warn("no parent membership number or email given — junior imported unlinked")
+
+    # Duplicate detection (no write): an existing User with this email, or an
+    # existing junior whose linked player email matches.
+    if email:
+        existing = User.query.filter_by(email=email).first()
+        if existing is not None:
+            fail(f"a user with email {email} already exists — would be skipped as duplicate")
+
+    parsed = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "synthesized_email": synthesized_email,
+        "phone": _cell(row, header_index, "junior_phone") or None,
+        "date_of_birth": dob.isoformat() if dob else None,
+        "gender": gender,
+        "current_level": current_level,
+        "experience": experience,
+        "availability": availability,
+        "curriculum": _cell(row, header_index, "curriculum") or None,
+        "has_handicap": has_handicap,
+        "handicap_index": handicap_index,
+        "played_us_kids": played_us_kids,
+        "us_kids_best_score": us_kids_best_score,
+        "medical_conditions": medical_conditions,
+        "golf_goals": _cell(row, header_index, "golf_goals") or None,
+        "participant_type": JuniorParticipantType.registered_junior.value,
+        "parent_name": parent_name or None,
+        "parent_email": parent_email or None,
+        "membership_number": membership_number or None,
+    }
+
+    return {
+        "row_number": row_number,
+        "parsed": parsed,
+        "parent_match": parent_match,
+        "status": status,
+        "messages": messages,
+    }
+
+
+def preview_import(csv_text):
+    """Parse + validate the whole CSV. Returns {rows: [...], summary: {...}}."""
+    header_index, rows = _read_csv(csv_text)
+    results = []
+    for i, row in enumerate(rows, start=1):
+        # skip fully blank lines
+        if not any((v or "").strip() for v in row.values()):
+            continue
+        results.append(_parse_import_row(row, header_index, i))
+
+    summary = {
+        "ok": sum(1 for r in results if r["status"] == "ok"),
+        "warning": sum(1 for r in results if r["status"] == "warning"),
+        "error": sum(1 for r in results if r["status"] == "error"),
+        "total": len(results),
+    }
+    return {"rows": results, "summary": summary}
+
+
+def _create_imported_junior(parsed, parent_match):
+    """Create a player User + JuniorProfile from a parsed import row inside the
+    CURRENT transaction (the caller wraps this in a savepoint). Returns the
+    JuniorProfile. Reuses the same field construction as signup.
+
+    Imported juniors land at approval_status 'pending_staff' (staff still
+    activate, matching create_child_account), participant_type
+    registered_junior, linked to the resolved parent when one was found.
+    """
+    from app.auth.models import User, UserRole, MembershipType
+
+    band = LevelBand.query.filter(
+        LevelBand.min_level <= parsed["current_level"],
+        LevelBand.max_level >= parsed["current_level"],
+    ).first()
+    if band is None:
+        raise ValueError(f"No level band exists for current_level {parsed['current_level']}")
+
+    # Random temp password — the junior/parent resets it later (we never expose
+    # it). 32 hex chars comfortably clears the 8-char minimum.
+    temp_password = secrets.token_hex(16)
+
+    user = User(
+        email=parsed["email"],
+        password_hash=User.generate_password_hash(temp_password),
+        first_name=parsed["first_name"],
+        last_name=parsed["last_name"] or "",
+        role=UserRole.player,
+        membership_type=MembershipType.junior,
+        phone=parsed.get("phone"),
+    )
+    db.session.add(user)
+    db.session.flush()  # assign user.id without ending the savepoint
+
+    profile = JuniorProfile(
+        user_id=user.id,
+        parent_id=parent_match["user_id"] if parent_match else None,
+        date_of_birth=date.fromisoformat(parsed["date_of_birth"]),
+        gender=parsed["gender"],
+        current_level=parsed["current_level"],
+        band_id=band.id,
+        curriculum=parsed.get("curriculum"),
+        has_handicap=bool(parsed.get("has_handicap")),
+        handicap_index=parsed.get("handicap_index"),
+        played_us_kids=parsed.get("played_us_kids"),
+        us_kids_best_score=parsed.get("us_kids_best_score"),
+        experience=parsed["experience"],
+        availability=parsed["availability"],
+        medical_conditions=parsed.get("medical_conditions"),
+        golf_goals=parsed.get("golf_goals"),
+        approval_status="pending_staff",
+        participant_type=parsed.get("participant_type", JuniorParticipantType.registered_junior.value),
+    )
+    db.session.add(profile)
+    db.session.flush()
+    return profile
+
+
+def commit_import(csv_text):
+    """Re-parse the SAME csv from scratch (never trust client-sent parsed data)
+    and create each importable row. Rows with status 'error' are skipped. Each
+    row is created inside its own savepoint so one failure can't abort the
+    batch. Returns {created, skipped, errors: [{row_number, message}]}."""
+    from app.auth.models import User
+
+    header_index, rows = _read_csv(csv_text)
+    created = 0
+    skipped = 0
+    errors = []
+
+    for i, row in enumerate(rows, start=1):
+        if not any((v or "").strip() for v in row.values()):
+            continue
+
+        result = _parse_import_row(row, header_index, i)
+        if result["status"] == "error":
+            skipped += 1
+            errors.append({"row_number": i, "message": "; ".join(result["messages"]) or "validation error"})
+            continue
+
+        parsed = result["parsed"]
+
+        # Idempotency: re-check duplicates at commit time (the DB may have
+        # changed since preview, or an earlier row in THIS batch may have
+        # created the same synthesized email). Skip rather than error.
+        if User.query.filter_by(email=parsed["email"]).first() is not None:
+            skipped += 1
+            errors.append({"row_number": i, "message": f"skipped — user {parsed['email']} already exists"})
+            continue
+
+        try:
+            with db.session.begin_nested():  # savepoint — isolates this row
+                _create_imported_junior(parsed, result["parent_match"])
+            created += 1
+        except Exception as exc:  # noqa: BLE001 — one bad row must not abort the batch
+            db.session.rollback()
+            skipped += 1
+            errors.append({"row_number": i, "message": f"failed to create: {exc}"})
+
+    db.session.commit()
+    return {"created": created, "skipped": skipped, "errors": errors}
