@@ -82,6 +82,9 @@ def get_tournaments():
 def post_tournament():
     try:
         t = c.create_tournament(request.get_json() or {})
+    except ValueError as ex:
+        db.session.rollback()
+        return _err("VALIDATION_ERROR", str(ex), 400)
     except IntegrityError:
         db.session.rollback()
         return _err("CONFLICT", "Tournament conflicts with existing data", 409)
@@ -105,7 +108,12 @@ def put_tournament(tid):
     t = c.get_tournament(tid)
     if t is None:
         return _not_found("Tournament")
-    return _data(c.tournament_schema.dump(c.update_tournament(t, request.get_json() or {})))
+    try:
+        updated = c.update_tournament(t, request.get_json() or {})
+    except ValueError as ex:
+        db.session.rollback()
+        return _err("VALIDATION_ERROR", str(ex), 400)
+    return _data(c.tournament_schema.dump(updated))
 
 
 @tournaments_bp.route("/tournaments/<int:tid>", methods=["DELETE"])
@@ -542,4 +550,25 @@ def get_junior_competitions(junior_id):
         date_from=request.args.get("from"),
         date_to=request.args.get("to"),
     )
+    return _data(result)
+
+
+@tournaments_bp.route("/juniors/<int:junior_id>/competition-requirements", methods=["GET"])
+@require_auth
+def get_junior_competition_requirements(junior_id):
+    """Per-junior competition compliance against the Junior Development Plan's
+    per-band requirements for a season (?season=YYYY, default current year).
+    Scoped like other junior-reading endpoints: admin/coach/committee always;
+    parent own child only; player self only."""
+    caller = get_current_user()
+    junior = _get_junior(junior_id)
+    if junior is None:
+        return _not_found("Junior")
+    if not _junior_in_scope(caller, junior):
+        return _err("FORBIDDEN", "Out of scope", 403)
+    result, err = c.competition_requirements(
+        junior_id, season=request.args.get("season")
+    )
+    if err:
+        return _from_tuple(err)
     return _data(result)

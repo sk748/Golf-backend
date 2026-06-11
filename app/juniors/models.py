@@ -51,6 +51,14 @@ class JuniorApprovalStatus(str, Enum):
     active = "active"
 
 
+class JuniorParticipantType(str, Enum):
+    # Three participant groups from the Junior Development Plan (billing is
+    # parked — this captures the type for programme tracking only).
+    registered_junior = "registered_junior"   # Registered Karen Juniors
+    club_beginner = "club_beginner"           # KCC Beginners
+    karen_academy = "karen_academy"           # Karen Academy & school juniors
+
+
 class LevelBand(TimestampMixin, db.Model):
     __tablename__ = "level_bands"
 
@@ -114,6 +122,11 @@ class JuniorProfile(TimestampMixin, db.Model):
         SQLEnum(JuniorApprovalStatus, values_callable=enum_values, name="junior_approval_status"),
         nullable=False,
         default=JuniorApprovalStatus.active,  # staff intake activates directly
+    )
+    participant_type = Column(
+        SQLEnum(JuniorParticipantType, values_callable=enum_values, name="junior_participant_type"),
+        nullable=False,
+        default=JuniorParticipantType.registered_junior,
     )
     # Award the junior chooses to show off in social spaces (chat). Two sources
     # (unify-later, Sam 2026-06-11): a staff-granted Badge (featured_badge_id) OR

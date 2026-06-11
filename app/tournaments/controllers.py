@@ -10,7 +10,7 @@ for serialization, plain functions returning models or (result, error) tuples.
 import json
 import math
 import random
-from datetime import date as date_cls
+from datetime import date as date_cls, timedelta
 from decimal import Decimal
 
 from app.database.database import db
@@ -18,6 +18,7 @@ from app.utils.schemas import SimpleModelSchema
 from app.tournaments.models import (
     Tournament, TournamentDivision, TournamentEntry, TournamentScore,
     TournamentHoleScore, TournamentMatch, ExternalResult, Series,
+    CompetitionType, ExternalEventType,
 )
 from app.tournaments import scoring
 
@@ -45,6 +46,96 @@ def _e(code, message, status):
     return (code, message, status)
 
 
+# ── Competition-requirement tracking (Junior Development Plan) ───────────────────
+#
+# Ground truth (Junior Development Plan competition rules):
+#   L1-3 : no competition requirements (no scoring yet).
+#   L4-5 : Karen Junior Challenge ENCOURAGED.
+#   L6-8 : Karen Junior Challenge MANDATORY; ENCOURAGED Faldo Series, US Kids,
+#          JGF, Karen Strokeplay, main league. Expectation: 2-3 competitive
+#          rounds/month.
+#   L9+  : Faldo Series MANDATORY; ENCOURAGED Karen Junior Challenge, US Kids,
+#          JGF, Karen Strokeplay (strongly), main league. Expectation: 2-3
+#          competitive rounds/month.
+
+# Map the EXISTING ExternalResult.event_type (ExternalEventType) values onto the
+# CompetitionType taxonomy. external_results keeps its own column; this maps in
+# code only (no data migration). karen_open is the Karen Open, distinct from the
+# Junior Challenge / Strokeplay competitions, so it maps to `other`.
+EXTERNAL_EVENT_TO_COMPETITION = {
+    ExternalEventType.faldo_series: CompetitionType.faldo_series,
+    ExternalEventType.us_kids: CompetitionType.us_kids,
+    ExternalEventType.jgf: CompetitionType.jgf,
+    ExternalEventType.karen_open: CompetitionType.other,
+    ExternalEventType.other: CompetitionType.other,
+}
+
+
+def _map_external_event_type(event_type):
+    """ExternalEventType (enum or raw string) -> CompetitionType, or None."""
+    if event_type is None:
+        return None
+    try:
+        key = event_type if isinstance(event_type, ExternalEventType) else ExternalEventType(
+            getattr(event_type, "value", event_type)
+        )
+    except ValueError:
+        return None
+    return EXTERNAL_EVENT_TO_COMPETITION.get(key)
+
+
+# 2-3 competitive rounds/month expectation (L6-8 and L9+).
+COMPETITIVE_ROUNDS_TARGET_MIN = 2
+COMPETITIVE_ROUNDS_TARGET_MAX = 3
+
+# Per-LEVEL requirements (levels 1-9; level >= 9 uses the L9+ rule). Each entry:
+# {"mandatory": [CompetitionType], "encouraged": [CompetitionType]}.
+_REQ_L1_3 = {"mandatory": [], "encouraged": []}
+_REQ_L4_5 = {
+    "mandatory": [],
+    "encouraged": [CompetitionType.karen_junior_challenge],
+}
+_REQ_L6_8 = {
+    "mandatory": [CompetitionType.karen_junior_challenge],
+    "encouraged": [
+        CompetitionType.faldo_series,
+        CompetitionType.us_kids,
+        CompetitionType.jgf,
+        CompetitionType.karen_strokeplay,
+        CompetitionType.main_league,
+    ],
+}
+_REQ_L9_PLUS = {
+    "mandatory": [CompetitionType.faldo_series],
+    "encouraged": [
+        CompetitionType.karen_junior_challenge,
+        CompetitionType.us_kids,
+        CompetitionType.jgf,
+        CompetitionType.karen_strokeplay,
+        CompetitionType.main_league,
+    ],
+}
+
+COMPETITION_REQUIREMENTS = {
+    1: _REQ_L1_3, 2: _REQ_L1_3, 3: _REQ_L1_3,
+    4: _REQ_L4_5, 5: _REQ_L4_5,
+    6: _REQ_L6_8, 7: _REQ_L6_8, 8: _REQ_L6_8,
+    9: _REQ_L9_PLUS,
+}
+
+# Levels that carry the 2-3 competitive-rounds/month expectation.
+_COMPETITIVE_ROUNDS_LEVELS = {6, 7, 8, 9}
+
+
+def _requirements_for_level(level):
+    """Requirements for a level (>=9 uses the L9+ rule)."""
+    if level is None:
+        return _REQ_L1_3
+    if level >= 9:
+        return _REQ_L9_PLUS
+    return COMPETITION_REQUIREMENTS.get(level, _REQ_L1_3)
+
+
 # ── Tournaments CRUD ─────────────────────────────────────────────────────────────
 
 def list_tournaments(status=None, format=None, series_id=None, date_from=None, date_to=None):
@@ -66,7 +157,23 @@ def get_tournament(tid):
     return db.session.get(Tournament, tid)
 
 
+def _validate_competition_type(value):
+    """Raise ValueError if value isn't a valid CompetitionType (None/'' allowed
+    = untagged)."""
+    if value in (None, ""):
+        return None
+    try:
+        return CompetitionType(getattr(value, "value", value))
+    except ValueError:
+        valid = ", ".join(ct.value for ct in CompetitionType)
+        raise ValueError(f"Invalid competition_type '{value}'. One of: {valid}")
+
+
 def create_tournament(data):
+    if "competition_type" in data:
+        _validate_competition_type(data.get("competition_type"))
+        if data.get("competition_type") == "":
+            data = {**data, "competition_type": None}
     t = tournament_schema.load(data)
     db.session.add(t)
     db.session.commit()
@@ -74,9 +181,13 @@ def create_tournament(data):
 
 
 def update_tournament(t, data):
+    if "competition_type" in data:
+        _validate_competition_type(data.get("competition_type"))
     for k, v in data.items():
         if k in {"id", "created_at", "updated_at"}:
             continue
+        if k == "competition_type" and v == "":
+            v = None
         setattr(t, k, v)
     db.session.commit()
     return t
@@ -764,6 +875,150 @@ def junior_competitions(junior_id, date_from=None, date_to=None):
         "internal": internal,
         "external": external,
     }
+
+
+# ── Competition-requirement compliance (Junior Development Plan) ─────────────────
+
+def _band_label_for_level(level):
+    """A human band label for a level, matching the Junior Development Plan bands."""
+    if level is None:
+        return None
+    if level <= 3:
+        return "L1-3"
+    if level <= 5:
+        return "L4-5"
+    if level <= 8:
+        return "L6-8"
+    return "L9+"
+
+
+def competition_requirements(junior_id, season=None):
+    """Per-junior competition compliance for a season (calendar year).
+
+    "Met" for a competition_type = the junior has a tournament ENTRY whose
+    tournament.competition_type matches, OR a VERIFIED external_result whose
+    mapped competition type matches, dated within the season.
+
+    Competitive rounds this month = the junior's competitive rounds in the
+    current calendar month. We count internal tournament ENTRIES that have a
+    submitted/verified score and sit in a competitive-format event (stroke_play /
+    stableford / match_play — i.e. all current formats), plus VERIFIED external
+    results that have a gross score. This faithfully mirrors junior_competitions'
+    notion of a "competition played" while restricting to scored/competitive rows.
+
+    Returns (result_dict, error_tuple)."""
+    from app.juniors.models import JuniorProfile
+
+    junior = db.session.get(JuniorProfile, junior_id)
+    if junior is None:
+        return None, _e("NOT_FOUND", "Junior not found", 404)
+
+    if season is None:
+        season_year = date_cls.today().year
+    else:
+        try:
+            season_year = int(season)
+        except (TypeError, ValueError):
+            return None, _e("VALIDATION_ERROR", "season must be a 4-digit year", 400)
+
+    season_start = date_cls(season_year, 1, 1)
+    season_end = date_cls(season_year, 12, 31)
+
+    level = junior.current_level
+    band_label = _band_label_for_level(level)
+    reqs = _requirements_for_level(level)
+
+    # Collect the set of CompetitionTypes the junior achieved this season, with
+    # supporting evidence rows, from internal entries + verified externals.
+    achieved = {}  # CompetitionType -> [evidence dict]
+
+    entries = TournamentEntry.query.filter_by(junior_id=junior_id).all()
+    for entry in entries:
+        tournament = get_tournament(entry.tournament_id)
+        if tournament is None or tournament.competition_type is None:
+            continue
+        if not (season_start <= tournament.start_date <= season_end):
+            continue
+        ct = tournament.competition_type
+        ct = ct if isinstance(ct, CompetitionType) else CompetitionType(getattr(ct, "value", ct))
+        achieved.setdefault(ct, []).append({
+            "source": "internal",
+            "tournament_id": tournament.id,
+            "tournament_name": tournament.name,
+            "date": tournament.start_date.isoformat(),
+        })
+
+    for r in list_external_results(junior_id=junior_id,
+                                   date_from=season_start, date_to=season_end):
+        if not r.verified:
+            continue
+        ct = _map_external_event_type(r.event_type)
+        if ct is None:
+            continue
+        achieved.setdefault(ct, []).append({
+            "source": "external",
+            "external_result_id": r.id,
+            "event_name": r.event_name,
+            "event_type": getattr(r.event_type, "value", r.event_type),
+            "date": r.date.isoformat(),
+        })
+
+    def _entry(ct, with_evidence):
+        out = {"competition_type": ct.value, "met": ct in achieved}
+        if with_evidence:
+            out["evidence"] = achieved.get(ct, [])
+        return out
+
+    mandatory = [_entry(ct, True) for ct in reqs["mandatory"]]
+    encouraged = [_entry(ct, False) for ct in reqs["encouraged"]]
+
+    # Competitive rounds THIS calendar month.
+    today = date_cls.today()
+    month_start = date_cls(today.year, today.month, 1)
+    if today.month == 12:
+        next_month_start = date_cls(today.year + 1, 1, 1)
+    else:
+        next_month_start = date_cls(today.year, today.month + 1, 1)
+    month_end = next_month_start - timedelta(days=1)
+
+    this_month = 0
+    for entry in entries:
+        tournament = get_tournament(entry.tournament_id)
+        if tournament is None:
+            continue
+        if not (month_start <= tournament.start_date <= month_end):
+            continue
+        sc = TournamentScore.query.filter_by(entry_id=entry.id).first()
+        if sc is None:
+            continue
+        status_val = getattr(sc.status, "value", sc.status)
+        if status_val not in ("submitted", "verified"):
+            continue
+        this_month += 1
+
+    for r in list_external_results(junior_id=junior_id,
+                                   date_from=month_start, date_to=month_end):
+        if r.verified and r.gross_score is not None:
+            this_month += 1
+
+    expects_rounds = level is not None and (level >= 9 or level in _COMPETITIVE_ROUNDS_LEVELS)
+    on_track = (this_month >= COMPETITIVE_ROUNDS_TARGET_MIN) if expects_rounds else True
+
+    return {
+        "junior_id": junior_id,
+        "season": season_year,
+        "level": level,
+        "band": band_label,
+        "mandatory": mandatory,
+        "encouraged": encouraged,
+        "competitive_rounds": {
+            "this_month": this_month,
+            "target_min": COMPETITIVE_ROUNDS_TARGET_MIN,
+            "target_max": COMPETITIVE_ROUNDS_TARGET_MAX,
+            "expected": expects_rounds,
+            "on_track": on_track,
+        },
+    }, None
 
 
 # ── Series CRUD + standings (spec §8.4) ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from app.database.database import db
-from app.juniors.models import JuniorProfile, LevelBand, LevelBenchmark, Badge, JuniorBadge
+from app.juniors.models import JuniorProfile, JuniorParticipantType, LevelBand, LevelBenchmark, Badge, JuniorBadge
 from app.utils.schemas import SimpleModelSchema
 
 junior_schema = SimpleModelSchema(JuniorProfile)
@@ -34,7 +34,7 @@ def _resolve_band(data: dict):
 
 def list_juniors(parent_id=None, band_id=None, current_level=None,
                  age_min=None, age_max=None, coach_id=None,
-                 approval_status=None):
+                 approval_status=None, participant_type=None):
     q = JuniorProfile.query
     if parent_id:
         q = q.filter_by(parent_id=parent_id)
@@ -42,6 +42,8 @@ def list_juniors(parent_id=None, band_id=None, current_level=None,
         q = q.filter_by(coach_id=coach_id)
     if approval_status:
         q = q.filter_by(approval_status=approval_status)
+    if participant_type:
+        q = q.filter_by(participant_type=participant_type)
     if band_id:
         q = q.filter_by(band_id=band_id)
     if current_level:
@@ -60,8 +62,25 @@ def get_junior(junior_id: int):
     return db.session.get(JuniorProfile, junior_id)
 
 
+_VALID_PARTICIPANT_TYPES = {pt.value for pt in JuniorParticipantType}
+
+
+def _validate_participant_type(data: dict):
+    """Validate participant_type if present; default to registered_junior when absent."""
+    pt = data.get("participant_type")
+    if pt is None:
+        data["participant_type"] = JuniorParticipantType.registered_junior.value
+        return data
+    if pt not in _VALID_PARTICIPANT_TYPES:
+        raise ValueError(
+            f"participant_type must be one of: {', '.join(sorted(_VALID_PARTICIPANT_TYPES))}"
+        )
+    return data
+
+
 def create_junior(data: dict):
     data = _resolve_band(dict(data))
+    data = _validate_participant_type(data)
     junior = junior_schema.load(data)
     db.session.add(junior)
     db.session.commit()
@@ -70,6 +89,12 @@ def create_junior(data: dict):
 
 def update_junior(junior, data: dict):
     data = _resolve_band(dict(data))
+    if "participant_type" in data:
+        pt = data["participant_type"]
+        if pt not in _VALID_PARTICIPANT_TYPES:
+            raise ValueError(
+                f"participant_type must be one of: {', '.join(sorted(_VALID_PARTICIPANT_TYPES))}"
+            )
     for k, v in data.items():
         setattr(junior, k, v)
     db.session.commit()

@@ -77,6 +77,7 @@ def get_juniors():
         age_max=request.args.get("age_max", type=int),
         coach_id=request.args.get("coach_id"),
         approval_status=request.args.get("approval_status"),
+        participant_type=request.args.get("participant_type"),
     )
     dumped = [_with_child_name(d, j) for d, j in zip(juniors_schema.dump(items), items)]
     return _data(dumped, count=len(items))

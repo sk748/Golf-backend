@@ -87,6 +87,21 @@ class ExternalEventType(str, Enum):
     other = "other"
 
 
+class CompetitionType(str, Enum):
+    """Competition taxonomy for the Junior Development Plan's per-band
+    competition requirements (L1-13comp-req tracking). An internal Tournament
+    may be tagged with one of these (e.g. the Karen Junior Challenge); external
+    results map their ExternalEventType onto this taxonomy in code (see
+    controllers.EXTERNAL_EVENT_TO_COMPETITION). Nullable / extensible."""
+    karen_junior_challenge = "karen_junior_challenge"
+    faldo_series = "faldo_series"
+    us_kids = "us_kids"
+    jgf = "jgf"
+    karen_strokeplay = "karen_strokeplay"
+    main_league = "main_league"
+    other = "other"
+
+
 # ── 5.1 tournaments ────────────────────────────────────────────────────────────
 
 class Tournament(TimestampMixin, db.Model):
@@ -117,6 +132,13 @@ class Tournament(TimestampMixin, db.Model):
     series_id = Column(Integer, ForeignKey("series.id"), nullable=True)
     max_entrants = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
+    # Competition-requirement tracking (L1-13comp-req): tags an internal event
+    # against the Junior Development Plan taxonomy (e.g. karen_junior_challenge).
+    # Nullable = untagged / not a tracked competition.
+    competition_type = Column(
+        SQLEnum(CompetitionType, values_callable=enum_values, name="competition_type"),
+        nullable=True,
+    )
 
     # Eligibility (all nullable = no restriction)
     age_min = Column(Integer, nullable=True)

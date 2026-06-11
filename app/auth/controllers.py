@@ -124,7 +124,10 @@ def _create_junior_profile(user, data: dict, parent_id=None, approval_status="ac
     band_id is auto-resolved from current_level=1 (beginner default).
     Self-registrations pass the resolved parent + 'pending_parent'.
     """
-    from app.juniors.models import JuniorProfile, LevelBand, JuniorExperience, JuniorAvailability
+    from app.juniors.models import (
+        JuniorProfile, JuniorParticipantType, LevelBand,
+        JuniorExperience, JuniorAvailability,
+    )
     from datetime import date
 
     # Resolve the level band for level 1
@@ -143,6 +146,10 @@ def _create_junior_profile(user, data: dict, parent_id=None, approval_status="ac
     valid_avail = {a.value for a in JuniorAvailability}
     availability = raw_avail if raw_avail in valid_avail else "weekends_only"
 
+    valid_pt = {pt.value for pt in JuniorParticipantType}
+    raw_pt = (data.get("participant_type") or JuniorParticipantType.registered_junior.value)
+    participant_type = raw_pt if raw_pt in valid_pt else JuniorParticipantType.registered_junior.value
+
     try:
         dob = date.fromisoformat(data["date_of_birth"])
     except (ValueError, KeyError):
@@ -158,6 +165,7 @@ def _create_junior_profile(user, data: dict, parent_id=None, approval_status="ac
         experience=experience,
         availability=availability,
         approval_status=approval_status,
+        participant_type=participant_type,
     )
     db.session.add(profile)
     try:
@@ -170,6 +178,8 @@ def create_child_account(parent, data: dict):
     """A parent creates their child's player account + junior profile
     (build-phase-2 decision 5). Parent consent is implicit, so the junior
     starts at pending_staff (admin/committee activate). Returns (user, err)."""
+    from app.juniors.models import JuniorParticipantType
+
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
     if not email or not password:
@@ -184,6 +194,15 @@ def create_child_account(parent, data: dict):
         return None, "date_of_birth is required"
     if User.query.filter_by(email=email).first():
         return None, "Email already registered"
+
+    # Validate participant_type when provided (parents may pass it; defaults to
+    # registered_junior when absent — _create_junior_profile handles the default).
+    if "participant_type" in data:
+        valid_pt = {pt.value for pt in JuniorParticipantType}
+        if data["participant_type"] not in valid_pt:
+            return None, (
+                f"participant_type must be one of: {', '.join(sorted(valid_pt))}"
+            )
 
     user = User(
         email=email,
