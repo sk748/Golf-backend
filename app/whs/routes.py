@@ -11,6 +11,7 @@ from app.whs.models import (
     SCORE_DIFFERENTIAL_REQUIRED,
     validate_fields,
 )
+from app.utils.decorators import require_auth
 
 whs_v1 = Blueprint("whs_v1", __name__, url_prefix="/api/whs")
 
@@ -27,6 +28,7 @@ def _err(message: str, missing: list = None):
 
 
 @whs_v1.route("/score-differential", methods=["POST"])
+@require_auth
 def score_differential():
     """
     Compute a WHS 2024 Score Differential for a round (9–18 holes).
@@ -53,6 +55,7 @@ def score_differential():
 
 
 @whs_v1.route("/handicap-index", methods=["POST"])
+@require_auth
 def handicap_index():
     """
     Compute a WHS 2024 Handicap Index from up to 20 recent differentials.
@@ -75,6 +78,7 @@ def handicap_index():
 
 
 @whs_v1.route("/course-handicap", methods=["POST"])
+@require_auth
 def course_handicap():
     """
     Compute a WHS 2024 Course Handicap.

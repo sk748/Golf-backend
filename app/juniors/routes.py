@@ -160,10 +160,12 @@ def get_junior_route(junior_id):
     junior = get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
-    # parents can only view their own child
+    # parents can only view their own child; a player only their own profile
     caller = get_current_user()
     if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
+        return _err("FORBIDDEN", "You can only view your own profile", 403)
     return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
@@ -171,6 +173,13 @@ def get_junior_route(junior_id):
 # decision 5): family-owned coaching context only. Identity, level/band and
 # programme fields stay staff-only.
 PARENT_EDITABLE_FIELDS = {"availability", "medical_conditions", "golf_goals", "experience"}
+
+# Relationship / approval-chain / identity columns that have dedicated, role-
+# guarded endpoints (PUT /juniors/:id/coach, /approve, admin user mgmt). Never
+# settable through the generic profile PUT by a non-admin — strips a coach
+# self-assigning a junior or skipping the approval chain (security audit
+# 2026-06-15).
+STAFF_PROTECTED_FIELDS = {"coach_id", "parent_id", "approval_status", "user_id", "id"}
 
 
 @juniors_bp.route("/juniors/<int:junior_id>", methods=["PUT"])
@@ -191,6 +200,9 @@ def put_junior(junior_id):
                 f"Parents may only edit: {', '.join(sorted(PARENT_EDITABLE_FIELDS))}",
                 403,
             )
+    elif not has_role(caller, "admin"):
+        # coach / committee: drop protected relationship/approval/identity fields.
+        data = {k: v for k, v in data.items() if k not in STAFF_PROTECTED_FIELDS}
     try:
         return _data(_with_child_name(junior_schema.dump(update_junior(junior, data)), junior))
     except ValueError as exc:
@@ -296,6 +308,8 @@ def junior_progress(junior_id):
     caller = get_current_user()
     if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
+        return _err("FORBIDDEN", "You can only view your own progress", 403)
     result, err = get_junior_progress(junior_id)
     if err:
         return _not_found("Junior")
