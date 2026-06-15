@@ -72,6 +72,68 @@ def get_coach_schedule(coach_id: str, week: str):
     return items
 
 
+def list_my_sessions(caller, date_from=None, date_to=None):
+    """Sessions the caller is actually part of, for their personal calendar:
+    - admin / committee: every session (oversight)
+    - coach: sessions they run
+    - player: sessions their own junior is actively enrolled in (via class) or
+      has an approved booking onto
+    - parent: same, across all of their children
+    """
+    from app.juniors.models import JuniorProfile
+    from app.utils.decorators import has_role
+    from sqlalchemy import or_
+
+    q = Session.query
+    if date_from:
+        q = q.filter(Session.date >= date_from)
+    if date_to:
+        q = q.filter(Session.date <= date_to)
+
+    if has_role(caller, "admin", "committee"):
+        return q.order_by(Session.date, Session.start_time).all()
+    if has_role(caller, "coach"):
+        return (
+            q.filter(Session.coach_id == caller.id)
+            .order_by(Session.date, Session.start_time)
+            .all()
+        )
+
+    # player / parent → resolve the relevant junior ids
+    if has_role(caller, "player"):
+        junior_ids = [j.id for j in JuniorProfile.query.filter_by(user_id=caller.id).all()]
+    else:  # parent
+        junior_ids = [j.id for j in JuniorProfile.query.filter_by(parent_id=caller.id).all()]
+    if not junior_ids:
+        return []
+
+    class_ids = [
+        e.class_id
+        for e in ClassEnrollment.query.filter(
+            ClassEnrollment.junior_id.in_(junior_ids),
+            ClassEnrollment.status == "active",
+        ).all()
+        if e.class_id is not None
+    ]
+    booked_session_ids = [
+        b.session_id
+        for b in BookingRequest.query.filter(
+            BookingRequest.junior_id.in_(junior_ids),
+            BookingRequest.status == "approved",
+            BookingRequest.session_id.isnot(None),
+        ).all()
+    ]
+
+    conds = []
+    if class_ids:
+        conds.append(Session.class_id.in_(class_ids))
+    if booked_session_ids:
+        conds.append(Session.id.in_(booked_session_ids))
+    if not conds:
+        return []
+    return q.filter(or_(*conds)).order_by(Session.date, Session.start_time).all()
+
+
 # ── Classes ───────────────────────────────────────────────────────────────────
 
 def list_classes(coach_id=None, band_id=None, age_group=None, is_active=None):

@@ -7,7 +7,7 @@ from app.sessions.controllers import (
     enrollment_schema, enrollments_schema,
     booking_schema, bookings_schema,
     list_sessions, get_session, create_session, update_session, delete_session,
-    get_coach_schedule,
+    get_coach_schedule, list_my_sessions,
     list_classes, get_class, create_class, update_class, delete_class,
     list_enrollments, get_enrollment, create_enrollment, update_enrollment, delete_enrollment,
     list_booking_requests, get_booking_request, create_booking_request,
@@ -64,6 +64,20 @@ def get_sessions():
         date_from=request.args.get("date_from"),
         date_to=request.args.get("date_to"),
         open_for_booking=open_filter,
+    )
+    return _data([_dump_session_with_booking(s) for s in items], count=len(items))
+
+
+@sessions_bp.route("/sessions/mine", methods=["GET"])
+@require_auth
+def get_my_sessions():
+    """The caller's own sessions for a date range — used by the personal
+    calendar so every role (not just coaches) sees the sessions they attend."""
+    caller = get_current_user()
+    items = list_my_sessions(
+        caller,
+        date_from=request.args.get("date_from"),
+        date_to=request.args.get("date_to"),
     )
     return _data([_dump_session_with_booking(s) for s in items], count=len(items))
 

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   CalendarDays,
+  CalendarPlus,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -13,7 +14,7 @@ import { ApiError } from '../../lib/api';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { StatCard } from '../../components/ui/StatCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
 import { Badge } from '../../components/ui/Badge';
 import { useCoachSchedule, type CoachSession } from './coach-schedule.queries';
 import {
@@ -37,6 +38,14 @@ import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
+}
+
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the count.
+function statValue(loading: boolean, error: boolean, value: number): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
 }
 
 function ErrorPanel({ message, testId }: { message: string; testId?: string }) {
@@ -89,39 +98,46 @@ export function CoachDashboard() {
         Your week and the evaluations waiting on your sign-off.
       </p>
 
-      {/* ── Hero stats ──────────────────────────────────────────────────── */}
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4">
-        <StatCard
+      {/* ── Interactive overview: a stat + headline per area, each a link ── */}
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <FeatureCard
+          label="This week"
           icon={CalendarDays}
-          value={
-            schedule.isLoading ? (
-              <Loader2 size={18} className="animate-spin text-azure" />
-            ) : schedule.isError ? (
-              '—'
-            ) : (
-              sessions.length
-            )
-          }
-          label="Sessions this week"
-          className="animate-fade-in-up stagger-1"
-          testId="stat-week-sessions"
+          tone="azure"
+          stat={statValue(schedule.isLoading, schedule.isError, sessions.length)}
+          headline="sessions on your schedule"
+          to="/schedule"
+          testId="feature-schedule"
         />
-        <StatCard
+        <FeatureCard
+          label="Sign-offs"
           icon={ClipboardCheck}
-          value={
-            evals.isLoading ? (
-              <Loader2 size={18} className="animate-spin text-azure" />
-            ) : evals.isError ? (
-              '—'
-            ) : (
-              <span className={pending.length > 0 ? 'text-gold' : undefined}>
-                {pending.length}
-              </span>
-            )
-          }
-          label="Awaiting my sign-off"
-          className="animate-fade-in-up stagger-2"
-          testId="stat-awaiting-signoff"
+          tone={pending.length > 0 ? 'gold' : 'default'}
+          stat={statValue(evals.isLoading, evals.isError, pending.length)}
+          headline="evaluations awaiting your signature"
+          to="/evaluations/new"
+          testId="feature-signoffs"
+        />
+        <FeatureCard
+          label="Bookings"
+          icon={CalendarPlus}
+          tone={myPendingBookings.length > 0 ? 'gold' : 'default'}
+          stat={statValue(
+            pendingBookings.isLoading,
+            pendingBookings.isError,
+            myPendingBookings.length,
+          )}
+          headline="session requests to review"
+          to="/coach-sessions"
+          testId="feature-bookings"
+        />
+        <FeatureCard
+          label="My juniors"
+          icon={Users}
+          stat={statValue(myJuniors.isLoading, myJuniors.isError, (myJuniors.data ?? []).length)}
+          headline="juniors assigned to you"
+          to="/juniors"
+          testId="feature-juniors"
         />
       </div>
 
@@ -299,56 +315,6 @@ export function CoachDashboard() {
           </div>
         </GlassCard>
 
-        {/* ── Pending session bookings (count + link only) ─────────────── */}
-        <GlassCard
-          className="animate-fade-in-up stagger-3 p-5"
-          data-testid="pending-bookings-card"
-        >
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-bold text-silver">
-              Pending session bookings
-            </h2>
-            <Link
-              to="/coach-sessions"
-              className="text-xs font-medium text-azure hover:underline"
-              data-testid="dashboard-review-bookings"
-            >
-              Review bookings
-            </Link>
-          </div>
-          <p className="mt-1 text-xs text-slate">
-            Booking requests waiting on your approval.
-          </p>
-          <div className="mt-4">
-            {pendingBookings.isLoading ? (
-              <Loader2
-                size={18}
-                className="animate-spin text-azure"
-                data-testid="pending-bookings-loading"
-              />
-            ) : pendingBookings.isError ? (
-              <ErrorPanel
-                message={errorMessage(
-                  pendingBookings.error,
-                  'Could not load pending bookings.',
-                )}
-                testId="pending-bookings-error"
-              />
-            ) : (
-              <p
-                className={
-                  myPendingBookings.length > 0
-                    ? 'text-2xl font-black text-gold'
-                    : 'text-2xl font-black text-silver'
-                }
-                data-testid="pending-bookings-count"
-              >
-                {myPendingBookings.length}
-              </p>
-            )}
-          </div>
-        </GlassCard>
-
         {/* ── My juniors ────────────────────────────────────────────────── */}
         <GlassCard className="animate-fade-in-up stagger-3 p-5">
           <div className="flex items-baseline justify-between gap-3">
@@ -412,11 +378,9 @@ export function CoachDashboard() {
             )}
           </div>
         </GlassCard>
-      </div>
 
-      {/* ── Club announcements ──────────────────────────────────────────── */}
-      <div className="animate-fade-in-up stagger-3 mt-6">
-        <AnnouncementsWidget />
+        {/* ── Club announcements — fourth cell, balancing the 2×2 grid ───── */}
+        <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
       </div>
     </div>
   );

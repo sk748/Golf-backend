@@ -28,6 +28,7 @@ import { StatCard } from '../../components/ui/StatCard';
 import { fieldClass, labelClass } from '../auth/AuthShell';
 import {
   useAllJuniors,
+  useCoachJuniors,
   useCoachUsers,
   type AssignableJunior,
 } from '../admin/coach-assignment.queries';
@@ -73,7 +74,12 @@ function coachName(coaches: User[], coachId: string | null): string {
 
 export function JuniorsBrowserPage() {
   const { user } = useAuth();
-  const juniorsQuery = useAllJuniors();
+  // A coach is scoped to their own roster (GET /api/coaches/:id/juniors) and
+  // never requests the club-wide list; everyone else (admin/committee) sees all.
+  const isCoach = user?.role === 'coach';
+  const allJuniorsQuery = useAllJuniors(!isCoach);
+  const coachJuniorsQuery = useCoachJuniors(isCoach ? user?.id : undefined);
+  const juniorsQuery = isCoach ? coachJuniorsQuery : allJuniorsQuery;
   const coachesQuery = useCoachUsers();
   const bandsQuery = useLevelBands();
 
@@ -135,11 +141,12 @@ export function JuniorsBrowserPage() {
         Programme
       </p>
       <h1 className="mt-1 text-2xl font-black text-silver sm:text-3xl">
-        Juniors
+        {isCoach ? 'My juniors' : 'Juniors'}
       </h1>
       <p className="mt-1 text-sm text-slate">
-        Every junior in the development programme. Open a profile for progress,
-        handicap history and the full intake record.
+        {isCoach
+          ? 'The juniors assigned to you. Open a profile for progress, handicap history and the full intake record.'
+          : 'Every junior in the development programme. Open a profile for progress, handicap history and the full intake record.'}
       </p>
 
       {/* Summary strip: total + pending club approvals + per-band counts */}
@@ -249,30 +256,32 @@ export function JuniorsBrowserPage() {
           </select>
         </div>
 
-        <div>
-          <label htmlFor="juniors-filter-coach" className={labelClass}>
-            Coach
-          </label>
-          <select
-            id="juniors-filter-coach"
-            value={coachFilter}
-            onChange={(e) => setCoachFilter(e.target.value)}
-            className={fieldClass}
-            data-testid="juniors-filter-coach"
-          >
-            <option value={FILTER_ALL}>All coaches</option>
-            <option value={FILTER_UNASSIGNED}>Unassigned</option>
-            {coaches.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name || c.email}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!isCoach && (
+          <div>
+            <label htmlFor="juniors-filter-coach" className={labelClass}>
+              Coach
+            </label>
+            <select
+              id="juniors-filter-coach"
+              value={coachFilter}
+              onChange={(e) => setCoachFilter(e.target.value)}
+              className={fieldClass}
+              data-testid="juniors-filter-coach"
+            >
+              <option value={FILTER_ALL}>All coaches</option>
+              <option value={FILTER_UNASSIGNED}>Unassigned</option>
+              {coaches.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name || c.email}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Coach list failed — names degrade to "Unassigned", say so. */}
-      {coachesQuery.isError && (
+      {!isCoach && coachesQuery.isError && (
         <GlassCard
           className="mt-5 border border-red-500/30 bg-red-500/10 p-4"
           role="alert"
@@ -334,6 +343,7 @@ export function JuniorsBrowserPage() {
             coaches={coaches}
             bands={bands}
             canApprove={canApprove}
+            showCoach={!isCoach}
           />
         )}
       </div>
@@ -349,6 +359,8 @@ interface JuniorListProps {
   bands: LevelBand[];
   // admin/committee only — coaches never see the inline Approve control.
   canApprove: boolean;
+  // Hidden for a coach (every row is their own junior, so the column is noise).
+  showCoach: boolean;
 }
 
 function bandBadge(bands: LevelBand[], bandId: number) {
@@ -403,7 +415,7 @@ function ApproveControl({ juniorId }: { juniorId: number }) {
   );
 }
 
-function JuniorList({ juniors, coaches, bands, canApprove }: JuniorListProps) {
+function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorListProps) {
   return (
     <>
       {/* Desktop table */}
@@ -427,9 +439,11 @@ function JuniorList({ juniors, coaches, bands, canApprove }: JuniorListProps) {
               <th scope="col" className="px-5 py-3 font-semibold">
                 Handicap
               </th>
-              <th scope="col" className="px-5 py-3 font-semibold">
-                Coach
-              </th>
+              {showCoach && (
+                <th scope="col" className="px-5 py-3 font-semibold">
+                  Coach
+                </th>
+              )}
               <th scope="col" className="px-5 py-3 font-semibold">
                 <span className="sr-only">Tournament ready / open profile</span>
               </th>
@@ -465,9 +479,11 @@ function JuniorList({ juniors, coaches, bands, canApprove }: JuniorListProps) {
                   <td className="px-5 py-3.5 font-mono tabular-nums text-slate">
                     {handicapLabel(j)}
                   </td>
-                  <td className="px-5 py-3.5 text-slate">
-                    {coachName(coaches, j.coach_id)}
-                  </td>
+                  {showCoach && (
+                    <td className="px-5 py-3.5 text-slate">
+                      {coachName(coaches, j.coach_id)}
+                    </td>
+                  )}
                   <td className="px-5 py-3.5 text-right">
                     <span className="inline-flex items-center gap-2">
                       {approvalBadge(j)}
@@ -536,8 +552,8 @@ function JuniorList({ juniors, coaches, bands, canApprove }: JuniorListProps) {
                 {age != null ? `Age ${age}` : 'Age —'} · Handicap{' '}
                 <span className="font-mono text-silver">
                   {handicapLabel(j)}
-                </span>{' '}
-                · {coachName(coaches, j.coach_id)}
+                </span>
+                {showCoach ? ` · ${coachName(coaches, j.coach_id)}` : ''}
               </p>
               {canApprove && j.approval_status === 'pending_staff' && (
                 <div className="mt-3">

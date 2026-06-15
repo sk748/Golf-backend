@@ -31,6 +31,7 @@ from app.messaging.routes import messaging_bp
 from app.announcements.routes import announcements_bp
 from app.notifications.routes import notifications_bp
 from app.handicap.routes import handicap_bp
+from app.events.routes import events_bp
 
 def create_app(config_filename=None):
     if config_filename is None:
@@ -87,6 +88,7 @@ def create_app(config_filename=None):
     app.register_blueprint(audit_bp)         # /api/admin/audit-log
     app.register_blueprint(whs_v1)           # /api/whs/*
     app.register_blueprint(messaging_bp)     # /api/conversations, /api/messages, /api/moderation, /api/flags
+    app.register_blueprint(events_bp)        # /api/events, /api/events/<id>/rsvp(s)
     app.register_blueprint(announcements_bp) # /api/announcements, /api/public/announcements
     app.register_blueprint(notifications_bp) # /api/notifications
     app.register_blueprint(handicap_bp)      # /api/juniors/<id>/handicap-journey

@@ -9,6 +9,9 @@ export interface AuthContextValue {
   login: (payload: LoginPayload) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<User>;
   logout: () => void;
+  // Sync the in-context user after a self-service profile edit (auth state is
+  // held here, not in a TanStack query, so there's no key to invalidate).
+  updateUser: (user: User) => void;
 }
 
 // Context lives in its own module so AuthProvider.tsx and useAuth.ts can each

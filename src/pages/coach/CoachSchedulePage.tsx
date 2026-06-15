@@ -1,93 +1,18 @@
 import { useState } from 'react';
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Loader2,
-} from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../auth/useAuth';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { Badge } from '../../components/ui/Badge';
+import { WeekCalendar, type CalendarItem } from '../../components/schedule/WeekCalendar';
 import { fieldClass, labelClass } from '../auth/AuthShell';
 import { useCoachUsers } from '../admin/coach-assignment.queries';
 import { useCoachSchedule, type CoachSession } from './coach-schedule.queries';
-import {
-  currentWeekStart,
-  dayLabel,
-  sessionISODate,
-  sessionTimeLabel,
-  shiftWeek,
-  toISODate,
-  weekDays,
-  weekRangeLabel,
-} from './coach-dates';
+import { currentWeekStart, shiftWeek, weekDays, weekRangeLabel } from './coach-dates';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
-}
-
-// Group sessions by their ISO date; sessions without a resolvable date fall into
-// a separate "unscheduled" bucket so they are never silently dropped.
-function groupByDay(
-  sessions: CoachSession[],
-): { byDate: Map<string, CoachSession[]>; undated: CoachSession[] } {
-  const byDate = new Map<string, CoachSession[]>();
-  const undated: CoachSession[] = [];
-  for (const s of sessions) {
-    const iso = sessionISODate(s);
-    if (!iso) {
-      undated.push(s);
-      continue;
-    }
-    const list = byDate.get(iso) ?? [];
-    list.push(s);
-    byDate.set(iso, list);
-  }
-  return { byDate, undated };
-}
-
-function SessionRow({ s }: { s: CoachSession }) {
-  const time = sessionTimeLabel(s);
-  const cancelled = s.status?.toLowerCase() === 'cancelled';
-  return (
-    <li
-      className="glass-light flex items-start gap-3 rounded-xl p-3"
-      data-testid={`schedule-session-${s.id}`}
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-azure/15">
-        <CalendarDays size={16} className="text-azure" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-silver">
-            {s.session_type ?? 'Session'}
-          </p>
-          {cancelled && (
-            <Badge tone="red" className="px-1.5 py-0.5">
-              Cancelled
-            </Badge>
-          )}
-        </div>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate">
-          {time && (
-            <span className="inline-flex items-center gap-1">
-              <Clock size={12} />
-              {time}
-            </span>
-          )}
-        </p>
-        {s.notes && (
-          <p className="mt-1 text-xs text-slate" data-testid={`schedule-notes-${s.id}`}>
-            {s.notes}
-          </p>
-        )}
-      </div>
-    </li>
-  );
 }
 
 // Staff (admin/committee) coach picker. Mounted ONLY for those roles so the
@@ -142,12 +67,21 @@ export function CoachSchedulePage() {
 
   const schedule = useCoachSchedule(coachId, week);
   const sessions: CoachSession[] = schedule.data ?? [];
-  const { byDate, undated } = groupByDay(sessions);
+  const items: CalendarItem[] = sessions.map((s) => ({
+    id: `session-${s.id}`,
+    date: s.date ?? '',
+    start_time: s.start_time,
+    end_time: s.end_time,
+    title: s.session_type ?? 'Session',
+    kind: 'session',
+    status: s.status,
+    subtitle: s.notes ?? undefined,
+  }));
   const days = weekDays(week);
   const isCurrentWeek = week === currentWeekStart();
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <p className="animate-fade-in-up text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
         Coaching
       </p>
@@ -248,38 +182,9 @@ export function CoachSchedulePage() {
             </p>
           </GlassCard>
         ) : (
-          <div className="flex flex-col gap-4">
-            {days.map((d) => {
-              const iso = toISODate(d);
-              const daySessions = byDate.get(iso) ?? [];
-              if (daySessions.length === 0) return null;
-              return (
-                <section key={iso} data-testid={`schedule-day-${iso}`}>
-                  <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate">
-                    {dayLabel(d)}
-                  </h2>
-                  <ul className="flex flex-col gap-2">
-                    {daySessions.map((s) => (
-                      <SessionRow key={s.id} s={s} />
-                    ))}
-                  </ul>
-                </section>
-              );
-            })}
-
-            {undated.length > 0 && (
-              <section data-testid="schedule-undated">
-                <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate">
-                  Unscheduled
-                </h2>
-                <ul className="flex flex-col gap-2">
-                  {undated.map((s) => (
-                    <SessionRow key={s.id} s={s} />
-                  ))}
-                </ul>
-              </section>
-            )}
-          </div>
+          <GlassCard className="animate-fade-in-up p-3 sm:p-4">
+            <WeekCalendar days={days} items={items} />
+          </GlassCard>
         )}
       </div>
     </div>

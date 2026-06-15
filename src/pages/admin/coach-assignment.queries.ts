@@ -49,13 +49,16 @@ export interface AssignableJunior {
   participant_type: string | null;
 }
 
-// GET /api/juniors — every junior in the programme (admin/coach/committee).
+// GET /api/juniors — every junior in the programme (admin/committee).
 // Shares the ['juniors','all'] cache key used by other pages for this resource.
-export function useAllJuniors(): UseQueryResult<AssignableJunior[]> {
+// `enabled` lets a coach view opt out entirely (a coach must scope to their own
+// roster via useCoachJuniors and never request the club-wide list).
+export function useAllJuniors(enabled = true): UseQueryResult<AssignableJunior[]> {
   return useQuery({
     queryKey: ['juniors', 'all'],
     queryFn: () => api.get<AssignableJunior[]>('/api/juniors'),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 

@@ -39,6 +39,24 @@ export function useCoachSchedule(
   });
 }
 
+// GET /api/sessions/mine?date_from=&date_to= — the CALLER's own sessions for a
+// date range, scoped server-side by role (coach=own, player/parent=enrolled or
+// booked, admin/committee=all). Powers the personal calendar for every role.
+export function useMySessions(
+  dateFrom?: string,
+  dateTo?: string,
+): UseQueryResult<CoachSession[]> {
+  return useQuery({
+    queryKey: ['sessions', 'mine', dateFrom, dateTo],
+    queryFn: () =>
+      api.get<CoachSession[]>('/api/sessions/mine', {
+        date_from: dateFrom,
+        date_to: dateTo,
+      }),
+    enabled: Boolean(dateFrom && dateTo),
+  });
+}
+
 // GET /api/sessions?coach_id=&date_from=&date_to=&status= — flat session list,
 // used by the attendance page to let the coach pick a session to mark.
 export function useCoachSessions(
