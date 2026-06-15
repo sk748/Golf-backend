@@ -22,6 +22,7 @@ from app.messaging.models import Conversation, ConversationMember, Message, Mess
 from app.announcements.models import Announcement
 from app.notifications.models import Notification
 from app.handicap.models import HandicapJourney
+from app.events.models import Event, EventRSVP
 
 __all__ = [
     "User", "UserRole", "MembershipType",
@@ -38,6 +39,7 @@ __all__ = [
     "Announcement",
     "Notification",
     "HandicapJourney",
+    "Event", "EventRSVP",
     "register_all",
 ]
 
