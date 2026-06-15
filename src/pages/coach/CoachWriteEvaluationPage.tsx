@@ -1,9 +1,14 @@
-// Coach monthly-evaluation CREATION — the band-conditional form (CLAUDE.md calls
+// Coach monthly-evaluation form — the band-conditional form (CLAUDE.md calls
 // this the most "intelligent" piece of frontend work in the app). One flat row
 // per golfer per month: common fields + exactly ONE band-specific section,
 // chosen by the golfer's level band (report_template: skills / practice_scores /
-// competition). Duplicate junior+month is a backend 409 — surfaced as "already
-// exists for {month}", never a generic error.
+// competition).
+//
+// A golfer+month with no row yet → CREATE (POST). A golfer+month that already
+// has a row → the coach may EDIT it (PUT /api/evaluations/:id) instead of being
+// blocked by the one-per-month rule; the form prefills from the existing row and
+// switches its submit to update. If a race still produces a 409 on create, we
+// fall back to loading the existing row for edit.
 //
 // Sign-off is sequential: this page may save, or save + coach-sign. It NEVER
 // offers a committee signature (that's the committee's counter-sign page).
@@ -18,6 +23,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Loader2,
+  Pencil,
   PenLine,
   Save,
   TrendingUp,
@@ -26,7 +32,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { ApiError } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { useAuth } from '../../auth/useAuth';
 import { Badge } from '../../components/ui/Badge';
@@ -41,7 +47,9 @@ import {
   useJuniorCompetitionsForMonth,
   useJuniors,
   usePromoteJunior,
+  useUpdateEvaluation,
   type CreateEvaluationInput,
+  type UpdateEvaluationInput,
 } from './coach-evaluations.queries';
 import {
   useLevelBands,
@@ -208,6 +216,33 @@ const EMPTY_FORM: FormState = {
   best_gross_score: '',
 };
 
+// Numeric/string nullable column -> form input string ("" when unset).
+function numToField(value: number | null | undefined): string {
+  return value == null ? '' : String(value);
+}
+function textToField(value: string | null | undefined): string {
+  return value ?? '';
+}
+
+// Prefill the band-conditional form from an existing evaluation row (edit mode).
+// Every column maps back to its input; nulls become empty strings.
+function evaluationToFormState(evaluation: Evaluation): FormState {
+  return {
+    attendance_count: numToField(evaluation.attendance_count),
+    attendance_total: numToField(evaluation.attendance_total),
+    assessment: evaluation.assessment,
+    recommendation: evaluation.recommendation,
+    special_remarks: textToField(evaluation.special_remarks),
+    putting_assessment: textToField(evaluation.putting_assessment),
+    chipping_assessment: textToField(evaluation.chipping_assessment),
+    full_swing_assessment: textToField(evaluation.full_swing_assessment),
+    avg_score_9: numToField(evaluation.avg_score_9),
+    avg_score_18: numToField(evaluation.avg_score_18),
+    competitions_played: numToField(evaluation.competitions_played),
+    best_gross_score: numToField(evaluation.best_gross_score),
+  };
+}
+
 const ASSESSMENT_OPTIONS: EvaluationAssessment[] = [
   'below_expectation',
   'meeting_expectation',
@@ -225,6 +260,7 @@ interface SaveOutcome {
   month: string;
   signed: boolean;
   signError: string | null;
+  edited: boolean;
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -241,6 +277,9 @@ export function CoachWriteEvaluationPage() {
   const [juniorIdRaw, setJuniorIdRaw] = useState('');
   const [month, setMonth] = useState<string>(months[0]);
   const [outcome, setOutcome] = useState<SaveOutcome | null>(null);
+  // When the golfer+month already has a row, the coach can toggle into editing
+  // it in place (prefilled form, PUT submit) rather than being blocked.
+  const [editingExisting, setEditingExisting] = useState(false);
 
   const juniorId = juniorIdRaw ? Number(juniorIdRaw) : undefined;
   const junior = (juniorsQuery.data ?? []).find((j) => j.id === juniorId);
@@ -257,14 +296,17 @@ export function CoachWriteEvaluationPage() {
   const select = (value: string) => {
     setJuniorIdRaw(value);
     setOutcome(null);
+    setEditingExisting(false);
   };
   const pickMonth = (value: string) => {
     setMonth(value);
     setOutcome(null);
+    setEditingExisting(false);
   };
   const reset = () => {
     setJuniorIdRaw('');
     setOutcome(null);
+    setEditingExisting(false);
   };
 
   return (
@@ -402,16 +444,33 @@ export function CoachWriteEvaluationPage() {
               </span>
             </div>
           </GlassCard>
+        ) : existing && junior && editingExisting ? (
+          // Edit the existing month's row in place (prefilled, PUT submit).
+          <EvaluationForm
+            key={`edit-${existing.id}`}
+            mode="edit"
+            existingId={existing.id}
+            initialForm={evaluationToFormState(existing)}
+            junior={junior}
+            band={band}
+            month={month}
+            coachId={coachId}
+            golferName={nameFor(junior.id)}
+            onCancel={() => setEditingExisting(false)}
+            onSaved={setOutcome}
+          />
         ) : existing ? (
           <ExistingEvaluationCard
             evaluation={existing}
             golferName={nameFor(existing.junior_id)}
             coachId={coachId}
             junior={junior}
+            onEdit={() => setEditingExisting(true)}
           />
         ) : junior ? (
           <EvaluationForm
             key={`${junior.id}-${month}`}
+            mode="create"
             junior={junior}
             band={band}
             month={month}
@@ -428,18 +487,21 @@ export function CoachWriteEvaluationPage() {
 // ── Existing-evaluation guard ──────────────────────────────────────────────────
 // Shown instead of the form when the golfer already has a row for the month.
 // Offers the coach-sign action when it's this coach's own unsigned evaluation
-// (the backend only lets the assigned coach sign). Never a committee control.
+// (the backend only lets the assigned coach sign), and an Edit action that opens
+// the prefilled form for a PUT update. Never a committee control.
 
 function ExistingEvaluationCard({
   evaluation,
   golferName,
   coachId,
   junior,
+  onEdit,
 }: {
   evaluation: Evaluation;
   golferName: string;
   coachId?: string;
   junior?: JuniorProfile;
+  onEdit: () => void;
 }) {
   const sign = useCoachSign();
   const promote = usePromoteJunior();
@@ -449,6 +511,10 @@ function ExistingEvaluationCard({
 
   const isMine = coachId != null && String(evaluation.coach_id) === String(coachId);
   const canSign = isMine && !evaluation.coach_signed;
+  // A coach may edit their own row. Once the committee has counter-signed the
+  // evaluation is final — we hide the edit affordance then (the backend remains
+  // the authority; this is a UI courtesy).
+  const canEdit = isMine && !evaluation.committee_signed;
 
   // Promotion: fully counter-signed + recommends moving up + room to move.
   // The backend re-checks all of this (plus eval↔junior linkage) on POST.
@@ -484,6 +550,11 @@ function ExistingEvaluationCard({
           <p className="mt-1 text-sm text-slate">
             {golferName} has an evaluation for this month — only one is allowed
             per golfer per month.
+            {canEdit
+              ? ' You can edit it below.'
+              : evaluation.committee_signed
+                ? ' It has been counter-signed and is now final.'
+                : ''}
           </p>
         </div>
       </div>
@@ -527,6 +598,20 @@ function ExistingEvaluationCard({
           </p>
         </div>
       </div>
+
+      {canEdit ? (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={onEdit}
+            data-testid="eval-existing-edit"
+          >
+            <Pencil className="h-4 w-4" aria-hidden />
+            Edit this evaluation
+          </Button>
+        </div>
+      ) : null}
 
       {canSign ? (
         <div className="mt-5 border-t border-white/10 pt-4">
@@ -612,6 +697,7 @@ function SuccessCard({
   outcome: SaveOutcome;
   onReset: () => void;
 }) {
+  const verb = outcome.edited ? 'updated' : 'saved';
   return (
     <GlassCard className="p-6 text-center" data-testid="eval-success">
       <CheckCircle2
@@ -619,13 +705,16 @@ function SuccessCard({
         aria-hidden
       />
       <p className="mt-3 text-lg font-black text-silver">
-        Evaluation saved{outcome.signed ? ' and signed' : ''}
+        Evaluation {verb}
+        {outcome.signed ? ' and signed' : ''}
       </p>
       <p className="mt-1 text-sm text-slate">
         {outcome.golferName} · {formatMonth(outcome.month)}
         {outcome.signed
           ? ' — it now awaits the committee counter-sign.'
-          : ' — saved as a draft; sign it when ready.'}
+          : outcome.edited
+            ? ' — changes saved.'
+            : ' — saved as a draft; sign it when ready.'}
       </p>
       {outcome.signError ? (
         <p
@@ -647,28 +736,44 @@ function SuccessCard({
 }
 
 // ── The band-conditional form ──────────────────────────────────────────────────
+// Drives both create (POST) and edit (PUT) — `mode` switches the submit path and
+// `initialForm` prefills from an existing row. The band-specific section is the
+// same in both modes (chosen by the golfer's band template).
 
 function EvaluationForm({
+  mode,
+  existingId,
+  initialForm,
   junior,
   band,
   month,
   coachId,
   golferName,
   onSaved,
+  onCancel,
 }: {
+  mode: 'create' | 'edit';
+  existingId?: number;
+  initialForm?: FormState;
   junior: JuniorProfile;
   band: LevelBand | undefined;
   month: string;
   coachId?: string;
   golferName: string;
   onSaved: (outcome: SaveOutcome) => void;
+  onCancel?: () => void;
 }) {
   const queryClient = useQueryClient();
   const create = useCreateEvaluation();
+  const update = useUpdateEvaluation();
   const sign = useCoachSign();
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(initialForm ?? EMPTY_FORM);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // If a create races into a 409, we flip to edit against the row we discover.
+  const [raceEditId, setRaceEditId] = useState<number | null>(null);
+  const isEdit = mode === 'edit' || raceEditId != null;
+  const editId = existingId ?? raceEditId ?? undefined;
 
   const template = resolveTemplate(band, junior.current_level);
   const bandLabel = band?.band_label ?? `Level ${junior.current_level}`;
@@ -686,16 +791,15 @@ function EvaluationForm({
     form.assessment !== '' &&
     form.recommendation !== '';
 
-  const busy = create.isPending || sign.isPending;
+  const busy = create.isPending || update.isPending || sign.isPending;
 
   const set = (patch: Partial<FormState>) =>
     setForm((f) => ({ ...f, ...patch }));
 
-  function buildPayload(): CreateEvaluationInput {
-    const payload: CreateEvaluationInput = {
-      junior_id: junior.id,
-      coach_id: coachId ?? '',
-      report_month: month,
+  // The mutable band-conditional fields — shared by create and edit. Edit omits
+  // the immutable identity (junior_id/coach_id/report_month select the row).
+  function buildFields(): UpdateEvaluationInput {
+    const fields: UpdateEvaluationInput = {
       current_level: junior.current_level,
       attendance_count: attendanceCount ?? 0,
       assessment: form.assessment as EvaluationAssessment,
@@ -703,52 +807,90 @@ function EvaluationForm({
     };
 
     const total = parseIntField(form.attendance_total);
-    if (total !== undefined) payload.attendance_total = total;
+    if (total !== undefined) fields.attendance_total = total;
     if (form.special_remarks.trim())
-      payload.special_remarks = form.special_remarks.trim();
+      fields.special_remarks = form.special_remarks.trim();
 
     // Exactly one band section is sent; the others stay unset (nullable).
     if (template === 'skills') {
       if (form.putting_assessment.trim())
-        payload.putting_assessment = form.putting_assessment.trim();
+        fields.putting_assessment = form.putting_assessment.trim();
       if (form.chipping_assessment.trim())
-        payload.chipping_assessment = form.chipping_assessment.trim();
+        fields.chipping_assessment = form.chipping_assessment.trim();
       if (form.full_swing_assessment.trim())
-        payload.full_swing_assessment = form.full_swing_assessment.trim();
+        fields.full_swing_assessment = form.full_swing_assessment.trim();
     } else if (template === 'practice_scores') {
       const avg9 = parseDecimal1dp(form.avg_score_9);
       const avg18 = parseDecimal1dp(form.avg_score_18);
-      if (avg9 !== undefined) payload.avg_score_9 = avg9;
-      if (avg18 !== undefined) payload.avg_score_18 = avg18;
+      if (avg9 !== undefined) fields.avg_score_9 = avg9;
+      if (avg18 !== undefined) fields.avg_score_18 = avg18;
     } else {
       const played = parseIntField(form.competitions_played);
       const best = parseIntField(form.best_gross_score);
-      if (played !== undefined) payload.competitions_played = played;
-      if (best !== undefined) payload.best_gross_score = best;
+      if (played !== undefined) fields.competitions_played = played;
+      if (best !== undefined) fields.best_gross_score = best;
     }
-    return payload;
+    return fields;
+  }
+
+  function buildCreatePayload(): CreateEvaluationInput {
+    return {
+      junior_id: junior.id,
+      coach_id: coachId ?? '',
+      report_month: month,
+      ...buildFields(),
+    };
   }
 
   async function submit(alsoSign: boolean) {
     if (!valid || !coachId) return;
     setSubmitError(null);
 
-    let created: Evaluation;
+    let saved: Evaluation;
+    const edited = isEdit;
     try {
-      created = await create.mutateAsync(buildPayload());
+      if (isEdit && editId != null) {
+        saved = await update.mutateAsync({ id: editId, body: buildFields() });
+      } else {
+        saved = await create.mutateAsync(buildCreatePayload());
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Domain rule: one row per golfer per month — name the conflict, and
-        // refetch the guard query so the existing-evaluation card appears.
+        // Domain rule: one row per golfer per month. A create lost the race —
+        // refetch the guard query and flip this form into edit against the
+        // existing row so the coach can update it instead of being blocked.
         setSubmitError(
-          `An evaluation for this golfer already exists for ${formatMonth(month)}.`,
+          `An evaluation for ${golferName} already exists for ${formatMonth(month)}. Loading it for editing…`,
         );
         void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
-      } else {
-        setSubmitError(
-          errorMessage(err, 'Could not save the evaluation. Please try again.'),
-        );
+        try {
+          const existingRows = await queryClient.fetchQuery({
+            queryKey: [
+              'evaluations',
+              { junior_id: junior.id, report_month: month },
+            ],
+            queryFn: () =>
+              api.get<Evaluation[]>('/api/evaluations', {
+                junior_id: junior.id,
+                report_month: month,
+              }),
+          });
+          const found = existingRows?.[0];
+          if (found) setRaceEditId(found.id);
+        } catch {
+          // If we can't resolve the row, leave the message; a re-render of the
+          // page (guard query) will surface the existing-evaluation card.
+        }
+        return;
       }
+      setSubmitError(
+        errorMessage(
+          err,
+          isEdit
+            ? 'Could not update the evaluation. Please try again.'
+            : 'Could not save the evaluation. Please try again.',
+        ),
+      );
       return;
     }
 
@@ -756,13 +898,13 @@ function EvaluationForm({
     let signError: string | null = null;
     if (alsoSign) {
       try {
-        await sign.mutateAsync(created.id);
+        await sign.mutateAsync(saved.id);
         signed = true;
       } catch (err) {
         signError = errorMessage(err, 'Please try again.');
       }
     }
-    onSaved({ golferName, month, signed, signError });
+    onSaved({ golferName, month, signed, signError, edited });
   }
 
   return (
@@ -775,6 +917,16 @@ function EvaluationForm({
       }}
       data-testid="eval-form"
     >
+      {isEdit ? (
+        <div
+          className="flex items-center gap-2 rounded-xl bg-azure/10 px-4 py-3 text-sm text-azure ring-1 ring-azure/30"
+          data-testid="eval-edit-banner"
+        >
+          <Pencil className="h-4 w-4 shrink-0" aria-hidden />
+          Editing {golferName}&apos;s evaluation for {formatMonth(month)}.
+        </div>
+      ) : null}
+
       {/* Common fields */}
       <SectionCard
         icon={<ClipboardCheck className="h-4 w-4 text-azure" aria-hidden />}
@@ -1068,7 +1220,7 @@ function EvaluationForm({
         </div>
       ) : null}
 
-      {/* Actions: save draft, or save + coach-sign. NEVER a committee sign. */}
+      {/* Actions: save (draft/update), or save + coach-sign. NEVER a committee sign. */}
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="submit"
@@ -1077,12 +1229,12 @@ function EvaluationForm({
           disabled={!valid || busy}
           data-testid="eval-save-draft"
         >
-          {create.isPending && !sign.isPending ? (
+          {(create.isPending || update.isPending) && !sign.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           ) : (
             <Save className="h-4 w-4" aria-hidden />
           )}
-          Save draft
+          {isEdit ? 'Save changes' : 'Save draft'}
         </Button>
         <Button
           type="button"
@@ -1099,6 +1251,18 @@ function EvaluationForm({
           )}
           Save &amp; sign
         </Button>
+        {onCancel ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={busy}
+            onClick={onCancel}
+            data-testid="eval-edit-cancel"
+          >
+            Cancel
+          </Button>
+        ) : null}
         {!valid ? (
           <span className="text-xs text-slate">
             Sessions attended, assessment and recommendation are required.

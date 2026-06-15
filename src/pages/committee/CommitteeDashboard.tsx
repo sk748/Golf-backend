@@ -14,7 +14,7 @@ import { ApiError } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { StatCard } from '../../components/ui/StatCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
 import {
   useActiveTournaments,
   useEvaluationSummary,
@@ -32,6 +32,18 @@ import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
+}
+
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the value.
+function statValue(
+  loading: boolean,
+  error: boolean,
+  value: number | string,
+): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
 }
 
 export function CommitteeDashboard() {
@@ -56,54 +68,33 @@ export function CommitteeDashboard() {
         the second sign-off on monthly evaluations.
       </p>
 
-      {/* ── Hero stats ───────────────────────────────────────────────────── */}
+      {/* ── Navigation hub: a stat + headline per area, each a link ──────── */}
       <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        <StatCard
+        <FeatureCard
+          label="Counter-sign"
           icon={PenLine}
-          value={
-            queue.isLoading ? (
-              <Loader2 size={20} className="animate-spin text-azure" />
-            ) : queue.isError ? (
-              '—'
-            ) : (
-              <span className={queueItems.length > 0 ? 'text-gold' : undefined}>
-                {queueItems.length}
-              </span>
-            )
-          }
-          label="Awaiting my counter-sign"
-          className="animate-fade-in-up stagger-1"
-          testId="stat-countersign-queue"
+          tone={queueItems.length > 0 ? 'gold' : 'default'}
+          stat={statValue(queue.isLoading, queue.isError, queueItems.length)}
+          headline="evaluations awaiting your sign-off"
+          to="/evaluations"
+          testId="feature-countersign"
         />
-        <StatCard
+        <FeatureCard
+          label="Juniors"
           icon={GraduationCap}
-          value={
-            juniors.isLoading ? (
-              <Loader2 size={20} className="animate-spin text-azure" />
-            ) : juniors.isError ? (
-              '—'
-            ) : (
-              (juniors.data?.length ?? 0)
-            )
-          }
-          label="Juniors in the programme"
-          className="animate-fade-in-up stagger-2"
-          testId="stat-juniors"
+          tone="azure"
+          stat={statValue(juniors.isLoading, juniors.isError, juniors.data?.length ?? 0)}
+          headline="in the development programme"
+          to="/juniors"
+          testId="feature-juniors"
         />
-        <StatCard
+        <FeatureCard
+          label="Tournaments"
           icon={Trophy}
-          value={
-            tournaments.isLoading ? (
-              <Loader2 size={20} className="animate-spin text-azure" />
-            ) : tournaments.isError ? (
-              '—'
-            ) : (
-              (tournaments.data?.length ?? 0)
-            )
-          }
-          label="Active tournaments"
-          className="animate-fade-in-up stagger-3"
-          testId="stat-active-tournaments"
+          stat={statValue(tournaments.isLoading, tournaments.isError, tournaments.data?.length ?? 0)}
+          headline="active events"
+          to="/tournaments"
+          testId="feature-tournaments"
         />
       </div>
 
@@ -202,13 +193,11 @@ export function CommitteeDashboard() {
           </div>
         </GlassCard>
 
-        {/* ── Per-band summary widget ─────────────────────────────────────── */}
-        <BandSummaryWidget />
-      </div>
-
-      {/* ── Club announcements ──────────────────────────────────────────── */}
-      <div className="animate-fade-in-up stagger-3 mt-6">
-        <AnnouncementsWidget />
+        {/* Right column: band summary stacked over announcements — no gap. */}
+        <div className="flex flex-col gap-4 lg:col-span-1">
+          <BandSummaryWidget />
+          <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+        </div>
       </div>
     </div>
   );

@@ -10,10 +10,13 @@ import { Link } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
+  Award,
   ChevronRight,
   Flag,
+  Gauge,
   Loader2,
   Minus,
+  PlusCircle,
   Sparkles,
   Target,
   TrendingDown,
@@ -36,6 +39,7 @@ import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
 import { useAuth } from '../../auth/useAuth';
 import type { Round } from '../../types/api';
 import {
@@ -101,6 +105,18 @@ function firstName(full?: string | null): string {
   return trimmed ? trimmed.split(/\s+/)[0] : 'there';
 }
 
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the value.
+function statValue(
+  loading: boolean,
+  error: boolean,
+  value: number | string,
+): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
+}
+
 function ErrorPanel({ message, testId }: { message: string; testId?: string }) {
   return (
     <div
@@ -140,7 +156,8 @@ export function PlayerDashboard() {
 
   const rounds = useRounds();
   const history = useHandicapHistory(userId);
-  const { achievements, earnedCount, total, currentLevel } = useAchievements();
+  const { stats, achievements, earnedCount, total, currentLevel, isLoading: achLoading, isError: achError } =
+    useAchievements();
 
   const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [previewRound, setPreviewRound] = useState<Round | null>(null);
@@ -226,6 +243,55 @@ export function PlayerDashboard() {
       <p className="mt-2 max-w-2xl text-sm text-slate">
         Every round is progress. Keep playing and watch your game grow.
       </p>
+
+      {/* ── Navigation hub: a stat + headline per area, each a link ───────── */}
+      <div className="stagger-1 mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {stats?.hasHandicap && stats.handicapIndex != null ? (
+          <FeatureCard
+            label="Handicap"
+            icon={Gauge}
+            tone="azure"
+            stat={statValue(achLoading, achError, stats.handicapIndex)}
+            headline="your handicap index & history"
+            to="/handicap"
+            testId="feature-handicap"
+          />
+        ) : (
+          <FeatureCard
+            label="Handicap"
+            icon={Gauge}
+            tone="azure"
+            stat={achLoading ? '·' : '—'}
+            headline="get scorecards signed to earn yours"
+            to="/handicap"
+            testId="feature-handicap"
+          />
+        )}
+        <FeatureCard
+          label="Progress"
+          icon={TrendingUp}
+          stat={statValue(achLoading, achError, `L${currentLevel}`)}
+          headline="your level & path to the next"
+          to="/progress"
+          testId="feature-progress"
+        />
+        <FeatureCard
+          label="Achievements"
+          icon={Award}
+          tone="gold"
+          stat={statValue(achLoading, achError, `${earnedCount}/${total}`)}
+          headline="badges you've unlocked"
+          to="/achievements"
+          testId="feature-achievements"
+        />
+        <FeatureCard
+          label="Log a round"
+          icon={PlusCircle}
+          headline="enter a scorecard, hole by hole"
+          to="/log-round"
+          testId="feature-log-round"
+        />
+      </div>
 
       {/* ── 0) NEXT-LEVEL CALLOUT — the motivating top of the page ────────── */}
       <Link

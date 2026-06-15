@@ -216,6 +216,32 @@ export function useCreateEvaluation(): UseMutationResult<
   });
 }
 
+// PUT /api/evaluations/:id — update the month's existing row (admin/coach; a
+// coach may only edit their OWN evaluation, else the backend 403s). Body carries
+// the band-conditional evaluation fields (same shape as create, minus the
+// immutable junior_id/coach_id/report_month identity — those select the row).
+// Invalidates every cached evaluations variant so the guard, queue and lists
+// refetch with the edited values.
+export type UpdateEvaluationInput = Omit<
+  CreateEvaluationInput,
+  'junior_id' | 'coach_id' | 'report_month'
+>;
+
+export function useUpdateEvaluation(): UseMutationResult<
+  Evaluation,
+  Error,
+  { id: number; body: UpdateEvaluationInput }
+> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: UpdateEvaluationInput }) =>
+      api.put<Evaluation>(`/api/evaluations/${id}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['evaluations'] });
+    },
+  });
+}
+
 // ── Month-scoped competition stats (prefill for the competition template) ─────
 // GET /api/juniors/:id/competitions?from=&to= — backend-computed
 // competitions_played / best_gross_score within a date window. NOTE: the route

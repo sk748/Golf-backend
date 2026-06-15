@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
+  AlertTriangle,
   CalendarDays,
   CalendarPlus,
   CheckCircle2,
@@ -27,6 +28,7 @@ import {
   type AssignableJunior,
 } from '../admin/coach-assignment.queries';
 import { usePendingBookings } from '../coaching/group-sessions.queries';
+import { useAtRiskJuniors } from './at-risk.queries';
 import {
   currentWeekStart,
   dayLabel,
@@ -78,6 +80,7 @@ export function CoachDashboard() {
   const { nameFor } = useGolferNames();
   const myJuniors = useCoachJuniors(coachId);
   const pendingBookings = usePendingBookings();
+  const atRisk = useAtRiskJuniors(coachId);
 
   const sessions: CoachSession[] = schedule.data ?? [];
   const pending = evals.data ?? [];
@@ -140,6 +143,83 @@ export function CoachDashboard() {
           testId="feature-juniors"
         />
       </div>
+
+      {/* ── At-risk attendance: juniors below their band's session minimum ── */}
+      <GlassCard
+        className="animate-fade-in-up stagger-2 mt-6 p-5"
+        data-testid="at-risk-card"
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-silver">
+            <AlertTriangle size={16} className="text-gold" aria-hidden />
+            At-risk attendance
+          </h2>
+          <Link
+            to="/attendance"
+            className="text-xs font-medium text-azure hover:underline"
+            data-testid="at-risk-take-attendance"
+          >
+            Take attendance
+          </Link>
+        </div>
+        <p className="mt-1 text-xs text-slate">
+          Juniors below their band&apos;s minimum session count this period.
+        </p>
+
+        <div className="mt-4">
+          {atRisk.isLoading ? (
+            <div
+              className="flex items-center gap-2 text-sm text-slate"
+              data-testid="at-risk-loading"
+            >
+              <Loader2 size={18} className="animate-spin text-azure" />
+              Checking attendance against band minimums…
+            </div>
+          ) : atRisk.isError ? (
+            <ErrorPanel
+              message="Could not check attendance against band minimums."
+              testId="at-risk-error"
+            />
+          ) : atRisk.atRisk.length === 0 ? (
+            <p
+              className="flex items-center gap-2 text-sm text-slate"
+              data-testid="at-risk-empty"
+            >
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              All juniors are on track for their band minimum.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2" data-testid="at-risk-list">
+              {atRisk.atRisk.map(({ junior, present, min, shortfall }) => (
+                <li key={junior.id} data-testid={`at-risk-${junior.id}`}>
+                  <Link
+                    to={`/juniors/${junior.id}`}
+                    className="glass-light flex items-center gap-3 rounded-xl p-3 ring-1 ring-gold/20 transition-colors hover:ring-gold/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15">
+                      <AlertTriangle size={16} className="text-gold" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-silver">
+                        {junior.full_name?.trim() || `Golfer #${junior.id}`}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                        <Badge tone="slate" className="px-1.5 py-0.5">
+                          L{junior.current_level}
+                        </Badge>
+                        <span className="tabular-nums text-gold">
+                          {present}/{min} sessions
+                        </span>
+                        <span>· {shortfall} short</span>
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </GlassCard>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         {/* ── This week's schedule ──────────────────────────────────────── */}

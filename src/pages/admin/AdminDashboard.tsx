@@ -12,10 +12,10 @@ import {
 import type { LucideIcon } from 'lucide-react';
 
 import { ApiError } from '../../lib/api';
-import { cn } from '../../lib/cn';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { StatCard } from '../../components/ui/StatCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
 import type { Role } from '../../types/api';
 import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 import { useAdminStats, useRecentActivity } from './admin-dashboard.queries';
@@ -23,6 +23,18 @@ import { useAdminStats, useRecentActivity } from './admin-dashboard.queries';
 // Normalize any thrown value into a user-facing message.
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
+}
+
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the value.
+function statValue(
+  loading: boolean,
+  error: boolean,
+  value: number | string,
+): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
 }
 
 function ErrorPanel({ message, testId }: { message: string; testId?: string }) {
@@ -91,63 +103,61 @@ export function AdminDashboard() {
         Club-wide activity at a glance.
       </p>
 
-      {/* ── A) Hero stats ─────────────────────────────────────────────── */}
-      {stats.isLoading ? (
-        <div
-          className="mt-8 flex items-center gap-2 text-sm text-slate"
-          data-testid="stats-loading"
-        >
-          <Loader2 size={18} className="animate-spin text-azure" />
-          Loading club stats…
-        </div>
-      ) : stats.isError ? (
-        <div className="mt-8">
+      {/* ── A) Navigation hub: primary counters that navigate ──────────── */}
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <FeatureCard
+          label="Users"
+          icon={Users}
+          stat={statValue(stats.isLoading, stats.isError, stats.data?.users.total ?? 0)}
+          headline="manage accounts & roles"
+          to="/users"
+          testId="feature-users"
+        />
+        <FeatureCard
+          label="Juniors"
+          icon={GraduationCap}
+          tone="azure"
+          stat={statValue(stats.isLoading, stats.isError, stats.data?.juniors ?? 0)}
+          headline="in the development programme"
+          to="/juniors"
+          testId="feature-juniors"
+        />
+        <FeatureCard
+          label="Tournaments"
+          icon={Trophy}
+          stat={statValue(stats.isLoading, stats.isError, stats.data?.tournaments.active ?? 0)}
+          headline="active events"
+          to="/tournaments"
+          testId="feature-tournaments"
+        />
+        <FeatureCard
+          label="Evaluations"
+          icon={ClipboardCheck}
+          tone={(stats.data?.evaluations.unsigned ?? 0) > 0 ? 'gold' : 'default'}
+          stat={statValue(stats.isLoading, stats.isError, stats.data?.evaluations.unsigned ?? 0)}
+          headline="awaiting sign-off"
+          to="/evaluations"
+          testId="feature-evaluations"
+        />
+      </div>
+
+      {stats.isError ? (
+        <div className="mt-6">
           <ErrorPanel
             message={errorMessage(stats.error, 'Could not load club stats.')}
             testId="stats-error"
           />
         </div>
+      ) : stats.isLoading ? (
+        <div
+          className="mt-6 flex items-center gap-2 text-sm text-slate"
+          data-testid="stats-loading"
+        >
+          <Loader2 size={18} className="animate-spin text-azure" />
+          Loading club stats…
+        </div>
       ) : stats.data ? (
         <>
-          <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard
-              icon={Users}
-              value={stats.data.users.total}
-              label="Total users"
-              className="animate-fade-in-up stagger-1"
-              testId="stat-total-users"
-            />
-            <StatCard
-              icon={GraduationCap}
-              value={stats.data.juniors}
-              label="Juniors"
-              className="animate-fade-in-up stagger-2"
-              testId="stat-juniors"
-            />
-            <StatCard
-              icon={Trophy}
-              value={stats.data.tournaments.active}
-              label="Active tournaments"
-              className="animate-fade-in-up stagger-3"
-              testId="stat-active-tournaments"
-            />
-            <StatCard
-              icon={ClipboardCheck}
-              value={
-                <span
-                  className={cn(
-                    stats.data.evaluations.unsigned > 0 && 'text-gold',
-                  )}
-                >
-                  {stats.data.evaluations.unsigned}
-                </span>
-              }
-              label="Evaluations awaiting sign-off"
-              className="animate-fade-in-up stagger-4"
-              testId="stat-unsigned-evals"
-            />
-          </div>
-
           {/* ── B) Users by role ────────────────────────────────────────── */}
           <GlassCard className="animate-fade-in-up stagger-2 mt-6 p-5">
             <h2 className="text-sm font-bold text-silver">Users by role</h2>
@@ -201,29 +211,8 @@ export function AdminDashboard() {
         </>
       ) : null}
 
-      {/* ── D) Quick actions + E) Recent activity ───────────────────────── */}
+      {/* ── D) Recent activity + E) Quick actions & announcements ──────── */}
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <GlassCard className="animate-fade-in-up stagger-1 p-5 lg:col-span-1">
-          <h2 className="text-sm font-bold text-silver">Quick actions</h2>
-          <div className="mt-4 flex flex-col gap-3">
-            <Link to="/users" data-testid="action-manage-users">
-              <Button variant="secondary" fullWidth>
-                <Users size={18} />
-                Manage users
-              </Button>
-            </Link>
-            <Link to="/courses" data-testid="action-courses">
-              <Button variant="ghost" fullWidth>
-                <Flag size={18} />
-                Course reference
-              </Button>
-            </Link>
-          </div>
-          <p className="mt-3 text-xs text-slate">
-            Create coach / committee accounts from the Users page.
-          </p>
-        </GlassCard>
-
         <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Recent activity</h2>
@@ -286,11 +275,32 @@ export function AdminDashboard() {
             )}
           </div>
         </GlassCard>
-      </div>
 
-      {/* ── F) Club announcements ────────────────────────────────────────── */}
-      <div className="animate-fade-in-up stagger-3 mt-6">
-        <AnnouncementsWidget />
+        {/* Right column: quick actions stacked over announcements — no gap. */}
+        <div className="flex flex-col gap-4 lg:col-span-1">
+          <GlassCard className="animate-fade-in-up stagger-1 p-5">
+            <h2 className="text-sm font-bold text-silver">Quick actions</h2>
+            <div className="mt-4 flex flex-col gap-3">
+              <Link to="/users" data-testid="action-manage-users">
+                <Button variant="secondary" fullWidth>
+                  <Users size={18} />
+                  Manage users
+                </Button>
+              </Link>
+              <Link to="/courses" data-testid="action-courses">
+                <Button variant="ghost" fullWidth>
+                  <Flag size={18} />
+                  Course reference
+                </Button>
+              </Link>
+            </div>
+            <p className="mt-3 text-xs text-slate">
+              Create coach / committee accounts from the Users page.
+            </p>
+          </GlassCard>
+
+          <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+        </div>
       </div>
     </div>
   );

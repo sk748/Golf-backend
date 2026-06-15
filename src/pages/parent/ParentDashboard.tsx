@@ -25,6 +25,7 @@ import {
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -581,13 +582,30 @@ function ApprovalsCard({ kids }: { kids: ParentChild[] }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the value.
+function statValue(
+  loading: boolean,
+  error: boolean,
+  value: number | string,
+): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
+}
+
 export function ParentDashboard() {
   const { user } = useAuth();
   const children = useMyChildren();
   const bands = useLevelBands();
   const requests = useMyBookingRequests();
+  const entries = useMyEntries();
 
   const kids = children.data ?? [];
+  const pendingRequests = (requests.data ?? []).filter(
+    (r) => String(r.status).toLowerCase() === 'pending',
+  );
+  const myEntries = entries.data ?? [];
 
   return (
     <div className="animate-fade-in-up mx-auto max-w-4xl" data-testid="parent-dashboard">
@@ -602,6 +620,36 @@ export function ParentDashboard() {
         on in the junior programme — progress, handicap, and your coaching
         requests, all in one place.
       </p>
+
+      {/* ── Navigation hub: a stat + headline per area, each a link ───────── */}
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <FeatureCard
+          label={kids.length === 1 ? 'My child' : 'My children'}
+          icon={Users}
+          tone="azure"
+          stat={statValue(children.isLoading, children.isError, kids.length)}
+          headline="profiles, progress & reports"
+          to="/my-child"
+          testId="feature-my-child"
+        />
+        <FeatureCard
+          label="Coaching sessions"
+          icon={CalendarPlus}
+          tone={pendingRequests.length > 0 ? 'gold' : 'default'}
+          stat={statValue(requests.isLoading, requests.isError, pendingRequests.length)}
+          headline="requests pending the club's reply"
+          to="/sessions"
+          testId="feature-sessions"
+        />
+        <FeatureCard
+          label="Tournaments"
+          icon={Trophy}
+          stat={statValue(entries.isLoading, entries.isError, myEntries.length)}
+          headline="your children's event entries"
+          to="/tournaments"
+          testId="feature-tournaments"
+        />
+      </div>
 
       {/* Signup approvals — children waiting on this parent's consent. */}
       {kids.some((k) => k.approval_status === 'pending_parent') ? (
