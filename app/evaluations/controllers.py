@@ -143,10 +143,14 @@ def committee_sign(evaluation_id: int, signer_id: str):
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 
-def get_evaluation_summary(band_id: int, month: str):
+def get_evaluation_summary(band_id: int, month: str, coach_id=None):
     from app.juniors.models import JuniorProfile
 
-    juniors = JuniorProfile.query.filter_by(band_id=band_id).all()
+    q = JuniorProfile.query.filter_by(band_id=band_id)
+    if coach_id is not None:
+        # Coach roster scoping: only this coach's juniors in the band.
+        q = q.filter_by(coach_id=coach_id)
+    juniors = q.all()
     junior_ids = [j.id for j in juniors]
     evs = Evaluation.query.filter(
         Evaluation.junior_id.in_(junior_ids),

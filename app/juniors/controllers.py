@@ -350,10 +350,15 @@ def delete_badge(b):
 
 # ── Junior Badges ─────────────────────────────────────────────────────────────
 
-def list_junior_badges(junior_id=None):
+def list_junior_badges(junior_id=None, coach_id=None):
     q = JuniorBadge.query
     if junior_id:
         q = q.filter_by(junior_id=junior_id)
+    if coach_id is not None:
+        # Coach roster scoping: only badges of juniors assigned to this coach.
+        q = q.join(JuniorProfile, JuniorBadge.junior_id == JuniorProfile.id).filter(
+            JuniorProfile.coach_id == coach_id
+        )
     return q.all()
 
 

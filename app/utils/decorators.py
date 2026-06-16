@@ -125,3 +125,17 @@ def is_admin(user):
 def has_role(user, *roles):
     role_val = user.role.value if hasattr(user.role, "value") else str(user.role)
     return role_val in roles
+
+
+def coach_owns_junior(caller, junior):
+    """Coach roster scoping (CLAUDE.md: "a coach sees the juniors assigned to
+    them"). True when the caller is the coach this junior is assigned to.
+
+    Sam's directive 2026-06-16: a coach sees ONLY their own students, no
+    exceptions — so coach-facing junior/evaluation/attendance routes gate on
+    this server-side, not just the frontend `useCoachJuniors` filter (which is
+    UX only). Admin/committee are NOT coaches and are checked separately.
+    """
+    if junior is None:
+        return False
+    return str(getattr(junior, "coach_id", None)) == str(caller.id)

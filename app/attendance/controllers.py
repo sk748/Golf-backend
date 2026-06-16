@@ -6,12 +6,19 @@ attendance_schema = SimpleModelSchema(Attendance)
 attendances_schema = SimpleModelSchema(Attendance, many=True)
 
 
-def list_attendance(session_id=None, junior_id=None):
+def list_attendance(session_id=None, junior_id=None, coach_id=None):
     q = Attendance.query
     if session_id:
         q = q.filter_by(session_id=session_id)
     if junior_id:
         q = q.filter_by(junior_id=junior_id)
+    if coach_id is not None:
+        # Coach roster scoping: only attendance for juniors assigned to this
+        # coach (no exceptions). Joins through the linked JuniorProfile.
+        from app.juniors.models import JuniorProfile
+        q = q.join(JuniorProfile, Attendance.junior_id == JuniorProfile.id).filter(
+            JuniorProfile.coach_id == coach_id
+        )
     return q.all()
 
 

@@ -6,7 +6,10 @@ from app.evaluations.controllers import (
     list_evaluations, get_evaluation, create_evaluation, update_evaluation, delete_evaluation,
     coach_sign, committee_sign, get_evaluation_summary,
 )
-from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
+from app.utils.decorators import (
+    require_roles, require_auth, admin_only, get_current_user, has_role, coach_owns_junior,
+)
+from app.juniors.controllers import get_junior
 from app.audit.service import record, junior_label
 
 evaluations_bp = Blueprint("evaluations_bp", __name__, url_prefix="/api")
@@ -40,7 +43,11 @@ def evaluation_summary():
     month = request.args.get("month")
     if not band_id or not month:
         return _err("VALIDATION_ERROR", "band_id and month are required", 400)
-    data = get_evaluation_summary(band_id, month)
+    # A coach's band summary shows ONLY their own juniors in that band (no
+    # exceptions); admin/committee see the whole band.
+    caller = get_current_user()
+    coach_id = caller.id if has_role(caller, "coach") else None
+    data = get_evaluation_summary(band_id, month, coach_id=coach_id)
     return _data(data, count=len(data))
 
 
@@ -49,9 +56,13 @@ def evaluation_summary():
 @evaluations_bp.route("/evaluations", methods=["GET"])
 @require_roles("admin", "coach", "committee")
 def get_evaluations():
+    # A coach sees ONLY evaluations they authored (== their own juniors, no
+    # exceptions); admin/committee may filter by any coach_id.
+    caller = get_current_user()
+    coach_id = caller.id if has_role(caller, "coach") else request.args.get("coach_id")
     items = list_evaluations(
         junior_id=request.args.get("junior_id"),
-        coach_id=request.args.get("coach_id"),
+        coach_id=coach_id,
         report_month=request.args.get("report_month"),
         committee_signed=request.args.get("committee_signed"),
         coach_signed=request.args.get("coach_signed"),
@@ -69,6 +80,10 @@ def post_evaluation():
     caller = get_current_user()
     if has_role(caller, "coach"):
         data["coach_id"] = caller.id
+        # A coach may only evaluate juniors on their own roster (no exceptions).
+        junior = get_junior(data.get("junior_id"))
+        if not coach_owns_junior(caller, junior):
+            return _err("FORBIDDEN", "Coaches can only evaluate their own juniors", 403)
     else:
         data.setdefault("coach_id", caller.id)
     try:
@@ -86,6 +101,9 @@ def get_evaluation_route(evaluation_id):
     ev = get_evaluation(evaluation_id)
     if ev is None:
         return _not_found("Evaluation")
+    caller = get_current_user()
+    if has_role(caller, "coach") and str(ev.coach_id) != str(caller.id):
+        return _err("FORBIDDEN", "Coaches can only view their own evaluations", 403)
     return _data(evaluation_schema.dump(ev))
 
 

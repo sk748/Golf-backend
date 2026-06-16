@@ -23,7 +23,8 @@ from app.juniors.controllers import (
     preview_import, commit_import,
 )
 from app.utils.decorators import (
-    require_roles, require_auth, admin_only, get_current_user, require_ownership, has_role
+    require_roles, require_auth, admin_only, get_current_user, require_ownership,
+    has_role, coach_owns_junior,
 )
 
 juniors_bp = Blueprint("juniors_bp", __name__, url_prefix="/api")
@@ -69,15 +70,18 @@ def get_juniors():
     caller = get_current_user()
     # parents can only see their own children
     parent_id = request.args.get("parent_id")
+    coach_id = request.args.get("coach_id")
     if has_role(caller, "parent"):
         parent_id = caller.id      # force scope to own children
+    if has_role(caller, "coach"):
+        coach_id = caller.id       # coach sees ONLY their own roster (no exceptions)
     items = list_juniors(
         parent_id=parent_id,
         band_id=request.args.get("band_id"),
         current_level=request.args.get("current_level"),
         age_min=request.args.get("age_min", type=int),
         age_max=request.args.get("age_max", type=int),
-        coach_id=request.args.get("coach_id"),
+        coach_id=coach_id,
         approval_status=request.args.get("approval_status"),
         participant_type=request.args.get("participant_type"),
     )
@@ -166,6 +170,8 @@ def get_junior_route(junior_id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
     if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
         return _err("FORBIDDEN", "You can only view your own profile", 403)
+    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+        return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
     return _data(_with_child_name(junior_schema.dump(junior), junior))
 
 
@@ -200,8 +206,12 @@ def put_junior(junior_id):
                 f"Parents may only edit: {', '.join(sorted(PARENT_EDITABLE_FIELDS))}",
                 403,
             )
+    elif has_role(caller, "coach"):
+        if not coach_owns_junior(caller, junior):
+            return _err("FORBIDDEN", "Coaches can only edit their own juniors", 403)
+        data = {k: v for k, v in data.items() if k not in STAFF_PROTECTED_FIELDS}
     elif not has_role(caller, "admin"):
-        # coach / committee: drop protected relationship/approval/identity fields.
+        # committee: drop protected relationship/approval/identity fields.
         data = {k: v for k, v in data.items() if k not in STAFF_PROTECTED_FIELDS}
     try:
         return _data(_with_child_name(junior_schema.dump(update_junior(junior, data)), junior))
@@ -251,6 +261,9 @@ def promote_junior_route(junior_id):
     junior = get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
+    caller = get_current_user()
+    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+        return _err("FORBIDDEN", "Coaches can only promote their own juniors", 403)
     data = request.get_json() or {}
     if not data.get("evaluation_id"):
         return _err("VALIDATION_ERROR", "evaluation_id is required", 400)
@@ -310,6 +323,8 @@ def junior_progress(junior_id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
     if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
         return _err("FORBIDDEN", "You can only view your own progress", 403)
+    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+        return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
     result, err = get_junior_progress(junior_id)
     if err:
         return _not_found("Junior")
@@ -328,6 +343,8 @@ def monthly_report(junior_id):
     caller = get_current_user()
     if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
         return _err("FORBIDDEN", "Parents can only view their own children", 403)
+    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+        return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
     result, err = get_monthly_report(junior_id, month)
     if err:
         return _not_found("Junior")
@@ -482,6 +499,7 @@ def get_junior_badges():
     another's recognitions."""
     caller = get_current_user()
     junior_id = request.args.get("junior_id")
+    coach_scope = None
 
     if has_role(caller, "player"):
         own = JuniorProfile.query.filter_by(user_id=caller.id).first()
@@ -494,8 +512,16 @@ def get_junior_badges():
         child = db.session.get(JuniorProfile, int(junior_id))
         if child is None or str(child.parent_id) != str(caller.id):
             return _err("FORBIDDEN", "You can only view your own child's badges", 403)
+    elif has_role(caller, "coach"):
+        # Coach sees badges of their OWN juniors only (no exceptions).
+        if junior_id is not None:
+            if not coach_owns_junior(caller, db.session.get(JuniorProfile, int(junior_id))
+                                     if str(junior_id).isdigit() else None):
+                return _err("FORBIDDEN", "You can only view your own juniors' badges", 403)
+        else:
+            coach_scope = caller.id
 
-    items = list_junior_badges(junior_id=junior_id)
+    items = list_junior_badges(junior_id=junior_id, coach_id=coach_scope)
     return _data(junior_badges_schema.dump(items), count=len(items))
 
 
