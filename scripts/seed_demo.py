@@ -43,6 +43,7 @@ committed once at the very end).
 
 import os
 import sys
+import json
 import random
 from datetime import date, datetime, timezone, time, timedelta
 
@@ -977,6 +978,108 @@ def seed_social(users):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Series / order of merit — points accumulate across completed legs
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_series(users, juniors, course, tees):
+    """A season-long order of merit: a Series with a points scheme + several
+    COMPLETED leg tournaments whose finishing positions accumulate into the
+    standings (see controllers.series_standings). The existing registration-open
+    June Challenge is linked as an upcoming (not-yet-counting) leg."""
+    admin = users["admin"]
+    info = {"series": 0, "legs": 0, "entries": 0, "scores": 0}
+
+    men_white = tees.get(("white", "men")) or next(iter(tees.values()))
+    par_total = course.par
+
+    # Points by finishing position (string keys — series_standings json-loads it).
+    points_scheme = {
+        "1": 100, "2": 80, "3": 65, "4": 55, "5": 50,
+        "6": 45, "7": 42, "8": 40, "9": 38, "10": 36,
+    }
+    series = Series(
+        name="Karen Junior Order of Merit 2026",
+        year=TODAY.year,
+        points_scheme=json.dumps(points_scheme),
+        status="active",
+    )
+    db.session.add(series)
+    db.session.flush()
+    info["series"] += 1
+
+    # Tournament-ready juniors with a handicap are the order-of-merit field.
+    field = [j for j in juniors if j.has_handicap]
+
+    # Three completed legs over the last three months; vary the finishing order
+    # per leg so the cumulative standings differ from any single event.
+    legs = [
+        ("Order of Merit — Leg 1 (Mar)", months_back(3)),
+        ("Order of Merit — Leg 2 (Apr)", months_back(2)),
+        ("Order of Merit — Leg 3 (May)", months_back(1)),
+    ]
+    for leg_idx, (name, when) in enumerate(legs):
+        t = Tournament(
+            name=name,
+            format=TournamentFormat.stroke_play,
+            scoring_basis=ScoringBasis.gross,
+            course_id=course.id,
+            tee_set_id=men_white.id,
+            holes=18,
+            start_date=when,
+            end_date=when,
+            counts_toward_handicap=False,
+            status=TournamentStatus.completed,
+            competition_type=CompetitionType.karen_strokeplay,
+            series_id=series.id,
+            level_min=4, level_max=9,
+            description=f"Counting leg of the {series.name}.",
+        )
+        db.session.add(t)
+        db.session.flush()
+        info["legs"] += 1
+
+        rng = random.Random(100 + leg_idx)
+        order = field[:]
+        rng.shuffle(order)  # this leg's finishing order
+        for pos, j in enumerate(order, start=1):
+            entry = TournamentEntry(
+                tournament_id=t.id,
+                junior_id=j.id,
+                registered_by=admin.id,
+                status=EntryStatus.confirmed,
+                registered_at=when,
+            )
+            db.session.add(entry)
+            db.session.flush()
+            info["entries"] += 1
+
+            gross = gross_for_level(j.current_level, rng)
+            ch = course_handicap_for(
+                j.handicap_index or 30, men_white.slope_rating,
+                float(men_white.course_rating), par_total, holes=18)
+            db.session.add(TournamentScore(
+                entry_id=entry.id,
+                holes_played=18,
+                gross_score=gross,
+                net_score=compute_net_score(gross, ch),
+                position=pos,
+                status=ScoreStatus.verified,
+            ))
+            info["scores"] += 1
+
+    # Link the existing registration-open June Challenge as an upcoming leg so
+    # the series detail shows what's still to come (it has no positions yet, so
+    # it doesn't affect standings).
+    upcoming = Tournament.query.filter_by(
+        name="Karen Junior Challenge - June").first()
+    if upcoming is not None and upcoming.series_id is None:
+        upcoming.series_id = series.id
+
+    db.session.flush()
+    return info
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Calendar events + RSVPs (unified calendar feature)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1159,6 +1262,9 @@ def run():
     print("Seeding tournaments...")
     tourn_info = seed_tournaments(users, juniors, course, tees, holes)
 
+    print("Seeding series / order of merit...")
+    series_info = seed_series(users, juniors, course, tees)
+
     print("Seeding badges...")
     n_badges = seed_badges(users, juniors, badges)
 
@@ -1201,6 +1307,9 @@ def run():
     print(f"    hole scores:        {tourn_info['hole_scores']}")
     print(f"    divisions:          {tourn_info['divisions']}")
     print(f"  External results:     {tourn_info['external_results']}")
+    print(f"  Series:               {series_info['series']}")
+    print(f"    counting legs:      {series_info['legs']}")
+    print(f"    leg entries:        {series_info['entries']}")
     print(f"  Badges awarded:       {n_badges}")
     print(f"  Achievement unlocks:  {n_ach}")
     print(f"  Announcements:        {social_info['announcements']}")
