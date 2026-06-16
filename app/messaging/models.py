@@ -118,6 +118,25 @@ class Message(TimestampMixin, db.Model):
     moderator = relationship("User", foreign_keys=[moderated_by])
 
 
+class BannedWordAttempt(TimestampMixin, db.Model):
+    """A blocked banned-word attempt (block/warn/log model, 2026-06-16).
+
+    The offending message is rejected and never stored as content — only the
+    matched term + who/where/when are kept, enough to escalate repeat offenders
+    to admins without retaining what the user tried to say. `created_at`
+    (TimestampMixin) drives the rolling-window repeat count.
+    """
+    __tablename__ = "banned_word_attempts"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=True)
+    matched_word = Column(String(80), nullable=False)
+    context = Column(String(20), nullable=False, default="message")  # message | edit
+
+    user = relationship("User")
+
+
 class MessageFlag(TimestampMixin, db.Model):
     __tablename__ = "message_flags"
 

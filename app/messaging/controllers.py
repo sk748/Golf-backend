@@ -11,7 +11,7 @@ Messaging domain logic (social phase, locked decisions 2026-06-11).
   their children is a member of; admin can read everything. Posting stays
   member-only.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import and_, or_, true
 from sqlalchemy.orm import aliased
@@ -20,9 +20,15 @@ from app.auth.models import User, UserRole
 from app.database.database import db
 from app.juniors.models import JuniorApprovalStatus, JuniorProfile
 from app.messaging.models import (
-    Conversation, ConversationMember, ConversationType,
+    BannedWordAttempt, Conversation, ConversationMember, ConversationType,
     FlagStatus, Message, MessageFlag, MessageStatus, RosterKind,
 )
+from app.utils.mixins import utc_now
+
+# Repeated banned-word attempts escalate to admins: the Nth trip within a
+# rolling window fires a high-priority alert (safety decision, 2026-06-16).
+BANNED_REPEAT_THRESHOLD = 3
+BANNED_REPEAT_WINDOW_HOURS = 24
 
 STAFF_ROLES = ("admin", "coach", "committee")
 
@@ -510,6 +516,45 @@ def dm_other_member(conv, user):
 
 def active_admins():
     return User.query.filter_by(role=UserRole.admin, is_active=True).all()
+
+
+def record_banned_attempt(user, matched_word, conversation_id=None, context="message"):
+    """Log a blocked banned-word attempt and escalate on repeats.
+
+    The attempt row keeps only the matched term + who/where/when (never the
+    rejected body). Returns (attempt, window_count, escalated): on the
+    BANNED_REPEAT_THRESHOLD-th trip within the rolling window every admin gets a
+    high-priority `banned_word_repeat` notification. Does NOT commit — the caller
+    commits alongside its own response.
+    """
+    from app.notifications.service import notify
+
+    attempt = BannedWordAttempt(
+        user_id=user.id,
+        conversation_id=conversation_id,
+        matched_word=(matched_word or "")[:80],
+        context=context,
+    )
+    db.session.add(attempt)
+    db.session.flush()
+
+    since = utc_now() - timedelta(hours=BANNED_REPEAT_WINDOW_HOURS)
+    count = BannedWordAttempt.query.filter(
+        BannedWordAttempt.user_id == user.id,
+        BannedWordAttempt.created_at >= since,
+    ).count()
+
+    escalated = count >= BANNED_REPEAT_THRESHOLD
+    if escalated:
+        for admin in active_admins():
+            notify(admin.id, "banned_word_repeat", {
+                "user_id": user.id,
+                "user_name": full_name(user),
+                "count": count,
+                "window_hours": BANNED_REPEAT_WINDOW_HOURS,
+                "conversation_id": conversation_id,
+            })
+    return attempt, count, escalated
 
 
 def open_flag_queue():

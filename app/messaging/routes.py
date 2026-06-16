@@ -16,8 +16,8 @@ from app.messaging.controllers import (
     active_admins, can_dm, can_read_conversation, conversations_for_user,
     create_dm, dm_other_member, find_dm, full_name, get_conversation,
     get_membership, is_staff, messages_for_viewer, open_flag_queue,
-    player_profile, role_value, serialize_conversation, serialize_flag,
-    serialize_message, staff_message_exists,
+    player_profile, record_banned_attempt, role_value, serialize_conversation,
+    serialize_flag, serialize_message, staff_message_exists,
 )
 from app.messaging.models import (
     Conversation, ConversationMember, ConversationType,
@@ -222,31 +222,28 @@ def post_message(conversation_id):
     if len(body) > MAX_BODY_LENGTH:
         return _err("VALIDATION_ERROR", f"body must be at most {MAX_BODY_LENGTH} characters", 400)
 
+    # Banned-word filter: block, warn, log (safety decision, 2026-06-16). The
+    # message is rejected outright — never stored or delivered — the sender is
+    # warned, and the attempt is logged; repeats escalate to admins.
     matched = check_banned(body)
+    if matched:
+        record_banned_attempt(user, matched, conversation_id=conv.id, context="message")
+        db.session.commit()
+        return _err(
+            "BANNED_WORD",
+            "Your message contains language that isn't allowed here. "
+            "Please remove it and try again.",
+            422,
+        )
+
     msg = Message(
         conversation_id=conv.id,
         sender_id=user.id,
         body=body,
-        status=MessageStatus.held if matched else MessageStatus.visible,
-        held_reason="banned word" if matched else None,
+        status=MessageStatus.visible,
     )
     db.session.add(msg)
     db.session.flush()
-
-    if matched:
-        # Auto-flag for admin review; the sender is recorded as the flagger
-        # with an explicit auto reason so it is not mistaken for a user report.
-        db.session.add(MessageFlag(
-            message_id=msg.id,
-            flagged_by=user.id,
-            reason="auto: banned-word filter",
-        ))
-        for admin in active_admins():
-            notify(admin.id, "message_held", {
-                "message_id": msg.id,
-                "conversation_id": conv.id,
-                "sender_name": full_name(user),
-            })
 
     # First contact (decision 5): first staff message in a DM with a player
     # notifies that player's parent.
@@ -295,8 +292,16 @@ def edit_message(conversation_id, message_id):
     body = body.strip()
     if len(body) > MAX_BODY_LENGTH:
         return _err("VALIDATION_ERROR", f"body must be at most {MAX_BODY_LENGTH} characters", 400)
-    if check_banned(body):
-        return _err("VALIDATION_ERROR", "That edit contains a word that isn't allowed", 400)
+    matched = check_banned(body)
+    if matched:
+        record_banned_attempt(user, matched, conversation_id=conversation_id, context="edit")
+        db.session.commit()
+        return _err(
+            "BANNED_WORD",
+            "Your edit contains language that isn't allowed here. "
+            "Please remove it and try again.",
+            422,
+        )
 
     if msg.original_body is None:
         msg.original_body = msg.body  # keep the very first version for the record

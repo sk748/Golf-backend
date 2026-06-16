@@ -18,7 +18,9 @@ from app.evaluations.models import Evaluation
 from app.attendance.models import Attendance
 from app.sessions.models import Session, Class, ClassEnrollment, BookingRequest
 from app.audit.models import AuditLog
-from app.messaging.models import Conversation, ConversationMember, Message, MessageFlag
+from app.messaging.models import (
+    Conversation, ConversationMember, Message, MessageFlag, BannedWordAttempt,
+)
 from app.announcements.models import Announcement
 from app.notifications.models import Notification
 from app.handicap.models import HandicapJourney
