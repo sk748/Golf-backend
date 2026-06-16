@@ -21,6 +21,21 @@ body,
   height: 100%;
 }
 
+/* Mobile-overflow guard. Any element wider than the screen (an un-shrunk grid
+   cell, a long unbreakable string) makes mobile browsers zoom OUT to fit the
+   widest content — which renders the whole app, including the fixed bottom nav,
+   at a desktop-ish width that no longer fits the viewport. Clamping the document
+   here forces grids/flex rows to honour their responsive layout (and `truncate`
+   to engage) at the true device width. `overflow-x: clip` (not `hidden`) clips
+   without creating a scroll container, so the sticky top bar keeps working.
+   Genuinely wide content (scorecards, the week calendar, reference tables) lives
+   in its own `overflow-x-auto` wrapper and still scrolls within its card. */
+body,
+#root {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background-color: var(--color-navy);
