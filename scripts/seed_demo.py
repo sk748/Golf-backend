@@ -41,6 +41,7 @@ Exit code 0 on success, non-zero on failure (the whole run is one transaction
 committed once at the very end).
 """
 
+import os
 import sys
 import random
 from datetime import date, datetime, timezone, time, timedelta
@@ -75,13 +76,16 @@ from app.tournaments.models import (
     ScoreStatus, DivisionBasis, ExternalEventType, CompetitionType,
 )
 from app.messaging.models import (
-    Conversation, ConversationMember, Message, MessageFlag,
+    Conversation, ConversationMember, Message, MessageFlag, BannedWordAttempt,
     ConversationType, MessageStatus,
 )
 from app.announcements.models import (
     Announcement, AnnouncementAudience, AnnouncementStatus,
 )
 from app.notifications.models import Notification
+from app.events.models import (
+    Event, EventRSVP, EventAudience, EventStatus, RSVPStatus,
+)
 
 # The WHS scoring path — gives us real score_differential + recomputed index.
 from app.rounds.controllers import sync_score
@@ -89,8 +93,11 @@ from app.tournaments.scoring import (
     course_handicap_for, compute_net_score, compute_stableford,
 )
 
-# Reference date for the whole dataset (per the prompt: today = 2026-06-11).
-TODAY = date(2026, 6, 11)
+# Reference date for the whole dataset. Anchored to the REAL current date so a
+# fresh demo always has events/sessions/rounds in the current + upcoming week
+# (the calendar opens on the current week). Override with SEED_TODAY=YYYY-MM-DD.
+_today_override = os.environ.get("SEED_TODAY")
+TODAY = date.fromisoformat(_today_override) if _today_override else date.today()
 random.seed(42)  # deterministic-ish demo data run to run
 
 
@@ -148,7 +155,12 @@ def wipe():
     # handicap_journeys → junior_profiles (raw delete avoids an extra import).
     db.session.execute(_sql_text("DELETE FROM handicap_journeys"))
 
+    # Calendar events (events.junior_id → junior_profiles, so clear before them).
+    db.session.query(EventRSVP).delete(synchronize_session=False)
+    db.session.query(Event).delete(synchronize_session=False)
+
     # Messaging / social
+    db.session.query(BannedWordAttempt).delete(synchronize_session=False)
     db.session.query(MessageFlag).delete(synchronize_session=False)
     db.session.query(Message).delete(synchronize_session=False)
     db.session.query(ConversationMember).delete(synchronize_session=False)
@@ -965,6 +977,161 @@ def seed_social(users):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Calendar events + RSVPs (unified calendar feature)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_events(users, juniors, bands):
+    """Calendar events across all four audiences (everyone / band / coach_group
+    / individual), some mandatory / RSVP-required, spread across the demo week so
+    the unified calendar and weekly view are populated. Adds a past event and a
+    cancelled one for variety."""
+    admin = users["admin"]
+    committee = users["committee"]
+    coach = users["coaches"][0]
+    info = {"events": 0, "rsvps": 0}
+
+    def add_event(**kw):
+        e = Event(**kw)
+        db.session.add(e)
+        info["events"] += 1
+        return e
+
+    def rsvp(event, user_id, status):
+        db.session.add(EventRSVP(event_id=event.id, user_id=user_id, status=status))
+        info["rsvps"] += 1
+
+    beginner_band = band_for_level(bands, 2)   # L1–3
+    advanced_band = band_for_level(bands, 7)   # L6–8
+    coach_juniors = [j for j in juniors if str(j.coach_id) == str(coach.id)]
+
+    # Days anchored to the demo week (TODAY = Thu 2026-06-11).
+    days_to_sat = (5 - TODAY.weekday()) % 7 or 7
+
+    # 1) EVERYONE — Club Open Day, upcoming Saturday, RSVP required.
+    open_day = add_event(
+        owner_id=admin.id, title="Club Open Day",
+        description="Family open day at Karen — games, a BBQ and a junior "
+                    "exhibition match. All members welcome.",
+        location="Karen Country Club", date=TODAY + timedelta(days=days_to_sat),
+        start_time=time(10, 0), end_time=time(15, 0),
+        audience=EventAudience.everyone, rsvp_required=True,
+        status=EventStatus.scheduled)
+    db.session.flush()
+    rsvp(open_day, users["demo_player"].id, RSVPStatus.going)
+    rsvp(open_day, users["parents"][0].id, RSVPStatus.going)
+    if len(users["coaches"]) > 1:
+        rsvp(open_day, users["coaches"][1].id, RSVPStatus.not_going)
+
+    # 2) BAND — beginners skills clinic this week (L1–3).
+    if beginner_band is not None:
+        add_event(
+            owner_id=coach.id, title="Beginners Skills Clinic",
+            description="Putting and chipping fundamentals for our L1–3 group.",
+            location="Practice green", date=TODAY + timedelta(days=2),
+            start_time=time(16, 0), end_time=time(17, 30),
+            audience=EventAudience.band, band_id=beginner_band.id,
+            status=EventStatus.scheduled)
+
+    # 3) COACH_GROUP — mandatory squad briefing for the coach's roster.
+    squad = add_event(
+        owner_id=coach.id, title="Squad Briefing — Karen Junior Challenge",
+        description="Mandatory pre-tournament briefing for my juniors. "
+                    "Bring your scorecards.",
+        location="Clubhouse lounge", date=TODAY + timedelta(days=1),
+        start_time=time(15, 30), end_time=time(16, 30),
+        audience=EventAudience.coach_group, coach_id=coach.id,
+        rsvp_required=True, mandatory=True, status=EventStatus.scheduled)
+    db.session.flush()
+    for j in coach_juniors[:4]:
+        rsvp(squad, j.user_id, RSVPStatus.going)
+
+    # 4) INDIVIDUAL — a one-to-one lesson for a single junior.
+    if coach_juniors:
+        j = coach_juniors[0]
+        add_event(
+            owner_id=coach.id, title="1:1 Lesson — short game",
+            description="Focused session on bunker play and wedge distances.",
+            location="Short-game area", date=TODAY + timedelta(days=3),
+            start_time=time(9, 0), end_time=time(10, 0),
+            audience=EventAudience.individual, junior_id=j.id,
+            status=EventStatus.scheduled)
+
+    # 5) Committee event — everyone, later next week.
+    add_event(
+        owner_id=committee.id, title="Parents' Evening — Programme Update",
+        description="Termly update on the junior development programme. "
+                    "Q&A with the coaching team.",
+        location="Clubhouse", date=TODAY + timedelta(days=days_to_sat + 4),
+        start_time=time(18, 0), end_time=time(19, 30),
+        audience=EventAudience.everyone, rsvp_required=True,
+        status=EventStatus.scheduled)
+
+    # 6) Past EVERYONE event (calendar history).
+    add_event(
+        owner_id=admin.id, title="Monthly Medal",
+        description="Club monthly medal — juniors welcome off the red tees.",
+        location="Karen Country Club", date=TODAY - timedelta(days=10),
+        start_time=time(8, 0), end_time=time(13, 0),
+        audience=EventAudience.everyone, status=EventStatus.scheduled)
+
+    # 7) Cancelled event (shows the cancelled state).
+    add_event(
+        owner_id=admin.id, title="Range Twilight Session (cancelled)",
+        description="Cancelled due to the range re-turfing.",
+        location="Driving range", date=TODAY + timedelta(days=4),
+        start_time=time(17, 30), end_time=time(19, 0),
+        audience=EventAudience.everyone, status=EventStatus.cancelled)
+
+    db.session.flush()
+    return info
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Notifications (the bell) — a small, realistic set on the demo logins
+# ─────────────────────────────────────────────────────────────────────────────
+
+def seed_notifications(users, juniors):
+    """Seed a few notifications (real emitted types) so the bell isn't empty on
+    the demo logins. Types mirror what the app emits in production."""
+    n = 0
+
+    def add(user_id, ntype, payload, read=False, ago_hours=2):
+        note = Notification(user_id=user_id, type=ntype, payload=payload, read=read)
+        note.created_at = utcnow() - timedelta(hours=ago_hours)
+        db.session.add(note)
+        nonlocal n
+        n += 1
+
+    admin = users["admin"]
+    coach = users["coaches"][0]
+    parent = users["parents"][0]
+    player = users["demo_player"]
+
+    # Admin: a repeat banned-word offender (moderation escalation) + a public RSVP-y announcement.
+    add(admin.id, "banned_word_repeat",
+        {"user_name": "A Member", "count": 3, "window_hours": 24}, ago_hours=1)
+    add(admin.id, "announcement",
+        {"title": "Karen Junior Challenge tees off this month"}, read=True, ago_hours=30)
+
+    # Coach: a flagged message to review.
+    add(coach.id, "message_flagged",
+        {"flagged_by_name": "David Kamau", "reason": "Please review"}, ago_hours=3)
+
+    # Parent: first-contact (a coach messaged their child) + tournament open.
+    add(parent.id, "first_contact",
+        {"staff_name": "Brian Otieno", "child_name": "Pauline Kamau"}, ago_hours=5)
+    add(parent.id, "tournament_open",
+        {"title": "Karen Junior Challenge"}, ago_hours=20)
+
+    # Player: an achievement unlock.
+    add(player.id, "achievement",
+        {"title": "First Birdie"}, ago_hours=8)
+
+    db.session.flush()
+    return n
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Orchestration
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1001,6 +1168,12 @@ def run():
     print("Seeding announcements + messages...")
     social_info = seed_social(users)
 
+    print("Seeding calendar events + RSVPs...")
+    events_info = seed_events(users, juniors, bands)
+
+    print("Seeding notifications...")
+    n_notifs = seed_notifications(users, juniors)
+
     # Single commit at the very end (whole run is one transaction).
     db.session.commit()
 
@@ -1033,6 +1206,9 @@ def run():
     print(f"  Announcements:        {social_info['announcements']}")
     print(f"  Conversations:        {social_info['conversations']}")
     print(f"  Messages:             {social_info['messages']}")
+    print(f"  Calendar events:      {events_info['events']}")
+    print(f"  Event RSVPs:          {events_info['rsvps']}")
+    print(f"  Notifications:        {n_notifs}")
     print("=" * 56)
     print("Logins (password: password123):")
     print("  admin@kcc.test / coach@kcc.test / committee@kcc.test")
