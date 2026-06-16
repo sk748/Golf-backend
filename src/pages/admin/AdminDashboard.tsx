@@ -212,7 +212,7 @@ export function AdminDashboard() {
       ) : null}
 
       {/* ── D) Recent activity + E) Quick actions & announcements ──────── */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
         <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Recent activity</h2>

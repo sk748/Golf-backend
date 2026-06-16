@@ -221,7 +221,7 @@ export function CoachDashboard() {
         </div>
       </GlassCard>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         {/* ── This week's schedule ──────────────────────────────────────── */}
         <GlassCard className="animate-fade-in-up stagger-1 p-5">
           <div className="flex items-baseline justify-between gap-3">

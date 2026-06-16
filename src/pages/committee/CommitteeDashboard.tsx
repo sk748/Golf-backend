@@ -98,7 +98,7 @@ export function CommitteeDashboard() {
         />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
         {/* ── Counter-sign queue (primary CTA list) ──────────────────────── */}
         <GlassCard className="animate-fade-in-up stagger-1 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
