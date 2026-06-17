@@ -25,6 +25,7 @@ from app.announcements.models import Announcement
 from app.notifications.models import Notification
 from app.handicap.models import HandicapJourney
 from app.events.models import Event, EventRSVP
+from app.league.models import League, LeagueTeam, LeagueFixture, LeaguePairing
 
 __all__ = [
     "User", "UserRole", "MembershipType",
@@ -42,6 +43,7 @@ __all__ = [
     "Notification",
     "HandicapJourney",
     "Event", "EventRSVP",
+    "League", "LeagueTeam", "LeagueFixture", "LeaguePairing",
     "register_all",
 ]
 
