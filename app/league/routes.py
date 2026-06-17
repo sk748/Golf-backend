@@ -39,10 +39,10 @@ from app.league.controllers import (
     get_fixture, list_fixtures, create_fixture, update_fixture, delete_fixture,
     get_pairing, create_pairing, update_pairing, delete_pairing,
     compute_standings, dump_fixture_detail, dump_league_with_teams, dump_pairing,
-    fixture_summary,
+    fixture_summary, sync_fixture_event, sync_fixture_attendance,
 )
 from app.league.models import League, LeagueTeam, LeagueFixture, LeaguePairing
-from app.utils.decorators import require_auth, require_roles
+from app.utils.decorators import require_auth, require_roles, get_current_user
 
 league_bp = Blueprint("league_bp", __name__, url_prefix="/api")
 
@@ -349,10 +349,12 @@ def post_fixture():
         return _err("VALIDATION_ERROR", "home_team_id and away_team_id must differ", 400)
     try:
         fixture = create_fixture(data)
+        sync_fixture_event(fixture, get_current_user().id)
+        sync_fixture_attendance(fixture)
     except Exception as exc:
         db.session.rollback()
         return _err("VALIDATION_ERROR", str(exc), 400)
-    return _data(fixture_schema.dump(fixture), 201)
+    return _data(dump_fixture_detail(fixture, fixture.league), 201)
 
 
 @league_bp.route("/league-fixtures/<int:fixture_id>", methods=["PUT"])
@@ -364,6 +366,8 @@ def put_fixture(fixture_id):
     data = request.get_json() or {}
     try:
         fixture = update_fixture(fixture, data)
+        sync_fixture_event(fixture, get_current_user().id)
+        sync_fixture_attendance(fixture)
     except Exception as exc:
         db.session.rollback()
         return _err("VALIDATION_ERROR", str(exc), 400)
@@ -377,6 +381,15 @@ def del_fixture(fixture_id):
     if err:
         return err
     try:
+        # Remove the mirrored calendar Event first (attendance cascades with the
+        # fixture). The fixture's event_id FK is cleared by deleting the fixture.
+        if fixture.event_id:
+            from app.events.models import Event
+            ev = db.session.get(Event, fixture.event_id)
+            fixture.event_id = None
+            db.session.flush()
+            if ev is not None:
+                db.session.delete(ev)
         delete_fixture(fixture)
     except Exception as exc:
         db.session.rollback()
@@ -395,6 +408,7 @@ def post_pairing():
         return _err("VALIDATION_ERROR", "fixture_id must reference an existing fixture", 400)
     try:
         pairing = create_pairing(data)
+        sync_fixture_attendance(pairing.fixture)
     except Exception as exc:
         db.session.rollback()
         return _err("VALIDATION_ERROR", str(exc), 400)
@@ -410,6 +424,7 @@ def put_pairing(pairing_id):
     data = request.get_json() or {}
     try:
         pairing = update_pairing(pairing, data)
+        sync_fixture_attendance(pairing.fixture)
     except Exception as exc:
         db.session.rollback()
         return _err("VALIDATION_ERROR", str(exc), 400)
@@ -422,8 +437,10 @@ def del_pairing(pairing_id):
     pairing, err = _require_pairing(pairing_id)
     if err:
         return err
+    fixture = pairing.fixture
     try:
         delete_pairing(pairing)
+        sync_fixture_attendance(fixture)
     except Exception as exc:
         db.session.rollback()
         return _err("CONFLICT", str(exc), 409)

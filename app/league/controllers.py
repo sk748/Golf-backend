@@ -332,3 +332,89 @@ def dump_league_with_teams(league):
     out = league_schema.dump(league)
     out["teams"] = [team_schema.dump(t) for t in league.teams]
     return out
+
+
+# ── F2 wiring: calendar Event + coaching attendance ──────────────────────────
+
+def sync_fixture_event(fixture, owner_id):
+    """Create / update / cancel the calendar Event that mirrors a fixture.
+
+    A dated, non-cancelled fixture gets an Event (audience=everyone,
+    rsvp_required) so it shows in /calendar and supporters can RSVP. A fixture
+    with no date or a cancelled status cancels its linked Event. Idempotent.
+    """
+    from app.events.models import Event, EventAudience, EventStatus
+
+    home = fixture.home_team.name if fixture.home_team else "TBD"
+    away = fixture.away_team.name if fixture.away_team else "TBD"
+    title = f"Junior League: {home} vs {away}"
+    status_val = getattr(fixture.status, "value", fixture.status)
+    should_cancel = fixture.date is None or status_val == FixtureStatus.cancelled.value
+
+    existing = db.session.get(Event, fixture.event_id) if fixture.event_id else None
+
+    if should_cancel:
+        if existing is not None:
+            existing.status = EventStatus.cancelled
+            db.session.commit()
+        return
+
+    if existing is not None:
+        existing.title = title
+        existing.date = fixture.date
+        existing.location = fixture.location
+        existing.status = EventStatus.scheduled
+        db.session.commit()
+        return
+
+    event = Event(
+        owner_id=owner_id,
+        title=title,
+        description=f"Inter-club Junior League fixture — come support {home}!",
+        location=fixture.location,
+        date=fixture.date,
+        audience=EventAudience.everyone,
+        rsvp_required=True,
+        mandatory=False,
+        status=EventStatus.scheduled,
+    )
+    db.session.add(event)
+    db.session.flush()
+    fixture.event_id = event.id
+    db.session.commit()
+
+
+def sync_fixture_attendance(fixture):
+    """Keep coaching-attendance in step with a fixture's selected players.
+
+    When a fixture is COMPLETED, every selected home junior (across its pairings)
+    gets a 'present' attendance row sourced from this fixture (counts toward band
+    session minimums, visible to admin/committee/their coach). Otherwise any
+    auto rows for this fixture are removed. Idempotent.
+    """
+    from app.attendance.models import Attendance, AttendanceStatus
+
+    status_val = getattr(fixture.status, "value", fixture.status)
+    selected = set()
+    if status_val == FixtureStatus.completed.value:
+        for p in fixture.pairings:
+            if p.home_junior_id:
+                selected.add(p.home_junior_id)
+            if p.home_partner_junior_id:
+                selected.add(p.home_partner_junior_id)
+
+    existing = {
+        a.junior_id: a
+        for a in Attendance.query.filter_by(league_fixture_id=fixture.id).all()
+    }
+    for jid in selected:
+        if jid not in existing:
+            db.session.add(Attendance(
+                league_fixture_id=fixture.id,
+                junior_id=jid,
+                status=AttendanceStatus.present,
+            ))
+    for jid, row in existing.items():
+        if jid not in selected:
+            db.session.delete(row)
+    db.session.commit()

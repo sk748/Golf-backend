@@ -111,6 +111,9 @@ class LeagueFixture(TimestampMixin, db.Model):
         nullable=False,
         default=FixtureStatus.scheduled,
     )
+    # The calendar Event mirroring this fixture (auto-managed) — lets fixtures
+    # appear in /calendar and supporters RSVP via the events domain.
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=True)
 
     league = relationship("League", back_populates="fixtures")
     home_team = relationship(

@@ -237,20 +237,27 @@ def get_junior_progress(junior_id: int):
 
 
 def get_monthly_report(junior_id: int, month: str):
+    from datetime import datetime
     from app.evaluations.models import Evaluation
     from app.attendance.models import Attendance
-    from app.sessions.models import Session
 
     junior = db.session.get(JuniorProfile, junior_id)
     if junior is None:
         return None, "Junior not found"
 
     evaluation = Evaluation.query.filter_by(junior_id=junior_id, report_month=month).first()
-    attendance_rows = (
-        Attendance.query.join(Session)
-        .filter(Attendance.junior_id == junior_id, Session.date >= month)
-        .all()
-    )
+    # Attendance can be sourced from a coaching Session OR a Junior League fixture
+    # (league rows have session_id NULL). Resolve each row's date from whichever
+    # source it has, and keep those in the report month onward.
+    month_date = datetime.strptime(month, "%Y-%m-%d").date() if isinstance(month, str) else month
+    attendance_rows = []
+    for a in Attendance.query.filter_by(junior_id=junior_id).all():
+        if a.session_id is not None:
+            d = a.session.date if a.session else None
+        else:
+            d = a.league_fixture.date if a.league_fixture else None
+        if d is not None and d >= month_date:
+            attendance_rows.append(a)
     return {
         "profile": junior_schema.dump(junior),
         "evaluation": SimpleModelSchema(Evaluation).dump(evaluation) if evaluation else None,
