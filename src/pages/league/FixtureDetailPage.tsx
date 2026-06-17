@@ -5,12 +5,14 @@
 // result and the margin. Win/halve/loss is conveyed by row tone. All scoring is
 // server-computed; we only display.
 
+import { useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarDays,
   Loader2,
   MapPin,
+  PartyPopper,
   Swords,
 } from 'lucide-react';
 
@@ -18,16 +20,62 @@ import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { fireGreenConfetti } from '../../features/achievements/confetti';
 import {
   fixtureDate,
   fixtureStatusLabel,
   fixtureStatusTone,
   pairingFormatLabel,
+  useStandings,
   type Fixture,
   type FixtureResult,
   type Pairing,
   useFixture,
 } from './league.queries';
+
+// A completed fixture is a "Karen win" when the home-club side won it. Which
+// side is the home club isn't on the fixture, so we resolve it from the
+// standings (which carry is_home_club + the team name) and match by name.
+function useKarenWin(fixture: Fixture | undefined): boolean {
+  const standings = useStandings(fixture?.league_id).data;
+  if (!fixture || fixture.status !== 'completed') return false;
+  const homeClubName = standings?.find((s) => s.is_home_club)?.team_name;
+  if (!homeClubName) return false;
+  const { summary } = fixture;
+  if (summary.result === 'home_win' && summary.home_team_name === homeClubName)
+    return true;
+  if (summary.result === 'away_win' && summary.away_team_name === homeClubName)
+    return true;
+  return false;
+}
+
+// Celebratory banner + one-shot green confetti for a Karen win (fired on mount,
+// once, honouring prefers-reduced-motion inside the helper).
+function KarenWinBanner() {
+  const fired = useRef(false);
+  useEffect(() => {
+    if (fired.current) return;
+    fired.current = true;
+    fireGreenConfetti();
+  }, []);
+
+  return (
+    <GlassCard
+      className="mt-4 flex items-center gap-3 border border-emerald-500/30 bg-emerald-500/10 p-4"
+      data-testid="fixture-karen-win"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+        <PartyPopper className="h-5 w-5" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-black text-emerald-300">Karen win!</p>
+        <p className="text-xs text-emerald-200/80">
+          A great result for the club in the Junior League.
+        </p>
+      </div>
+    </GlassCard>
+  );
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -205,6 +253,7 @@ export function FixtureDetailPage() {
 
   const query = useFixture(validId ? fixtureId : undefined);
   const fixture = query.data;
+  const karenWin = useKarenWin(fixture);
 
   const notFound =
     !validId ||
@@ -251,6 +300,7 @@ export function FixtureDetailPage() {
         </div>
       ) : fixture ? (
         <>
+          {karenWin ? <KarenWinBanner /> : null}
           <FixtureHeader fixture={fixture} />
 
           <GlassCard

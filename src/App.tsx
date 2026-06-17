@@ -45,6 +45,7 @@ import { SeriesListPage } from './pages/tournaments/SeriesListPage';
 import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
 import { LeagueOverviewPage } from './pages/league/LeagueOverviewPage';
 import { FixtureDetailPage } from './pages/league/FixtureDetailPage';
+import { LeagueManagePage } from './pages/league/LeagueManagePage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 
 // Access-tier guards. Each wraps an <Outlet/> so a group of routes declares its
@@ -179,6 +180,7 @@ export function App() {
         {/* admin + coach + committee — junior browser/profiles, weekly schedule,
             and verifying the rounds queue. */}
         <Route element={<StaffOnly />}>
+          <Route path="/league/manage" element={<LeagueManagePage />} />
           <Route path="/juniors" element={<JuniorsBrowserPage />} />
           <Route path="/juniors/:id" element={<JuniorProfilePage />} />
           <Route path="/schedule" element={<CoachSchedulePage />} />

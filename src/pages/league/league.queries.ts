@@ -10,7 +10,13 @@
 // landing-page scoreboard hero. GET /api/league/scoreboard is the same shape but
 // auth-scoped, for the in-app dashboards.
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import { api } from '../../lib/api';
 
@@ -259,4 +265,270 @@ export function pairingFormatLabel(format: PairingFormat): string {
     default:
       return String(format);
   }
+}
+
+// ── Additional read: every league (the manage-page selector) ───────────────────
+
+// GET /api/leagues — all leagues (no `current` filter). Staff manage page lists
+// these to pick which league to edit.
+export function useLeagues(): UseQueryResult<League[]> {
+  return useQuery({
+    queryKey: ['league', 'all'],
+    queryFn: () => api.get<League[]>('/api/leagues'),
+    staleTime: 60 * 1000,
+  });
+}
+
+// ── Mutation input types (the backend write contract for this module) ──────────
+
+export interface CreateLeagueInput {
+  name: string;
+  year?: number | null;
+  status?: LeagueStatus;
+  is_current?: boolean;
+  points_win?: number;
+  points_halve?: number;
+  points_loss?: number;
+  description?: string | null;
+}
+
+export type UpdateLeagueInput = Partial<CreateLeagueInput>;
+
+export interface CreateTeamInput {
+  league_id: number;
+  name: string;
+  short_name?: string | null;
+  is_home_club?: boolean;
+}
+
+export type UpdateTeamInput = Partial<Omit<CreateTeamInput, 'league_id'>>;
+
+export interface CreateFixtureInput {
+  league_id: number;
+  home_team_id: number;
+  away_team_id: number;
+  round_number?: number | null;
+  date?: string | null; // ISO YYYY-MM-DD
+  location?: string | null;
+  status?: FixtureStatus;
+}
+
+export type UpdateFixtureInput = Partial<Omit<CreateFixtureInput, 'league_id'>>;
+
+export interface CreatePairingInput {
+  fixture_id: number;
+  pairing_order?: number | null;
+  format?: PairingFormat;
+  home_junior_id?: number | null;
+  home_partner_junior_id?: number | null;
+  home_label?: string | null;
+  away_label?: string | null;
+  away_partner_label?: string | null;
+  result?: FixtureResult;
+  margin?: string | null;
+}
+
+export type UpdatePairingInput = Partial<Omit<CreatePairingInput, 'fixture_id'>>;
+
+// ── Mutations (admin/coach/committee; backend enforces) ────────────────────────
+// All scoring/standings are recomputed server-side; every write invalidates the
+// scoreboard feeds and the current-league key so dashboards refresh, plus any
+// league-scoped keys the change affects.
+
+// Invalidate the league-wide feeds + a specific league's nested keys.
+function useLeagueInvalidation() {
+  const qc = useQueryClient();
+  return (leagueId?: number) => {
+    void qc.invalidateQueries({ queryKey: ['league', 'scoreboard'] });
+    void qc.invalidateQueries({ queryKey: ['league', 'scoreboard', 'public'] });
+    void qc.invalidateQueries({ queryKey: ['league', 'current'] });
+    void qc.invalidateQueries({ queryKey: ['league', 'all'] });
+    if (leagueId != null) {
+      void qc.invalidateQueries({ queryKey: ['league', leagueId] });
+      void qc.invalidateQueries({ queryKey: ['league', leagueId, 'standings'] });
+      void qc.invalidateQueries({ queryKey: ['league', leagueId, 'fixtures'] });
+    }
+  };
+}
+
+// Invalidate a single fixture's detail (its pairings) in addition to the league
+// feeds — used by fixture + pairing writes, which re-derive that fixture.
+function useFixtureInvalidation() {
+  const invalidateLeague = useLeagueInvalidation();
+  const qc = useQueryClient();
+  return (fixtureId?: number, leagueId?: number) => {
+    invalidateLeague(leagueId);
+    if (fixtureId != null) {
+      void qc.invalidateQueries({ queryKey: ['league', 'fixture', fixtureId] });
+    }
+  };
+}
+
+// ── Leagues ────────────────────────────────────────────────────────────────────
+
+export function useCreateLeague(): UseMutationResult<
+  League,
+  Error,
+  CreateLeagueInput
+> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: (input: CreateLeagueInput) =>
+      api.post<League>('/api/leagues', input),
+    onSuccess: (league) => invalidate(league.id),
+  });
+}
+
+export function useUpdateLeague(): UseMutationResult<
+  League,
+  Error,
+  { id: number; body: UpdateLeagueInput }
+> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: ({ id, body }) => api.put<League>(`/api/leagues/${id}`, body),
+    onSuccess: (league) => invalidate(league.id),
+  });
+}
+
+export function useDeleteLeague(): UseMutationResult<unknown, Error, number> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: (id: number) => api.del<unknown>(`/api/leagues/${id}`),
+    onSuccess: (_data, id) => invalidate(id),
+  });
+}
+
+export function useSetCurrentLeague(): UseMutationResult<League, Error, number> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.put<League>(`/api/leagues/${id}/set-current`),
+    onSuccess: (league) => invalidate(league.id),
+  });
+}
+
+// ── Teams ────────────────────────────────────────────────────────────────────
+
+export function useCreateTeam(): UseMutationResult<
+  Team,
+  Error,
+  CreateTeamInput
+> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: (input: CreateTeamInput) =>
+      api.post<Team>('/api/league-teams', input),
+    onSuccess: (team) => invalidate(team.league_id),
+  });
+}
+
+export function useUpdateTeam(): UseMutationResult<
+  Team,
+  Error,
+  { id: number; body: UpdateTeamInput }
+> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: ({ id, body }) => api.put<Team>(`/api/league-teams/${id}`, body),
+    onSuccess: (team) => invalidate(team.league_id),
+  });
+}
+
+export function useDeleteTeam(): UseMutationResult<
+  unknown,
+  Error,
+  { id: number; leagueId: number }
+> {
+  const invalidate = useLeagueInvalidation();
+  return useMutation({
+    mutationFn: ({ id }) => api.del<unknown>(`/api/league-teams/${id}`),
+    onSuccess: (_data, { leagueId }) => invalidate(leagueId),
+  });
+}
+
+// ── Fixtures ───────────────────────────────────────────────────────────────────
+
+export function useCreateFixture(): UseMutationResult<
+  Fixture,
+  Error,
+  CreateFixtureInput
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: (input: CreateFixtureInput) =>
+      api.post<Fixture>('/api/league-fixtures', input),
+    onSuccess: (fixture) => invalidate(fixture.id, fixture.league_id),
+  });
+}
+
+export function useUpdateFixture(): UseMutationResult<
+  Fixture,
+  Error,
+  { id: number; body: UpdateFixtureInput }
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      api.put<Fixture>(`/api/league-fixtures/${id}`, body),
+    onSuccess: (fixture) => invalidate(fixture.id, fixture.league_id),
+  });
+}
+
+export function useDeleteFixture(): UseMutationResult<
+  unknown,
+  Error,
+  { id: number; leagueId: number }
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: ({ id }) => api.del<unknown>(`/api/league-fixtures/${id}`),
+    onSuccess: (_data, { id, leagueId }) => invalidate(id, leagueId),
+  });
+}
+
+// ── Pairings ───────────────────────────────────────────────────────────────────
+// Saving a pairing result re-computes the fixture aggregate AND the standings
+// server-side, so these invalidate the fixture detail + the league feeds. The
+// caller passes the owning leagueId so the standings/fixtures lists refresh.
+
+export function useCreatePairing(): UseMutationResult<
+  Pairing,
+  Error,
+  { input: CreatePairingInput; leagueId?: number }
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: ({ input }) =>
+      api.post<Pairing>('/api/league-pairings', input),
+    onSuccess: (pairing, { leagueId }) =>
+      invalidate(pairing.fixture_id, leagueId),
+  });
+}
+
+export function useUpdatePairing(): UseMutationResult<
+  Pairing,
+  Error,
+  { id: number; body: UpdatePairingInput; leagueId?: number }
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: ({ id, body }) =>
+      api.put<Pairing>(`/api/league-pairings/${id}`, body),
+    onSuccess: (pairing, { leagueId }) =>
+      invalidate(pairing.fixture_id, leagueId),
+  });
+}
+
+export function useDeletePairing(): UseMutationResult<
+  unknown,
+  Error,
+  { id: number; fixtureId: number; leagueId?: number }
+> {
+  const invalidate = useFixtureInvalidation();
+  return useMutation({
+    mutationFn: ({ id }) => api.del<unknown>(`/api/league-pairings/${id}`),
+    onSuccess: (_data, { fixtureId, leagueId }) =>
+      invalidate(fixtureId, leagueId),
+  });
 }

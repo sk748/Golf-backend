@@ -22,6 +22,7 @@ import {
   Target,
   TrendingDown,
   Trophy,
+  Users,
   Zap,
 } from 'lucide-react';
 
@@ -40,7 +41,8 @@ export type AchievementCategory =
   | 'rounds'
   | 'scoring'
   | 'handicap'
-  | 'competition';
+  | 'competition'
+  | 'league';
 
 // Real player stats, computed from backend data (see use-achievements.ts).
 export interface PlayerStats {
@@ -79,6 +81,7 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   scoring: 'Scoring',
   handicap: 'Handicap',
   competition: 'Competition',
+  league: 'Junior League',
 };
 
 export const ACHIEVEMENTS: AchievementDef[] = [
@@ -134,6 +137,15 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'cmp-5', title: 'Seasoned Competitor', description: 'Play 5 competitions.', category: 'competition', tier: 'gold', icon: Trophy, unlocked: (s) => s.competitionsPlayed >= 5, progress: (s) => pct(s.competitionsPlayed, 5) },
   { id: 'cmp-10', title: 'Road Warrior', description: 'Play 10 competitions.', category: 'competition', tier: 'platinum', icon: Medal, unlocked: (s) => s.competitionsPlayed >= 10, progress: (s) => pct(s.competitionsPlayed, 10) },
   { id: 'cmp-20', title: 'Circuit Star', description: 'Play 20 competitions.', category: 'competition', tier: 'platinum', icon: Crown, unlocked: (s) => s.competitionsPlayed >= 20, progress: (s) => pct(s.competitionsPlayed, 20) },
+
+  // ── Junior League (inter-club team play) — green-toned team awards ─────────
+  // Awarded from the backend's AchievementUnlock/sync against league results;
+  // auto-unlock DETECTION from PlayerStats is out of scope for this pass, so the
+  // unlocked() predicate stays false (they surface via a featured/synced award
+  // and resolve their title/icon through achievementById).
+  { id: 'league_participant', title: 'League Debut', description: 'Represented the club in the Junior League.', category: 'league', tier: 'silver', icon: Users, unlocked: () => false },
+  { id: 'league_runner_up', title: 'League Runners-Up', description: 'Junior League runners-up.', category: 'league', tier: 'gold', icon: Medal, unlocked: () => false },
+  { id: 'league_champion', title: 'League Champions', description: 'Junior League champions.', category: 'league', tier: 'platinum', icon: Trophy, unlocked: () => false },
 ];
 
 // Lookup by catalog id (the `achievement_key` the backend stores for a featured

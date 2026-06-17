@@ -61,6 +61,9 @@ const externalResults: NavItem = { to: '/tournaments/external', label: 'External
 const series: NavItem = { to: '/series', label: 'Series', icon: ListOrdered };
 // Junior League — shared read-only overview (standings + fixtures); every role.
 const league: NavItem = { to: '/league', label: 'Junior League', icon: Trophy };
+// Junior League management — staff (admin/coach/committee) run the league
+// (leagues, teams, fixtures, pairings + results). Route-gated to staff.
+const leagueManage: NavItem = { to: '/league/manage', label: 'Manage league', icon: Settings };
 
 // Rounds — players log their own (pending until verified); staff log for any
 // junior and clear the verification queue.
@@ -120,7 +123,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, league, series, logRound, verifyRounds, externalResults],
+      items: [tournaments, league, leagueManage, series, logRound, verifyRounds, externalResults],
     },
     communicationGroup,
     {
@@ -155,7 +158,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, league, series, logRound, verifyRounds, externalResults],
+      items: [tournaments, league, leagueManage, series, logRound, verifyRounds, externalResults],
     },
     communicationGroup,
   ],
@@ -181,7 +184,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, league, series, verifyRounds],
+      items: [tournaments, league, leagueManage, series, verifyRounds],
     },
     communicationGroup,
   ],

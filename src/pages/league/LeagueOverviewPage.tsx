@@ -3,19 +3,25 @@
 // highlighted), and the schedule grouped by round (each fixture links to its
 // detail). All scoring is computed server-side; we only display it.
 
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CalendarRange,
   ChevronRight,
   Loader2,
+  PartyPopper,
+  Settings,
   Star,
   Trophy,
 } from 'lucide-react';
 
+import { useAuth } from '../../auth/useAuth';
 import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { fireGreenConfetti } from '../../features/achievements/confetti';
 import {
   fixtureDate,
   fixtureStatusLabel,
@@ -24,6 +30,7 @@ import {
   useFixtures,
   useStandings,
   type Fixture,
+  type League,
   type Standing,
 } from './league.queries';
 
@@ -276,11 +283,69 @@ function ScheduleSection({ leagueId }: { leagueId: number }) {
   );
 }
 
+// ── Champions celebration ───────────────────────────────────────────────────────
+// When a league has finished (status 'completed') and Karen (the home-club team)
+// tops the standings, fire a green confetti burst once on mount and show a
+// "Champions" banner.
+function ChampionsCelebration({ leagueId }: { leagueId: number }) {
+  const standings = useStandings(leagueId).data;
+  const fired = useRef(false);
+  // Standings are returned in finishing order; rank 1 is the leader.
+  const champion = standings?.[0];
+  const isKarenChampion = Boolean(champion?.is_home_club);
+
+  useEffect(() => {
+    if (!isKarenChampion || fired.current) return;
+    fired.current = true;
+    fireGreenConfetti();
+  }, [isKarenChampion]);
+
+  if (!isKarenChampion || !champion) return null;
+
+  return (
+    <GlassCard
+      className="mt-6 flex items-center gap-3 border border-emerald-500/30 bg-emerald-500/10 p-5"
+      data-testid="league-champions"
+    >
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400">
+        <PartyPopper className="h-6 w-6" aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <p className="text-base font-black text-emerald-300">
+          {champion.team_name} — Junior League Champions
+        </p>
+        <p className="text-sm text-emerald-200/80">
+          Top of the table when the season closed. Congratulations to the team.
+        </p>
+      </div>
+    </GlassCard>
+  );
+}
+
+// Staff-only entry point to the league management page.
+function ManageLeagueButton() {
+  const { user } = useAuth();
+  const isStaff =
+    user?.role === 'admin' ||
+    user?.role === 'coach' ||
+    user?.role === 'committee';
+  if (!isStaff) return null;
+  return (
+    <Link to="/league/manage" data-testid="league-manage-link">
+      <Button variant="ghost" size="sm">
+        <Settings className="h-4 w-4" aria-hidden />
+        Manage league
+      </Button>
+    </Link>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function LeagueOverviewPage() {
   const query = useCurrentLeague();
-  const league = query.data?.[0] ?? null;
+  const league: League | null = query.data?.[0] ?? null;
+  const showChampions = league?.status === 'completed';
 
   return (
     <div className="mx-auto max-w-4xl animate-fade-in-up">
@@ -289,7 +354,7 @@ export function LeagueOverviewPage() {
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gold/20 text-gold">
           <Trophy className="h-5 w-5" aria-hidden />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">
             Junior League
           </p>
@@ -302,6 +367,7 @@ export function LeagueOverviewPage() {
             ) : null}
           </h1>
         </div>
+        <ManageLeagueButton />
       </div>
 
       {query.isLoading ? (
@@ -333,6 +399,10 @@ export function LeagueOverviewPage() {
         </GlassCard>
       ) : (
         <>
+          {showChampions ? (
+            <ChampionsCelebration leagueId={league.id} />
+          ) : null}
+
           {league.description ? (
             <p className="mt-4 max-w-2xl text-sm text-silver/80">
               {league.description}
