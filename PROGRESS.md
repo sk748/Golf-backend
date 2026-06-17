@@ -472,11 +472,27 @@ Stakeholder-feedback build. Plan: `~/.claude/plans/eager-mixing-dream.md`.
   `/api/messaging/contacts` player branch now surfaces other players (+ own coach + admins).
   Moderation (banned-word/flag/admin) unchanged. Frontend needed no change (NewChatDialog
   renders whatever contacts returns). Verified (contacts list players, DM create 201).
+- **Phase F — ✅ SHIPPED (Junior League, inter-club).** New flexible domain (`app/league/`),
+  not hardcoded to clubs/year/points. Scoring: per-pairing win/halve/loss (configurable,
+  default 1/0.5/0) → club fixture points → P/W/D/L/Pts/Avg standings.
+  - **F1 backend** (migration `q18league`): League/Team/Fixture/Pairing + CRUD + standings +
+    `/league/scoreboard`. Writes admin/coach/committee; reads all roles.
+  - **F2 wiring** (migration `q19leaguewiring`): dated fixtures auto-create a calendar Event
+    (supporters RSVP; admin/committee see RSVP lists via existing events endpoints); selected
+    players in a completed fixture record coaching attendance (`attendance.league_fixture_id`,
+    session_id nullable, XOR check); monthly report counts both sources.
+  - **F3 frontend**: compact dashboard strip (position + next fixture; score-focused LIVE card —
+    NOT the full table, per Sam) under the announcement banner; rich split hero on the public
+    landing; `/league` overview (full table + schedule); `/league/fixtures/:id` per-pairing
+    detail; `/league/manage` staff UI (league/team/fixture/pairing CRUD + junior team-selection +
+    results). Public `/api/public/league/scoreboard` for the logged-out landing.
+  - **F4**: green confetti + "Karen win"/"Champions" celebrations; catalog keys
+    league_participant/runner_up/champion (auto-unlock detection deferred).
+  - `scripts/seed_demo_league.py` — DEMO-ONLY seed (8 clubs, Karen leading, a live fixture).
+  - Verified live: scoring/standings exact, role-gating, fixture→event+RSVP, completed→attendance,
+    public scoreboard. Real 2025/26 data is demo-seed only, never shipped.
 - **C2** email reset (BLOCKED: SMTP creds; `openpyxl`/`Flask-Mail` approved) ·
-  **E** coach tracker + .xlsx (`openpyxl` approved) ·
-  **F** Junior League inter-club domain — scoring locked (per-pairing win/halve/loss
-  1/0.5/0 → club points → P/W/D/L/Pts/Avg standings); keep teams/schedule/points-rule
-  flexible; real 2025/26 data is DEMO-SEED ONLY, not live. (Schedule/matchups: Sam to provide.)
+  **E** coach tracker + .xlsx (`openpyxl` approved).
 - **Audit follow-ups (api-contract-auditor, A–D, both PASS-level minor):**
   (1) MED — `JuniorProfilePage` uses `useAllJuniors()` for coaches instead of
   `useCoachJuniors` (convention nit; backend force-scopes so no leak — pre-existing).
