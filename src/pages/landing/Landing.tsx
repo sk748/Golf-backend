@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 
 import { HeroSlideshow } from '../../components/HeroSlideshow';
 import { Button } from '../../components/ui/Button';
+import { ScoreboardHero } from '../league/ScoreboardHero';
 import { ClubNews } from './ClubNews';
 
 // The four-band junior pathway (CLAUDE.md domain). Static marketing content for
@@ -86,6 +87,17 @@ export function Landing() {
           </div>
         </main>
       </HeroSlideshow>
+
+      {/* Junior League scoreboard — public feed; self-hides when no current
+          league. Full-width navy band (matches the sections around it); the
+          inner column directly wraps the hero, so when the hero renders null it
+          has no children and `empty:hidden` collapses the column and its top
+          padding — leaving only the zero-height navy band, no dead gap. */}
+      <div className="bg-navy px-6">
+        <div className="mx-auto max-w-6xl pt-16 empty:hidden sm:pt-20">
+          <ScoreboardHero source="public" />
+        </div>
+      </div>
 
       {/* The pathway band */}
       <section className="bg-navy px-6 py-16 sm:py-20" aria-labelledby="pathway-heading">

@@ -43,6 +43,8 @@ import { JuniorsBrowserPage } from './pages/juniors/JuniorsBrowserPage';
 import { JuniorProfilePage } from './pages/juniors/JuniorProfilePage';
 import { SeriesListPage } from './pages/tournaments/SeriesListPage';
 import { SeriesDetailPage } from './pages/tournaments/SeriesDetailPage';
+import { LeagueOverviewPage } from './pages/league/LeagueOverviewPage';
+import { FixtureDetailPage } from './pages/league/FixtureDetailPage';
 import { ProfilePage } from './pages/profile/ProfilePage';
 
 // Access-tier guards. Each wraps an <Outlet/> so a group of routes declares its
@@ -141,6 +143,10 @@ export function App() {
             create/edit/delete is gated to admin inside the pages. */}
         <Route path="/series" element={<SeriesListPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
+        {/* Junior League — shared read-only overview + fixture detail for every
+            signed-in role; all scoring is server-computed. */}
+        <Route path="/league" element={<LeagueOverviewPage />} />
+        <Route path="/league/fixtures/:id" element={<FixtureDetailPage />} />
         {/* Social phase — every role chats (matrix enforced server-side) and
             reads the club announcement feed. */}
         <Route path="/messages" element={<MessagesPage />} />

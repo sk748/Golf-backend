@@ -377,9 +377,18 @@ def build_scoreboard():
         most_recent = sorted(completed, key=lambda f: (f.date or _date.min, f.id), reverse=True)[0]
         recent_fixture = dump_fixture_detail(most_recent, league)
 
+    # The home club's own standing + rank (1-based), regardless of top-5 — this
+    # is the "current position" the compact dashboard strip shows.
+    home_standing = None
+    for i, row in enumerate(standings):
+        if row.get("is_home_club"):
+            home_standing = {**row, "rank": i + 1}
+            break
+
     return {
         "league": dump_league_with_teams(league),
         "standings": standings[:5],
+        "home_standing": home_standing,
         "next_fixture": next_fixture,
         "recent_fixture": recent_fixture,
     }

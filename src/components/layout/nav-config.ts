@@ -59,6 +59,8 @@ const tournaments: NavItem = { to: '/tournaments', label: 'Tournaments', icon: M
 const externalResults: NavItem = { to: '/tournaments/external', label: 'External results', icon: Globe };
 // Series / order-of-merit — all roles reach standings; admin manages.
 const series: NavItem = { to: '/series', label: 'Series', icon: ListOrdered };
+// Junior League — shared read-only overview (standings + fixtures); every role.
+const league: NavItem = { to: '/league', label: 'Junior League', icon: Trophy };
 
 // Rounds — players log their own (pending until verified); staff log for any
 // junior and clear the verification queue.
@@ -118,7 +120,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, series, logRound, verifyRounds, externalResults],
+      items: [tournaments, league, series, logRound, verifyRounds, externalResults],
     },
     communicationGroup,
     {
@@ -153,7 +155,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, series, logRound, verifyRounds, externalResults],
+      items: [tournaments, league, series, logRound, verifyRounds, externalResults],
     },
     communicationGroup,
   ],
@@ -179,7 +181,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       heading: 'Competitions',
       icon: Medal,
       mobileTabRank: 2,
-      items: [tournaments, series, verifyRounds],
+      items: [tournaments, league, series, verifyRounds],
     },
     communicationGroup,
   ],
@@ -195,7 +197,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       ],
     },
     { heading: 'Programme', icon: CalendarDays, mobileTabRank: 3, items: [timetable] },
-    { heading: 'Competitions', icon: Medal, mobileTabRank: 2, items: [tournaments, series] },
+    { heading: 'Competitions', icon: Medal, mobileTabRank: 2, items: [tournaments, league, series] },
     communicationGroup,
   ],
   player: [
@@ -216,7 +218,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       mobileTabRank: 2,
       items: [bookSession, timetable],
     },
-    { heading: 'Competitions', icon: Medal, mobileTabRank: 3, items: [tournaments, series] },
+    { heading: 'Competitions', icon: Medal, mobileTabRank: 3, items: [tournaments, league, series] },
     communicationGroup,
   ],
 };

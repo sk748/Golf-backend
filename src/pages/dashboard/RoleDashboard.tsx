@@ -1,5 +1,6 @@
 import { useAuth } from '../../auth/useAuth';
 import { DashboardAnnouncementBanner } from '../announcements/DashboardAnnouncementBanner';
+import { DashboardLeagueStrip } from '../league/DashboardLeagueStrip';
 import { AdminDashboard } from '../admin/AdminDashboard';
 import { PlayerDashboard } from '../player/PlayerDashboard';
 import { CoachDashboard } from '../coach/CoachDashboard';
@@ -29,6 +30,11 @@ export function RoleDashboard() {
   return (
     <>
       <DashboardAnnouncementBanner />
+      {/* Compact Junior League widget — announcement-bar weight, sits right
+          under it. Shows Karen's position + next fixture, or a score-focused
+          card when a match is live. Full table lives on /league. Self-hides
+          when there's no current league (owns its own bottom margin). */}
+      <DashboardLeagueStrip />
       <RoleDashboardBody />
     </>
   );
