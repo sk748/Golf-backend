@@ -169,6 +169,25 @@ function resultLabel(r: FixtureResult): string {
   }
 }
 
+// Team-named result label: replaces generic "Home win / Away win" with the
+// actual club names for a specific fixture. E.g. "Karen won", "Sigona won".
+function teamResultLabel(
+  r: FixtureResult,
+  homeName: string,
+  awayName: string,
+): string {
+  switch (r) {
+    case 'home_win':
+      return `${homeName} won`;
+    case 'away_win':
+      return `${awayName} won`;
+    case 'halved':
+      return 'Halved';
+    default:
+      return 'Pending';
+  }
+}
+
 function leagueStatusLabel(s: LeagueStatus): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -1261,15 +1280,30 @@ function PairingManageRow({
   leagueId,
   juniors,
   juniorsLoading,
+  homeTeamName,
+  awayTeamName,
 }: {
   pairing: Pairing;
   leagueId: number;
   juniors: AssignableJunior[];
   juniorsLoading: boolean;
+  homeTeamName: string;
+  awayTeamName: string;
 }) {
   const del = useDeletePairing();
+  const update = useUpdatePairing();
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
+
+  // Inline result entry state — initialised from the saved pairing.
+  const [resultDraft, setResultDraft] = useState<FixtureResult>(pairing.result);
+  const [marginDraft, setMarginDraft] = useState(pairing.margin ?? '');
+
+  // Keep draft in sync if the pairing is refreshed from the server.
+  useEffect(() => {
+    setResultDraft(pairing.result);
+    setMarginDraft(pairing.margin ?? '');
+  }, [pairing.result, pairing.margin]);
 
   if (editing) {
     return (
@@ -1294,25 +1328,41 @@ function PairingManageRow({
     ? `${away} & ${pairing.away_partner_label}`
     : away;
 
+  const isDirty =
+    resultDraft !== pairing.result ||
+    marginDraft !== (pairing.margin ?? '');
+
+  function handleSaveResult() {
+    update.mutate(
+      {
+        id: pairing.id,
+        body: {
+          result: resultDraft,
+          margin: marginDraft.trim() || null,
+        },
+        leagueId,
+      },
+    );
+  }
+
   return (
     <div
       className="border-t border-white/5 px-5 py-3"
       data-testid={`pairing-row-${pairing.id}`}
     >
+      {/* Identity row: order, format label, edit / delete controls */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-bold uppercase tracking-widest text-slate">
           {pairing.pairing_order != null ? `#${pairing.pairing_order} · ` : ''}
           {pairingFormatLabel(pairing.format)}
         </span>
         <div className="flex items-center gap-1">
-          <Badge tone={pairing.result === 'pending' ? 'slate' : 'azure'} shape="pill">
-            {resultLabel(pairing.result)}
-          </Badge>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setEditing(true)}
             data-testid={`pairing-edit-${pairing.id}`}
+            aria-label="Edit pairing setup"
           >
             <Pencil className="h-4 w-4" aria-hidden />
           </Button>
@@ -1326,6 +1376,8 @@ function PairingManageRow({
           </Button>
         </div>
       </div>
+
+      {/* Player names */}
       <div className="mt-2 flex items-center gap-3">
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-silver">
           {homeFull}
@@ -1335,9 +1387,48 @@ function PairingManageRow({
           {awayFull}
         </p>
       </div>
-      {pairing.margin ? (
-        <p className="mt-1 text-xs text-slate">Margin: {pairing.margin}</p>
+
+      {/* ── Inline result entry ─────────────────────────────────────────────── */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Match result"
+          className={cn(
+            inputClass,
+            'flex-1 py-2 text-xs',
+          )}
+          value={resultDraft}
+          onChange={(e) => setResultDraft(e.target.value as FixtureResult)}
+          data-testid={`pairing-winner-${pairing.id}`}
+        >
+          {PAIRING_RESULTS.map((r) => (
+            <option key={r} value={r} className="bg-navy">
+              {teamResultLabel(r, homeTeamName, awayTeamName)}
+            </option>
+          ))}
+        </select>
+        <input
+          aria-label="Match margin"
+          className={cn(inputClass, 'w-28 flex-none py-2 text-xs')}
+          value={marginDraft}
+          onChange={(e) => setMarginDraft(e.target.value)}
+          placeholder="3&2, 2 up…"
+          disabled={resultDraft === 'pending' || resultDraft === 'halved'}
+          data-testid={`pairing-margin-${pairing.id}`}
+        />
+        <Button
+          size="sm"
+          variant={isDirty ? 'primary' : 'ghost'}
+          disabled={!isDirty || update.isPending}
+          onClick={handleSaveResult}
+          data-testid={`pairing-save-${pairing.id}`}
+        >
+          {update.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
+      {update.error ? (
+        <p className="mt-1 text-xs text-red-400">{String(update.error)}</p>
       ) : null}
+
       <ConfirmDialog
         open={confirm}
         destructive
@@ -1360,9 +1451,11 @@ function PairingManageRow({
 function PairingsPanel({
   fixtureId,
   leagueId,
+  teams,
 }: {
   fixtureId: number;
   leagueId: number;
+  teams: Team[];
 }) {
   const query = useFixture(fixtureId);
   const fixture = query.data;
@@ -1375,6 +1468,12 @@ function PairingsPanel({
   const coachJuniors = useCoachJuniors(isCoach ? user?.id : undefined);
   const juniorsQuery = isCoach ? coachJuniors : allJuniors;
   const juniors = juniorsQuery.data ?? [];
+
+  // Resolve team names for the team-named winner picker.
+  const homeTeam = teams.find((t) => t.id === fixture?.home_team_id);
+  const awayTeam = teams.find((t) => t.id === fixture?.away_team_id);
+  const homeTeamName = homeTeam?.short_name ?? homeTeam?.name ?? 'Home';
+  const awayTeamName = awayTeam?.short_name ?? awayTeam?.name ?? 'Away';
 
   return (
     <GlassCard className="overflow-hidden" data-testid="pairings-panel">
@@ -1430,6 +1529,8 @@ function PairingsPanel({
               leagueId={leagueId}
               juniors={juniors}
               juniorsLoading={juniorsQuery.isLoading}
+              homeTeamName={homeTeamName}
+              awayTeamName={awayTeamName}
             />
           ))}
         </div>
@@ -1589,6 +1690,7 @@ export function LeagueManagePage() {
                 <PairingsPanel
                   fixtureId={selectedFixtureId}
                   leagueId={league.id}
+                  teams={teams}
                 />
               ) : (
                 <GlassCard

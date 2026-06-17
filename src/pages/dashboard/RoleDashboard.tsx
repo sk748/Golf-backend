@@ -30,10 +30,10 @@ export function RoleDashboard() {
   return (
     <>
       <DashboardAnnouncementBanner />
-      {/* Compact Junior League widget — announcement-bar weight, sits right
-          under it. Shows Karen's position + next fixture, or a score-focused
-          card when a match is live. Full table lives on /league. Self-hides
-          when there's no current league (owns its own bottom margin). */}
+      {/* Compact Junior League bar — a single width-filling strip
+          (announcement-bar weight): Karen's position + next fixture, or a live
+          score when a match is in progress. Full table lives on /league.
+          Self-hides when there's no current league. */}
       <DashboardLeagueStrip />
       <RoleDashboardBody />
     </>

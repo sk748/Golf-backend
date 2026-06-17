@@ -1,13 +1,12 @@
 // Compact Junior League widget for the DASHBOARD (not the rich landing hero).
 //
-//  • Default (no live match): a subdued strip, sized like the announcement
-//    banner — Karen's current position + the next fixture, linking to /league.
-//    The full standings table lives on the /league page, not here.
-//  • Live (a fixture is in_progress): a more prominent card focused on the
-//    SCORE — head-to-head aggregate + pairing dots — linking to the match.
+// A single horizontal bar (announcement-bar weight) that fills the width on
+// desktop and wraps on mobile:
+//   [🏆 Junior League] · [Karen position] · [live score OR next fixture] · [CTA]
 //
-// Self-hides when there is no current league. Owns its bottom margin so a
-// hidden widget leaves no gap.
+// When a fixture is in_progress the middle shows the live SCORE (the dashboard
+// never shows the full standings table — that lives on /league). Self-hides
+// when there is no current league; owns its bottom margin.
 
 import { Link } from 'react-router-dom';
 import { ArrowRight, Trophy } from 'lucide-react';
@@ -27,135 +26,128 @@ const DOT_CLASS: Record<string, string> = {
   halved: 'bg-gold',
 };
 
-// First word of a club name — keeps the live card compact (e.g. "Royal").
+// First word of a club name — keeps the bar compact (e.g. "Royal").
 function shortTeam(name: string | null): string {
   if (!name) return 'TBD';
   return name.split(' ')[0];
 }
 
-// ── Live card: focus on the score ─────────────────────────────────────────────
+function Divider() {
+  return <span className="hidden h-6 w-px bg-white/10 sm:block" aria-hidden />;
+}
 
-function LiveCard({ fixture, karenName }: { fixture: Fixture; karenName: string | null }) {
+function LiveScore({ fixture, karenName }: { fixture: Fixture; karenName: string | null }) {
   const { summary } = fixture;
   const homeIsKaren = karenName != null && summary.home_team_name === karenName;
   const awayIsKaren = karenName != null && summary.away_team_name === karenName;
-
   return (
-    <Link
-      to={`/league/fixtures/${fixture.id}`}
-      data-testid="dashboard-league-live"
-      className="mb-4 block animate-fade-in rounded-2xl border border-azure/30 bg-azure/10 p-4 transition-colors hover:bg-azure/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-azure">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-azure opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-azure" />
-          </span>
-          Live{fixture.round_number != null ? ` · Round ${fixture.round_number}` : ''}
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-azure">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-azure opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-azure" />
         </span>
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-azure">
-          View match <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-        </span>
-      </div>
-
-      <div className="mt-3 flex items-center justify-center gap-3 sm:gap-5">
-        <span
-          className={cn(
-            'flex-1 truncate text-right text-sm font-bold sm:text-base',
-            homeIsKaren ? 'text-gold' : 'text-silver',
-          )}
-          title={summary.home_team_name ?? undefined}
-        >
+        Live
+      </span>
+      <span className="flex items-center gap-1.5 truncate text-sm font-bold">
+        <span className={cn('truncate', homeIsKaren ? 'text-gold' : 'text-silver')}>
           {shortTeam(summary.home_team_name)}
         </span>
-        <span className="shrink-0 font-mono text-2xl font-black text-silver sm:text-3xl">
-          {summary.home_points}
-          <span className="mx-1.5 text-slate">–</span>
-          {summary.away_points}
+        <span className="font-mono text-base font-black text-silver">
+          {summary.home_points}<span className="mx-1 text-slate">–</span>{summary.away_points}
         </span>
-        <span
-          className={cn(
-            'flex-1 truncate text-left text-sm font-bold sm:text-base',
-            awayIsKaren ? 'text-gold' : 'text-silver',
-          )}
-          title={summary.away_team_name ?? undefined}
-        >
+        <span className={cn('truncate', awayIsKaren ? 'text-gold' : 'text-silver')}>
           {shortTeam(summary.away_team_name)}
         </span>
-      </div>
-
+      </span>
       {fixture.pairings.length > 0 ? (
-        <div className="mt-3 flex items-center justify-center gap-1.5" aria-hidden>
+        <span className="hidden items-center gap-1 md:flex" aria-hidden>
           {fixture.pairings.map((p) => (
             <span
               key={p.id}
-              className={cn(
-                'h-2 w-2 rounded-full',
-                DOT_CLASS[p.result] ?? 'border border-white/40',
-              )}
+              className={cn('h-2 w-2 rounded-full', DOT_CLASS[p.result] ?? 'border border-white/40')}
             />
           ))}
-        </div>
+        </span>
       ) : null}
-    </Link>
-  );
-}
-
-// ── Subdued strip: position + next fixture ────────────────────────────────────
-
-function PositionStrip({ board }: { board: Scoreboard }) {
-  const home = board.home_standing;
-  const next = board.next_fixture;
-
-  return (
-    <Link
-      to="/league"
-      data-testid="dashboard-league-strip"
-      className="mb-4 flex items-center gap-3 rounded-2xl border border-gold/20 bg-gold/10 p-3 transition-colors hover:bg-gold/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/40"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/20 text-gold">
-        <Trophy size={18} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-silver">
-          <span className="text-gold">Junior League</span>
-          {home ? (
-            <>
-              {' · '}
-              {shortTeam(home.team_name)} {ordinal(home.rank)}
-              <span className="font-normal text-slate"> · {home.points} pts</span>
-            </>
-          ) : null}
-        </p>
-        <p className="mt-0.5 truncate text-xs text-slate">
-          {next
-            ? `Next: ${shortTeam(next.summary.home_team_name)} v ${shortTeam(next.summary.away_team_name)} · ${fixtureDate(next.date)}`
-            : 'Standings & schedule'}
-        </p>
-      </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-gold" aria-hidden />
-    </Link>
+    </div>
   );
 }
 
 export function DashboardLeagueStrip() {
-  const board = useScoreboard().data;
+  const board: Scoreboard | undefined = useScoreboard().data;
   if (!board || !board.league) return null;
 
-  // A live match takes over the strip with a score-focused card.
   const live =
     board.next_fixture?.status === 'in_progress'
       ? board.next_fixture
       : board.recent_fixture?.status === 'in_progress'
         ? board.recent_fixture
         : null;
-
   const karenName = board.league.teams?.find((t) => t.is_home_club)?.name ?? null;
+  const home = board.home_standing;
+  const next = board.next_fixture;
 
-  return live ? (
-    <LiveCard fixture={live} karenName={karenName} />
-  ) : (
-    <PositionStrip board={board} />
+  // The CTA targets the live match when there is one, else the league page.
+  const ctaTo = live ? `/league/fixtures/${live.id}` : '/league';
+  const ctaLabel = live ? 'View match' : 'View league';
+
+  return (
+    <div
+      data-testid="dashboard-league-strip"
+      className={cn(
+        'mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border p-3 sm:px-4',
+        live ? 'border-azure/30 bg-azure/10' : 'border-gold/20 bg-gold/10',
+      )}
+    >
+      {/* Brand */}
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gold/20 text-gold">
+          <Trophy size={16} aria-hidden />
+        </span>
+        <span className="text-sm font-bold text-gold">Junior League</span>
+      </div>
+
+      {/* Position */}
+      {home ? (
+        <>
+          <Divider />
+          <span className="shrink-0 text-sm font-semibold text-silver">
+            {shortTeam(home.team_name)}{' '}
+            <span className="text-gold">{ordinal(home.rank)}</span>
+            <span className="font-normal text-slate"> · {home.points} pts</span>
+          </span>
+        </>
+      ) : null}
+
+      {/* Live score, or next fixture */}
+      <Divider />
+      {live ? (
+        <LiveScore fixture={live} karenName={karenName} />
+      ) : (
+        <span className="min-w-0 truncate text-sm text-slate">
+          {next ? (
+            <>
+              <span className="font-semibold text-azure">Next: </span>
+              {shortTeam(next.summary.home_team_name)} v {shortTeam(next.summary.away_team_name)}
+              {' · '}
+              {fixtureDate(next.date)}
+            </>
+          ) : (
+            'Standings & schedule'
+          )}
+        </span>
+      )}
+
+      {/* CTA — pushed to the right on desktop */}
+      <Link
+        to={ctaTo}
+        data-testid="dashboard-league-cta"
+        className="ml-auto inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-azure transition-all hover:gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50 rounded"
+      >
+        {ctaLabel}
+        <ArrowRight className="h-4 w-4" aria-hidden />
+      </Link>
+    </div>
   );
 }
