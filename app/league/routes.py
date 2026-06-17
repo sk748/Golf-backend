@@ -39,7 +39,7 @@ from app.league.controllers import (
     get_fixture, list_fixtures, create_fixture, update_fixture, delete_fixture,
     get_pairing, create_pairing, update_pairing, delete_pairing,
     compute_standings, dump_fixture_detail, dump_league_with_teams, dump_pairing,
-    fixture_summary, sync_fixture_event, sync_fixture_attendance,
+    fixture_summary, sync_fixture_event, sync_fixture_attendance, build_scoreboard,
 )
 from app.league.models import League, LeagueTeam, LeagueFixture, LeaguePairing
 from app.utils.decorators import require_auth, require_roles, get_current_user
@@ -149,66 +149,15 @@ def get_fixture_detail(fixture_id):
 @league_bp.route("/league/scoreboard", methods=["GET"])
 @require_auth
 def get_scoreboard():
-    """Return the is_current league's headline data for the dashboard hero.
+    """Current league's headline data for the dashboard hero (authenticated)."""
+    return _data(build_scoreboard())
 
-    Payload: {league, standings (top 5), next_fixture, recent_fixture}.
-    Returns null league gracefully if no current league exists.
-    """
-    leagues = list_leagues(current_only=True)
-    if not leagues:
-        return _data({
-            "league": None,
-            "standings": [],
-            "next_fixture": None,
-            "recent_fixture": None,
-        })
 
-    league = leagues[0]
-    standings = compute_standings(league)
-
-    from app.league.models import FixtureStatus
-    from datetime import date as _date
-
-    all_fixtures = list_fixtures(league.id)
-
-    # Next fixture: earliest scheduled/in_progress with a date >= today, or
-    # the first without a date, ordered by round then id.
-    today = _date.today()
-    upcoming = [
-        f for f in all_fixtures
-        if getattr(f.status, "value", f.status) in (
-            FixtureStatus.scheduled.value, FixtureStatus.in_progress.value
-        )
-    ]
-    next_fixture = None
-    if upcoming:
-        dated = [f for f in upcoming if f.date is not None and f.date >= today]
-        undated = [f for f in upcoming if f.date is None or f.date < today]
-        candidates = sorted(dated, key=lambda f: (f.date, f.id)) + \
-                     sorted(undated, key=lambda f: (f.round_number or 9999, f.id))
-        if candidates:
-            next_fixture = dump_fixture_detail(candidates[0], league)
-
-    # Most-recent completed fixture.
-    completed = [
-        f for f in all_fixtures
-        if getattr(f.status, "value", f.status) == FixtureStatus.completed.value
-    ]
-    recent_fixture = None
-    if completed:
-        most_recent = sorted(
-            completed,
-            key=lambda f: (f.date or _date.min, f.id),
-            reverse=True,
-        )[0]
-        recent_fixture = dump_fixture_detail(most_recent, league)
-
-    return _data({
-        "league": dump_league_with_teams(league),
-        "standings": standings[:5],
-        "next_fixture": next_fixture,
-        "recent_fixture": recent_fixture,
-    })
+@league_bp.route("/public/league/scoreboard", methods=["GET"])
+def get_public_scoreboard():
+    """Same hero payload, but PUBLIC — for the logged-out landing page (mirrors
+    /api/public/announcements). Read-only; exposes only the current league."""
+    return _data(build_scoreboard())
 
 
 # ── Write: Leagues ────────────────────────────────────────────────────────────

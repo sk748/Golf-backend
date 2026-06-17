@@ -334,6 +334,57 @@ def dump_league_with_teams(league):
     return out
 
 
+# ── Scoreboard payload (shared by the authed + public hero endpoints) ────────
+
+def build_scoreboard():
+    """Build the dashboard/landing hero payload for the current league.
+
+    Returns {league, standings[<=5], next_fixture, recent_fixture}; league is
+    None when no league is marked current. Pure read — safe for the public route.
+    """
+    from datetime import date as _date
+
+    leagues = list_leagues(current_only=True)
+    if not leagues:
+        return {"league": None, "standings": [], "next_fixture": None, "recent_fixture": None}
+
+    league = leagues[0]
+    standings = compute_standings(league)
+    all_fixtures = list_fixtures(league.id)
+    today = _date.today()
+
+    upcoming = [
+        f for f in all_fixtures
+        if getattr(f.status, "value", f.status) in (
+            FixtureStatus.scheduled.value, FixtureStatus.in_progress.value
+        )
+    ]
+    next_fixture = None
+    if upcoming:
+        dated = [f for f in upcoming if f.date is not None and f.date >= today]
+        undated = [f for f in upcoming if f.date is None or f.date < today]
+        candidates = sorted(dated, key=lambda f: (f.date, f.id)) + \
+            sorted(undated, key=lambda f: (f.round_number or 9999, f.id))
+        if candidates:
+            next_fixture = dump_fixture_detail(candidates[0], league)
+
+    completed = [
+        f for f in all_fixtures
+        if getattr(f.status, "value", f.status) == FixtureStatus.completed.value
+    ]
+    recent_fixture = None
+    if completed:
+        most_recent = sorted(completed, key=lambda f: (f.date or _date.min, f.id), reverse=True)[0]
+        recent_fixture = dump_fixture_detail(most_recent, league)
+
+    return {
+        "league": dump_league_with_teams(league),
+        "standings": standings[:5],
+        "next_fixture": next_fixture,
+        "recent_fixture": recent_fixture,
+    }
+
+
 # ── F2 wiring: calendar Event + coaching attendance ──────────────────────────
 
 def sync_fixture_event(fixture, owner_id):
