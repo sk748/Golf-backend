@@ -97,6 +97,11 @@ def create_junior(data: dict):
 
 def update_junior(junior, data: dict):
     data = _resolve_band(dict(data))
+    # Handicap is owned by the User and written ONLY via PUT /api/users/<id>/handicap
+    # (which stamps provenance and mirrors onto this profile). Strip it here so the
+    # generic profile edit can't silently diverge the two stores or skip provenance.
+    data.pop("handicap_index", None)
+    data.pop("has_handicap", None)
     if "participant_type" in data:
         pt = data["participant_type"]
         if pt not in _VALID_PARTICIPANT_TYPES:

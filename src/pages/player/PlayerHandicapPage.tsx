@@ -31,6 +31,8 @@ import {
   isPendingRound,
   isPracticeRound,
 } from '../scoring/round-entry.queries';
+import type { HandicapProvenance } from '../juniors/handicap.queries';
+import { formatHandicapSetDate } from '../juniors/handicap.queries';
 
 // Small verification/practice badge pair for a round row. Additive display of
 // the API's status / counts_toward_handicap fields — renders nothing for a
@@ -206,6 +208,21 @@ export function PlayerHandicapPage() {
             >
               {heroIndex != null ? heroIndex : '—'}
             </p>
+            {/* Subtle provenance note for the player — "Set by coach on {date}" */}
+            {(() => {
+              const p = user as unknown as HandicapProvenance;
+              if (p.handicap_source === 'manual' && p.handicap_set_at) {
+                return (
+                  <p
+                    className="mt-1.5 text-xs text-slate"
+                    data-testid="handicap-provenance-note"
+                  >
+                    Set by coach on {formatHandicapSetDate(p.handicap_set_at)}
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Trend chip — lower is better, so DOWN = improving (encouraging). */}

@@ -61,7 +61,7 @@ export function CommitteeDashboard() {
         Programme oversight
       </p>
       <h1 className="animate-fade-in-up stagger-1 mt-1 text-2xl font-black text-silver sm:text-3xl">
-        Committee overview
+        Junior Golf Committee
       </h1>
       <p className="animate-fade-in-up stagger-1 mt-2 max-w-2xl text-sm text-slate">
         Read-across visibility into juniors, evaluations, and tournaments — and

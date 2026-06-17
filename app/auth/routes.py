@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.auth.controllers import (
     user_schema, users_schema,
     register_user, login_user, create_child_account,
-    update_user_profile, list_users, get_user_by_id,
+    update_user_profile, change_password, list_users, get_user_by_id,
     create_user, update_user, delete_user,
 )
 from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, require_ownership
@@ -98,6 +98,22 @@ def update_profile():
     user = get_current_user()
     data = request.get_json() or {}
     return _ok(user_schema.dump(update_user_profile(user, data)))
+
+
+@user_v1.route("/auth/change-password", methods=["POST"])
+@require_auth
+def change_password_route():
+    """Self-service password change for the signed-in user. All failures are 400
+    (never 401 — see change_password) so a wrong current password doesn't log
+    the user out."""
+    user = get_current_user()
+    data = request.get_json() or {}
+    _updated, err = change_password(user, data)
+    if err:
+        return _err(err, 400)
+    # Wrapped in {data:...} so the standard api client unwraps it like any other
+    # endpoint (login/register are the only top-level auth responses).
+    return _data({"message": "Password updated"})
 
 
 # ── User CRUD (admin manages; users can read/update self) ─────────────────────

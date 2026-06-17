@@ -34,6 +34,11 @@ TEMPLATES = {
     "evaluation.signed": lambda a, t, m: f"{a} signed the {m.get('month', 'monthly')} evaluation for {t}.",
     "evaluation.counter_signed": lambda a, t, m: f"{a} counter-signed the {m.get('month', 'monthly')} evaluation for {t}.",
     "tournament.created": lambda a, t, m: f"{a} created the tournament “{t}”.",
+    "handicap.manual_set": lambda a, t, m: (
+        f"{a} cleared {t}'s handicap index."
+        if m.get("handicap_index") is None
+        else f"{a} manually set {t}'s handicap index to {m.get('handicap_index')}."
+    ),
 }
 
 

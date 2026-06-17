@@ -82,7 +82,7 @@ function iconFor(category: string): LucideIcon {
 const ROLE_ROWS: { role: Role; label: string; key: 'admins' | 'coaches' | 'committee' | 'parents' | 'players' }[] = [
   { role: 'admin', label: 'Admins', key: 'admins' },
   { role: 'coach', label: 'Coaches', key: 'coaches' },
-  { role: 'committee', label: 'Committee', key: 'committee' },
+  { role: 'committee', label: 'Junior Golf Committee', key: 'committee' },
   { role: 'parent', label: 'Parents', key: 'parents' },
   { role: 'player', label: 'Players', key: 'players' },
 ];

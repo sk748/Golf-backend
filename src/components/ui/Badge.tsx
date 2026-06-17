@@ -47,10 +47,20 @@ const ROLE_TONE: Record<Role, Tone> = {
   player: 'azure',
 };
 
+// Compact, capitalised label for the badge pill (tight spaces). The full
+// "Junior Golf Committee" name is used where space allows (dashboards, tables).
+const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Admin',
+  coach: 'Coach',
+  committee: 'Committee',
+  parent: 'Parent',
+  player: 'Player',
+};
+
 export function RoleBadge({ role, className }: { role: Role; className?: string }) {
   return (
     <Badge tone={ROLE_TONE[role]} shape="pill" className={className} data-testid={`role-badge-${role}`}>
-      {role}
+      {ROLE_LABEL[role]}
     </Badge>
   );
 }

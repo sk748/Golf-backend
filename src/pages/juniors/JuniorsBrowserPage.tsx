@@ -4,13 +4,14 @@
 // links to the staff profile view at /juniors/:id. Data comes from the shared
 // useAllJuniors hook (['juniors','all']) — no new endpoints, no mock data.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   CheckCircle2,
   ChevronRight,
   Loader2,
+  Pencil,
   Search,
   UserCheck,
   Users,
@@ -39,6 +40,11 @@ import {
   approvalStatusTone,
   useApproveJunior,
 } from './juniors.queries';
+import {
+  formatHandicapSetDate,
+  type HandicapProvenance,
+} from './handicap.queries';
+import { SetHandicapDialog } from './SetHandicapDialog';
 
 const FILTER_ALL = 'all';
 const FILTER_UNASSIGNED = 'unassigned';
@@ -89,9 +95,30 @@ export function JuniorsBrowserPage() {
   const [approvalFilter, setApprovalFilter] = useState<string>(FILTER_ALL);
   const [participantFilter, setParticipantFilter] = useState<string>(FILTER_ALL);
 
+  // "Set handicap" dialog state — one dialog instance for the whole list.
+  const [handicapTarget, setHandicapTarget] = useState<{
+    juniorName: string;
+    userId: string;
+    currentValue: number | null;
+  } | null>(null);
+  const openHandicapDialog = useCallback(
+    (j: AssignableJunior) => {
+      setHandicapTarget({
+        juniorName: j.full_name?.trim() || `Golfer #${j.id}`,
+        userId: j.user_id,
+        currentValue: j.handicap_index,
+      });
+    },
+    [],
+  );
+
   // Only admin/committee may activate pending_staff signups (the backend 403s
   // a coach) — gate the inline Approve button accordingly.
   const canApprove = user?.role === 'admin' || user?.role === 'committee';
+
+  // All staff (admin/coach/committee) can set a manual handicap.
+  const canSetHandicap =
+    user?.role === 'admin' || user?.role === 'coach' || user?.role === 'committee';
 
   const juniors = useMemo(() => juniorsQuery.data ?? [], [juniorsQuery.data]);
   const coaches = coachesQuery.data ?? [];
@@ -338,13 +365,27 @@ export function JuniorsBrowserPage() {
             No juniors match these filters.
           </GlassCard>
         ) : (
-          <JuniorList
-            juniors={visible}
-            coaches={coaches}
-            bands={bands}
-            canApprove={canApprove}
-            showCoach={!isCoach}
-          />
+          <>
+            <JuniorList
+              juniors={visible}
+              coaches={coaches}
+              bands={bands}
+              canApprove={canApprove}
+              showCoach={!isCoach}
+              canSetHandicap={canSetHandicap}
+              onSetHandicap={openHandicapDialog}
+            />
+            {/* Single shared "Set handicap" dialog for the whole list */}
+            {canSetHandicap && handicapTarget ? (
+              <SetHandicapDialog
+                open
+                onClose={() => setHandicapTarget(null)}
+                juniorName={handicapTarget.juniorName}
+                userId={handicapTarget.userId}
+                currentValue={handicapTarget.currentValue}
+              />
+            ) : null}
+          </>
         )}
       </div>
     </div>
@@ -361,6 +402,9 @@ interface JuniorListProps {
   canApprove: boolean;
   // Hidden for a coach (every row is their own junior, so the column is noise).
   showCoach: boolean;
+  // All staff can set a manual handicap.
+  canSetHandicap: boolean;
+  onSetHandicap: (j: AssignableJunior) => void;
 }
 
 function bandBadge(bands: LevelBand[], bandId: number) {
@@ -415,7 +459,7 @@ function ApproveControl({ juniorId }: { juniorId: number }) {
   );
 }
 
-function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorListProps) {
+function JuniorList({ juniors, coaches, bands, canApprove, showCoach, canSetHandicap, onSetHandicap }: JuniorListProps) {
   return (
     <>
       {/* Desktop table */}
@@ -477,7 +521,29 @@ function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorLi
                     </span>
                   </td>
                   <td className="px-5 py-3.5 font-mono tabular-nums text-slate">
-                    {handicapLabel(j)}
+                    <span className="inline-flex flex-col gap-1">
+                      <span>{handicapLabel(j)}</span>
+                      {/* Provenance badge — staff already sees this table */}
+                      {(() => {
+                        const p = j as unknown as HandicapProvenance;
+                        if (p.handicap_source === 'manual') {
+                          const d = formatHandicapSetDate(p.handicap_set_at);
+                          return (
+                            <Badge tone="gold" className="text-[10px]" data-testid={`hcp-prov-${j.id}`}>
+                              {d ? `Set ${d}` : 'Manual'}
+                            </Badge>
+                          );
+                        }
+                        if (p.handicap_source === 'computed') {
+                          return (
+                            <Badge tone="azure" className="text-[10px]" data-testid={`hcp-prov-${j.id}`}>
+                              WHS
+                            </Badge>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </span>
                   </td>
                   {showCoach && (
                     <td className="px-5 py-3.5 text-slate">
@@ -485,7 +551,7 @@ function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorLi
                     </td>
                   )}
                   <td className="px-5 py-3.5 text-right">
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 flex-wrap justify-end">
                       {approvalBadge(j)}
                       {canApprove && j.approval_status === 'pending_staff' && (
                         <ApproveControl juniorId={j.id} />
@@ -494,6 +560,18 @@ function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorLi
                         <Badge tone="gold" shape="pill">
                           Tournament ready
                         </Badge>
+                      )}
+                      {canSetHandicap && (
+                        <button
+                          type="button"
+                          onClick={() => onSetHandicap(j)}
+                          className="inline-flex min-h-[44px] items-center gap-1.5 rounded px-2 text-xs font-bold text-slate transition hover:text-azure focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50"
+                          aria-label={`Set handicap for ${juniorName(j)}`}
+                          data-testid={`set-hcp-btn-${j.id}`}
+                        >
+                          <Pencil size={13} aria-hidden />
+                          Set HCP
+                        </button>
                       )}
                       <Link
                         to={`/juniors/${j.id}`}
@@ -555,9 +633,47 @@ function JuniorList({ juniors, coaches, bands, canApprove, showCoach }: JuniorLi
                 </span>
                 {showCoach ? ` · ${coachName(coaches, j.coach_id)}` : ''}
               </p>
+              {/* Provenance badge — mobile */}
+              {(() => {
+                const p = j as unknown as HandicapProvenance;
+                if (p.handicap_source === 'manual') {
+                  const d = formatHandicapSetDate(p.handicap_set_at);
+                  return (
+                    <div className="mt-1.5">
+                      <Badge tone="gold" className="text-[10px]" data-testid={`hcp-prov-mob-${j.id}`}>
+                        {d ? `Set ${d}` : 'Manual'}
+                      </Badge>
+                    </div>
+                  );
+                }
+                if (p.handicap_source === 'computed') {
+                  return (
+                    <div className="mt-1.5">
+                      <Badge tone="azure" className="text-[10px]" data-testid={`hcp-prov-mob-${j.id}`}>
+                        WHS
+                      </Badge>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               {canApprove && j.approval_status === 'pending_staff' && (
                 <div className="mt-3">
                   <ApproveControl juniorId={j.id} />
+                </div>
+              )}
+              {canSetHandicap && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => onSetHandicap(j)}
+                    className="inline-flex min-h-[44px] items-center gap-1.5 rounded px-2 text-xs font-bold text-azure transition hover:text-azure/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50"
+                    aria-label={`Set handicap for ${juniorName(j)}`}
+                    data-testid={`set-hcp-btn-mob-${j.id}`}
+                  >
+                    <Pencil size={13} aria-hidden />
+                    Set handicap
+                  </button>
                 </div>
               )}
             </GlassCard>

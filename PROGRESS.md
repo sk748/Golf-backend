@@ -446,6 +446,43 @@ smoked; contract audit PASS; dev DB clean (7 seed badges, 0 awards/unlocks/notif
 - **Confetti** palette widened to bright multi-colour.
 - Catalog achievements stay AUTO (no manual grant) — by design.
 
+### Feedback build — 9 items, phases A–F (Sam, 2026-06-17)
+Stakeholder-feedback build. Plan: `~/.claude/plans/eager-mixing-dream.md`.
+- **Phase A — ✅ SHIPPED.** (1) Committee labelled "Junior Golf Committee" where
+  space allows (dashboard heading, admin role-breakdown row; compact "Committee"
+  kept in tight chips). (2) Coach round-verify confirmed already in nav. (3) Coach
+  session **edit** expanded to date/time/level+age eligibility/open-for-booking;
+  backend `update_session` now uses a field allowlist (`SimpleModelSchema.coerce_fields`)
+  closing the blind-setattr mass-assignment hole.
+- **Phase B — ✅ SHIPPED.** Manual handicap entry + verification. New
+  `PUT /api/users/<id>/handicap` (admin/coach/committee only; coach scoped to own
+  juniors; audited as `handicap.manual_set`; mirrors onto JuniorProfile). Provenance
+  columns on `users` (`handicap_source`, `handicap_set_by`, `handicap_set_at`),
+  migration `p17handicapprov`. WHS verify now stamps `source='computed'`. Junior
+  payloads surface provenance via `_with_child_name`. Frontend: `SetHandicapDialog`
+  inline on JuniorProfile + per-row on JuniorsBrowser, provenance badge wherever a
+  handicap shows; handicap removed from the intake form (single write-path enforced —
+  `update_junior` strips handicap fields). Verified end-to-end (set/403/400/ignored-intake).
+- **Phase C1 — ✅ SHIPPED.** Self-service change-password. `POST /api/auth/change-password`
+  (verify current → set new, reuses `_validate_password`; wrong current = 400 NOT 401 so
+  the client's session-expiry handler doesn't fire). Frontend: "Change password" card on
+  ProfilePage (current/new/confirm, client-side match + length checks). Verified
+  (wrong→400, short→400, valid→200, re-login works).
+- **Phase D — ✅ SHIPPED.** Player↔player chat (Sam: any↔any). `can_dm` allows player→player;
+  `/api/messaging/contacts` player branch now surfaces other players (+ own coach + admins).
+  Moderation (banned-word/flag/admin) unchanged. Frontend needed no change (NewChatDialog
+  renders whatever contacts returns). Verified (contacts list players, DM create 201).
+- **C2** email reset (BLOCKED: SMTP creds; `openpyxl`/`Flask-Mail` approved) ·
+  **E** coach tracker + .xlsx (`openpyxl` approved) ·
+  **F** Junior League inter-club domain — scoring locked (per-pairing win/halve/loss
+  1/0.5/0 → club points → P/W/D/L/Pts/Avg standings); keep teams/schedule/points-rule
+  flexible; real 2025/26 data is DEMO-SEED ONLY, not live. (Schedule/matchups: Sam to provide.)
+- **Audit follow-ups (api-contract-auditor, A–D, both PASS-level minor):**
+  (1) MED — `JuniorProfilePage` uses `useAllJuniors()` for coaches instead of
+  `useCoachJuniors` (convention nit; backend force-scopes so no leak — pre-existing).
+  (2) LOW — `SetHandicapDialog` relies on callers to role-gate (all callers do; route +
+  backend also gate). Tidy both in the next cleanup/locked-types pass.
+
 ### Deferred — locked-types sync pass (needs explicit unlock of src/types/api.ts)
 Known drift between the locked frontend types and the live backend, all worked
 around locally for now (no locked-file edits):
@@ -454,6 +491,8 @@ around locally for now (no locked-file edits):
   get_junior_progress) — parent's `ChildProgress` has them; the two share cache
   key `['juniors',id,'progress']` (latent type divergence, never co-mounted).
 - `JuniorProfile` drift (pre-existing, noted earlier).
+- Handicap provenance (`handicap_source`/`handicap_set_by`/`handicap_set_at` on
+  User + junior payloads) — typed locally in `pages/juniors/handicap.queries.ts`.
 Do these in one pass when src/types/api.ts is unlocked.
 
 ### Next up (other)

@@ -48,8 +48,29 @@ def create_session(data: dict):
     return s
 
 
+# Mass-assignment guard: only these fields are editable via PUT /api/sessions/<id>.
+# Identity/ownership columns (id, coach_id) and timestamps are never client-settable.
+SESSION_UPDATABLE_FIELDS = {
+    "class_id",
+    "session_type",
+    "date",
+    "start_time",
+    "end_time",
+    "notes",
+    "status",
+    "title",
+    "open_for_booking",
+    "max_attendance",
+    "level_min",
+    "level_max",
+    "age_min",
+    "age_max",
+    "requirements",
+}
+
+
 def update_session(s, data: dict):
-    for k, v in data.items():
+    for k, v in session_schema.coerce_fields(data, SESSION_UPDATABLE_FIELDS).items():
         setattr(s, k, v)
     db.session.commit()
     return s

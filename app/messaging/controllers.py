@@ -71,11 +71,15 @@ def can_dm(initiator, target):
     if i_role == "player":
         if t_role == "admin":
             return True, None
+        # Players may DM each other (Sam, 2026-06-17). The banned-word filter,
+        # flagging, and admin moderation apply to these messages like any other.
+        if t_role == "player":
+            return True, None
         if t_role == "coach":
             profile = player_profile(initiator)
             if profile is not None and str(profile.coach_id) == str(target.id):
                 return True, None
-        return False, "Players can only message their own assigned coach or an admin"
+        return False, "Players can only message other players, their own assigned coach, or an admin"
     if t_role in DM_TARGETS.get(i_role, set()):
         return True, None
     return False, f"A {i_role} cannot start a direct message with a {t_role}"

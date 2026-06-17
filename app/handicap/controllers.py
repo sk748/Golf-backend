@@ -10,11 +10,16 @@ engine owns handicap_index. Here a "signed scorecard" maps to a VERIFIED Round
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from app.database.database import db
 from app.handicap.models import HandicapJourney, HandicapJourneyStatus
 from app.rounds.models import Round, HoleScore
 from app.utils.schemas import SimpleModelSchema
+
+# WHS handicap-index bounds (mirror the users.handicap_index check constraint).
+HANDICAP_MIN = -10.0
+HANDICAP_MAX = 54.0
 
 journey_schema = SimpleModelSchema(HandicapJourney)
 journeys_schema = SimpleModelSchema(HandicapJourney, many=True)
@@ -89,6 +94,43 @@ def update_journey(j, data: dict):
 
     db.session.commit()
     return j, None
+
+
+# ── Manual handicap override (admin/coach/committee) ─────────────────────────
+
+def set_manual_handicap(user, index, actor_id: str):
+    """Manually set (or clear) a user's handicap index, stamping provenance as
+    'manual'. `index` is a number, or None to clear. Mirrors the value onto the
+    linked JuniorProfile (and its has_handicap flag) when one exists.
+
+    Returns (user, error_string); the error is a 400-worthy validation message.
+    This is the deliberate exception to "WHS owns the index" — used for events
+    (e.g. JGF) where the calculator has no course data, so staff key it in.
+    """
+    from app.juniors.models import JuniorProfile
+
+    if index is None:
+        value = None
+    else:
+        try:
+            value = Decimal(str(index)).quantize(Decimal("0.1"))
+        except (InvalidOperation, TypeError, ValueError):
+            return None, "handicap_index must be a number"
+        if value < Decimal(str(HANDICAP_MIN)) or value > Decimal(str(HANDICAP_MAX)):
+            return None, f"handicap_index must be between {HANDICAP_MIN} and {HANDICAP_MAX}"
+
+    user.handicap_index = value
+    user.handicap_source = "manual"
+    user.handicap_set_by = actor_id
+    user.handicap_set_at = utc_now()
+
+    jp = JuniorProfile.query.filter_by(user_id=user.id).first()
+    if jp is not None:
+        jp.handicap_index = value
+        jp.has_handicap = value is not None
+
+    db.session.commit()
+    return user, None
 
 
 # ── Progress computation (read-only over verified rounds) ────────────────────

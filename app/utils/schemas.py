@@ -30,6 +30,21 @@ class SimpleModelSchema:
                 values[column.name] = self._coerce(column, data[column.name])
         return self.model(**values)
 
+    def coerce_fields(self, data, allowed=None):
+        """Type-coerce the keys present in ``data`` and return them as a dict.
+
+        When ``allowed`` is given, only those column names are considered — this
+        is the mass-assignment guard for partial updates (PUT/PATCH), so a
+        client can never set identity/ownership columns it isn't meant to.
+        """
+        out = {}
+        for column in self.columns:
+            if allowed is not None and column.name not in allowed:
+                continue
+            if column.name in data:
+                out[column.name] = self._coerce(column, data[column.name])
+        return out
+
     def _dump_one(self, item):
         result = {}
         for column in self.columns:

@@ -59,6 +59,13 @@ def _with_child_name(dumped, junior):
         dumped["full_name"] = f"{user.first_name} {user.last_name}".strip()
         dumped["first_name"] = user.first_name
         dumped["last_name"] = user.last_name
+        # Handicap provenance lives on the linked User, not JuniorProfile. Surface
+        # it so staff pages can badge a handicap as manually-set vs WHS-computed.
+        dumped["handicap_source"] = user.handicap_source
+        dumped["handicap_set_by"] = user.handicap_set_by
+        dumped["handicap_set_at"] = (
+            user.handicap_set_at.isoformat() if user.handicap_set_at else None
+        )
     return dumped
 
 

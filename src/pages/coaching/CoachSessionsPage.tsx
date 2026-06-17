@@ -736,6 +736,24 @@ function SessionEditPanel({
     session.max_attendance != null ? String(session.max_attendance) : '',
   );
   const [requirements, setRequirements] = useState(session.requirements ?? '');
+  // Time/date fields — `type="date"`/`type="time"` need "YYYY-MM-DD" / "HH:MM",
+  // so trim any seconds the backend returns ("HH:MM:SS").
+  const [date, setDate] = useState(session.date ?? '');
+  const [startTime, setStartTime] = useState((session.start_time ?? '').slice(0, 5));
+  const [endTime, setEndTime] = useState((session.end_time ?? '').slice(0, 5));
+  const [levelMin, setLevelMin] = useState(
+    session.level_min != null ? String(session.level_min) : '',
+  );
+  const [levelMax, setLevelMax] = useState(
+    session.level_max != null ? String(session.level_max) : '',
+  );
+  const [ageMin, setAgeMin] = useState(
+    session.age_min != null ? String(session.age_min) : '',
+  );
+  const [ageMax, setAgeMax] = useState(
+    session.age_max != null ? String(session.age_max) : '',
+  );
+  const [openForBooking, setOpenForBooking] = useState(session.open_for_booking);
 
   function save() {
     update.mutate(
@@ -745,6 +763,14 @@ function SessionEditPanel({
           title: title.trim() || null,
           max_attendance: parseIntOrUndef(max) ?? null,
           requirements: requirements.trim() || null,
+          date: date || undefined,
+          start_time: startTime || undefined,
+          end_time: endTime || undefined,
+          level_min: parseIntOrUndef(levelMin) ?? null,
+          level_max: parseIntOrUndef(levelMax) ?? null,
+          age_min: parseIntOrUndef(ageMin) ?? null,
+          age_max: parseIntOrUndef(ageMax) ?? null,
+          open_for_booking: openForBooking,
         },
       },
       { onSuccess: onClose },
@@ -782,6 +808,103 @@ function SessionEditPanel({
           />
         </Field>
       </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Date" htmlFor={`edit-date-${session.id}`}>
+          <input
+            id={`edit-date-${session.id}`}
+            type="date"
+            className={inputClass}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+        </Field>
+        <Field label="Start" htmlFor={`edit-start-${session.id}`}>
+          <input
+            id={`edit-start-${session.id}`}
+            type="time"
+            className={inputClass}
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+          />
+        </Field>
+        <Field label="End" htmlFor={`edit-end-${session.id}`}>
+          <input
+            id={`edit-end-${session.id}`}
+            type="time"
+            className={inputClass}
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Levels"
+          htmlFor={`edit-levelmin-${session.id}`}
+          hint="Eligible level band. Blank = any."
+        >
+          <div className="flex items-center gap-2">
+            <input
+              id={`edit-levelmin-${session.id}`}
+              type="number"
+              min={1}
+              max={9}
+              inputMode="numeric"
+              className={inputClass}
+              value={levelMin}
+              placeholder="Min"
+              onChange={(e) => setLevelMin(e.target.value)}
+            />
+            <span className="text-slate" aria-hidden>
+              –
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={9}
+              inputMode="numeric"
+              aria-label="Maximum level"
+              className={inputClass}
+              value={levelMax}
+              placeholder="Max"
+              onChange={(e) => setLevelMax(e.target.value)}
+            />
+          </div>
+        </Field>
+        <Field
+          label="Ages"
+          htmlFor={`edit-agemin-${session.id}`}
+          hint="Eligible age range. Blank = any."
+        >
+          <div className="flex items-center gap-2">
+            <input
+              id={`edit-agemin-${session.id}`}
+              type="number"
+              min={4}
+              max={21}
+              inputMode="numeric"
+              className={inputClass}
+              value={ageMin}
+              placeholder="Min"
+              onChange={(e) => setAgeMin(e.target.value)}
+            />
+            <span className="text-slate" aria-hidden>
+              –
+            </span>
+            <input
+              type="number"
+              min={4}
+              max={21}
+              inputMode="numeric"
+              aria-label="Maximum age"
+              className={inputClass}
+              value={ageMax}
+              placeholder="Max"
+              onChange={(e) => setAgeMax(e.target.value)}
+            />
+          </div>
+        </Field>
+      </div>
       <Field label="Requirements" htmlFor={`edit-reqs-${session.id}`}>
         <input
           id={`edit-reqs-${session.id}`}
@@ -790,6 +913,19 @@ function SessionEditPanel({
           onChange={(e) => setRequirements(e.target.value)}
         />
       </Field>
+      <label
+        className="flex items-center gap-2 text-sm text-silver"
+        htmlFor={`edit-open-${session.id}`}
+      >
+        <input
+          id={`edit-open-${session.id}`}
+          type="checkbox"
+          className="h-4 w-4 rounded border-white/20 bg-transparent"
+          checked={openForBooking}
+          onChange={(e) => setOpenForBooking(e.target.checked)}
+        />
+        Open for booking
+      </label>
 
       {update.isError ? (
         <ErrorPanel

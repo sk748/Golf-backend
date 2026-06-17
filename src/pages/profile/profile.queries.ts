@@ -20,3 +20,19 @@ export function useUpdateProfile() {
       api.put<User>('/api/auth/profile', body, { raw: true }),
   });
 }
+
+// Self-service password change (POST /api/auth/change-password). Unlike the auth
+// login/register/me routes, this one returns a normal { data } envelope, so it
+// unwraps like any other endpoint (no raw). A wrong current password comes back
+// as a 400 (never 401) so the client's session-expiry handler isn't triggered.
+export interface ChangePasswordInput {
+  current_password: string;
+  new_password: string;
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (body: ChangePasswordInput) =>
+      api.post<{ message: string }>('/api/auth/change-password', body),
+  });
+}

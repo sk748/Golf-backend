@@ -7,7 +7,7 @@ import { ApiError } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { RoleBadge } from '../../components/ui/Badge';
-import { useUpdateProfile } from './profile.queries';
+import { useUpdateProfile, useChangePassword } from './profile.queries';
 
 const inputClass =
   'w-full rounded-xl border border-white/10 bg-navy/60 px-3 py-2.5 text-sm text-silver placeholder:text-slate/60 focus:border-azure focus:outline-none focus:ring-1 focus:ring-azure';
@@ -150,6 +150,10 @@ export function ProfilePage() {
         </div>
       </form>
 
+      {/* Self-service password change (no email needed — the user knows their
+          current password). Separate form so it submits independently. */}
+      <ChangePasswordCard />
+
       {/* Sign out — the primary place to end a session (the mobile shell has no
           sidebar). */}
       <div className="mt-8 border-t border-white/5 pt-6">
@@ -165,5 +169,153 @@ export function ProfilePage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const change = useChangePassword();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [done, setDone] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+
+  function reset() {
+    setDone(false);
+    setClientError(null);
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setDone(false);
+    setClientError(null);
+    if (next.length < 8) {
+      setClientError('New password must be at least 8 characters.');
+      return;
+    }
+    if (next !== confirm) {
+      setClientError('New password and confirmation do not match.');
+      return;
+    }
+    change.mutate(
+      { current_password: current, new_password: next },
+      {
+        onSuccess: () => {
+          setDone(true);
+          setCurrent('');
+          setNext('');
+          setConfirm('');
+        },
+      },
+    );
+  }
+
+  const serverError =
+    change.error instanceof ApiError
+      ? change.error.message
+      : change.isError
+        ? 'Could not change your password.'
+        : null;
+  const errorMsg = clientError ?? serverError;
+
+  return (
+    <form onSubmit={onSubmit} className="mt-6 space-y-4" data-testid="change-password-form">
+      <GlassCard className="space-y-4 p-5 sm:p-6">
+        <div>
+          <h2 className="text-sm font-bold text-silver">Change password</h2>
+          <p className="mt-1 text-xs text-slate">
+            Choose a new password of at least 8 characters.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="current_password" className={labelClass}>
+            Current password
+          </label>
+          <input
+            id="current_password"
+            type="password"
+            className={inputClass}
+            value={current}
+            onChange={(e) => {
+              setCurrent(e.target.value);
+              reset();
+            }}
+            autoComplete="current-password"
+            required
+            data-testid="cp-current"
+          />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="new_password" className={labelClass}>
+              New password
+            </label>
+            <input
+              id="new_password"
+              type="password"
+              className={inputClass}
+              value={next}
+              onChange={(e) => {
+                setNext(e.target.value);
+                reset();
+              }}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              data-testid="cp-new"
+            />
+          </div>
+          <div>
+            <label htmlFor="confirm_password" className={labelClass}>
+              Confirm new password
+            </label>
+            <input
+              id="confirm_password"
+              type="password"
+              className={inputClass}
+              value={confirm}
+              onChange={(e) => {
+                setConfirm(e.target.value);
+                reset();
+              }}
+              autoComplete="new-password"
+              required
+              minLength={8}
+              data-testid="cp-confirm"
+            />
+          </div>
+        </div>
+      </GlassCard>
+
+      {errorMsg && (
+        <p
+          role="alert"
+          className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+          data-testid="cp-error"
+        >
+          {errorMsg}
+        </p>
+      )}
+
+      <div className="flex items-center gap-3">
+        <Button type="submit" variant="primary" disabled={change.isPending} data-testid="cp-save">
+          {change.isPending ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Updating…
+            </>
+          ) : (
+            'Update password'
+          )}
+        </Button>
+        {done && !change.isPending && (
+          <span
+            className="flex items-center gap-1.5 text-sm font-medium text-emerald-400"
+            data-testid="cp-done"
+          >
+            <Check size={16} /> Password updated
+          </span>
+        )}
+      </div>
+    </form>
   );
 }

@@ -76,12 +76,13 @@ def list_contacts():
         users = [u for u in query.all() if role_value(u) != "player"]
     elif role == "parent":
         users = [u for u in query.all() if role_value(u) in ("admin", "coach", "committee")]
-    else:  # player: own assigned coach + admins
+    else:  # player: other players + own assigned coach + admins
         profile = player_profile(user)
         coach_id = str(profile.coach_id) if profile is not None and profile.coach_id else None
         users = [
             u for u in query.all()
-            if role_value(u) == "admin" or (coach_id is not None and str(u.id) == coach_id)
+            if role_value(u) in ("admin", "player")
+            or (coach_id is not None and str(u.id) == coach_id)
         ]
     items = [
         {"user_id": str(u.id), "full_name": full_name(u), "role": role_value(u)}

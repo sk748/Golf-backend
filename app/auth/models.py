@@ -42,6 +42,14 @@ class User(db.Model):
         default=MembershipType.guest,
     )
     handicap_index = Column(Numeric(4, 1), nullable=True)
+    # Provenance for handicap_index. 'computed' = written by the WHS engine on a
+    # verified round; 'manual' = entered by admin/coach/committee (e.g. JGF events
+    # where the calculator lacks course data). NULL = never set.
+    handicap_source = Column(String(20), nullable=True)
+    # The user id of the staff member who last set the index manually. Stored as
+    # a plain id (like AuditLog.actor_user_id) to avoid a self-referential FK.
+    handicap_set_by = Column(String(36), nullable=True)
+    handicap_set_at = Column(DateTime(timezone=True), nullable=True)
     cdh_number = Column(String(100), nullable=True)
     # Club membership number — the common code linking a junior signup to the
     # parent member (build-phase-2 decisions 5+7). Unique when present.

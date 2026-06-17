@@ -41,6 +41,8 @@ import { CompetitionHistory } from '../tournaments/CompetitionHistory';
 import { LogExternalResultCard } from '../tournaments/LogExternalResultCard';
 import { CompetitionRequirementsCard } from '../../features/competition/CompetitionRequirementsCard';
 import { HandicapJourneyCard } from '../../features/handicap/HandicapJourneyCard';
+import type { HandicapProvenance } from '../juniors/handicap.queries';
+import { formatHandicapSetDate } from '../juniors/handicap.queries';
 import { AddChildCard } from './AddChildCard';
 import { EditChildDetailsCard } from './EditChildDetailsCard';
 import {
@@ -692,6 +694,21 @@ function ChildDetail({
                 Not yet established — earned through signed scorecards.
               </p>
             )}
+            {/* Subtle provenance note for the parent — "Set by coach on {date}" */}
+            {(() => {
+              const p = child as unknown as HandicapProvenance;
+              if (p.handicap_source === 'manual' && p.handicap_set_at) {
+                return (
+                  <p
+                    className="mt-1.5 text-xs text-slate"
+                    data-testid="child-handicap-provenance-note"
+                  >
+                    Set by coach on {formatHandicapSetDate(p.handicap_set_at)}
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
 

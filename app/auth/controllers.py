@@ -340,6 +340,30 @@ def update_user_profile(user, data: dict):
     return user
 
 
+def change_password(user, data: dict):
+    """Self-service password change: verify the current password, then set the
+    new one (same minimum length as registration). Returns (user, error_string).
+
+    NOTE: an incorrect current password is reported as a 400 by the route, NOT a
+    401 — a 401 would trip the client's global "session expired → logout" handler
+    and bounce the user to /login mid-change.
+    """
+    current = data.get("current_password") or ""
+    new = data.get("new_password") or ""
+    if not current or not new:
+        return None, "Current and new password are required"
+    if not user.verify_password_hash(current):
+        return None, "Current password is incorrect"
+    pw_err = _validate_password(new)
+    if pw_err:
+        return None, pw_err
+    if new == current:
+        return None, "New password must be different from your current password"
+    user.password_hash = User.generate_password_hash(new)
+    db.session.commit()
+    return user, None
+
+
 def delete_user(user):
     db.session.delete(user)
     db.session.commit()

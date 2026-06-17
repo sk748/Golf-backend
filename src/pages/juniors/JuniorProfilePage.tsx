@@ -18,6 +18,7 @@ import {
   ClipboardList,
   HeartPulse,
   Loader2,
+  Pencil,
   Save,
   ShieldAlert,
   Target,
@@ -72,6 +73,11 @@ import {
   useUpdateJuniorStaff,
   type JuniorAttendanceRecord,
 } from './juniors.queries';
+import {
+  formatHandicapSetDate,
+  type HandicapProvenance,
+} from './handicap.queries';
+import { SetHandicapDialog } from './SetHandicapDialog';
 
 const inputClass =
   'w-full rounded-xl bg-white/5 px-4 py-3 text-sm text-silver placeholder:text-slate/60 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-azure/60 disabled:opacity-50';
@@ -106,6 +112,37 @@ function fullDate(iso: string): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+
+// ── Handicap provenance badge (staff views only) ─────────────────────────────
+// Shown next to the handicap figure wherever staff see it.
+// "Manually set · 14 Jun 2026" vs "WHS computed". Uses Badge primitive.
+
+function HandicapProvenanceBadge({
+  provenance,
+}: {
+  provenance: HandicapProvenance;
+}) {
+  if (provenance.handicap_source === 'manual') {
+    const date = formatHandicapSetDate(provenance.handicap_set_at);
+    return (
+      <Badge
+        tone="gold"
+        data-testid="handicap-provenance-badge-manual"
+      >
+        Manually set{date ? ` · ${date}` : ''}
+      </Badge>
+    );
+  }
+  if (provenance.handicap_source === 'computed') {
+    return (
+      <Badge tone="azure" data-testid="handicap-provenance-badge-computed">
+        WHS computed
+      </Badge>
+    );
+  }
+  return null;
 }
 
 // ── Section shell (icon + title header on a glass card) ──────────────────────
@@ -222,8 +259,6 @@ interface EditFormState {
   gender: string;
   currentLevel: string;
   curriculum: string;
-  hasHandicap: boolean;
-  handicapIndex: string;
   playedUsKids: boolean;
   usKidsBestScore: string;
   experience: string;
@@ -240,8 +275,6 @@ function formFromJunior(j: AssignableJunior): EditFormState {
     gender: j.gender ?? 'male',
     currentLevel: String(j.current_level ?? 1),
     curriculum: j.curriculum ?? '',
-    hasHandicap: j.has_handicap,
-    handicapIndex: j.handicap_index != null ? String(j.handicap_index) : '',
     playedUsKids: j.played_us_kids === true,
     usKidsBestScore:
       j.us_kids_best_score != null ? String(j.us_kids_best_score) : '',
@@ -276,12 +309,6 @@ function StaffEditCard({ junior }: { junior: AssignableJunior }) {
       setClientError('Level must be a whole number from 1 to 9.');
       return;
     }
-    const handicapIndex =
-      form.handicapIndex.trim() === '' ? null : Number(form.handicapIndex);
-    if (handicapIndex != null && Number.isNaN(handicapIndex)) {
-      setClientError('Handicap index must be a number (one decimal place).');
-      return;
-    }
     const usKidsBest =
       form.usKidsBestScore.trim() === '' ? null : Number(form.usKidsBestScore);
     if (usKidsBest != null && !Number.isInteger(usKidsBest)) {
@@ -295,8 +322,6 @@ function StaffEditCard({ junior }: { junior: AssignableJunior }) {
         gender: form.gender,
         current_level: level, // band recomputes server-side — band_id never sent
         curriculum: form.curriculum.trim() === '' ? null : form.curriculum.trim(),
-        has_handicap: form.hasHandicap,
-        handicap_index: handicapIndex,
         played_us_kids: form.playedUsKids,
         us_kids_best_score: usKidsBest,
         experience: form.experience,
@@ -439,30 +464,7 @@ function StaffEditCard({ junior }: { junior: AssignableJunior }) {
               />
             </div>
 
-            <div>
-              <label className="flex items-center gap-2.5 text-sm font-semibold text-silver">
-                <input
-                  type="checkbox"
-                  checked={form.hasHandicap}
-                  onChange={(e) => change('hasHandicap', e.target.checked)}
-                  disabled={update.isPending}
-                  className="h-4 w-4 accent-azure"
-                  data-testid="edit-has-handicap"
-                />
-                Has a handicap
-              </label>
-              <input
-                aria-label="Handicap index"
-                type="number"
-                step={0.1}
-                className={inputClass + ' mt-2'}
-                value={form.handicapIndex}
-                onChange={(e) => change('handicapIndex', e.target.value)}
-                placeholder="Handicap index"
-                disabled={update.isPending || !form.hasHandicap}
-                data-testid="edit-handicap-index"
-              />
-            </div>
+            {/* Handicap is set via the dedicated Set-handicap control, not the intake form */}
 
             <div>
               <label className="flex items-center gap-2.5 text-sm font-semibold text-silver">
@@ -936,6 +938,12 @@ function JuniorProfileBody({
     : undefined;
   const hasHandicap = junior.has_handicap && junior.handicap_index != null;
 
+  // "Set handicap" dialog state — staff (admin/coach/committee) only.
+  const [handicapDialogOpen, setHandicapDialogOpen] = useState(false);
+  // Cast to access the provenance fields (not yet in the locked AssignableJunior type).
+  const provenance = junior as unknown as HandicapProvenance;
+  const isStaff = role === 'admin' || role === 'coach' || role === 'committee';
+
   // HandicapJourneyEditor is only shown to coach and admin (committee is read-only).
   const canEditHandicapJourney = role === 'coach' || role === 'admin';
 
@@ -995,6 +1003,25 @@ function JuniorProfileBody({
                 Not yet established.
               </p>
             )}
+            {/* Provenance badge — staff only */}
+            {isStaff && provenance.handicap_source ? (
+              <div className="mt-1.5">
+                <HandicapProvenanceBadge provenance={provenance} />
+              </div>
+            ) : null}
+            {/* Inline "Set handicap" — staff only */}
+            {isStaff ? (
+              <button
+                type="button"
+                onClick={() => setHandicapDialogOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 rounded text-xs font-bold text-azure transition hover:text-azure/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50 min-h-[44px] px-2"
+                data-testid="set-handicap-trigger"
+                aria-label="Set handicap index"
+              >
+                <Pencil size={12} aria-hidden />
+                Set handicap
+              </button>
+            ) : null}
           </div>
         </div>
       </GlassCard>
@@ -1033,6 +1060,17 @@ function JuniorProfileBody({
 
       {/* 8) Recent attendance */}
       <AttendanceSection junior={junior} />
+
+      {/* Set handicap dialog — staff only, mounts at body root via portal */}
+      {isStaff ? (
+        <SetHandicapDialog
+          open={handicapDialogOpen}
+          onClose={() => setHandicapDialogOpen(false)}
+          juniorName={name}
+          userId={junior.user_id}
+          currentValue={junior.handicap_index}
+        />
+      ) : null}
     </div>
   );
 }

@@ -105,6 +105,8 @@ def _recompute_index(user):
     ]
     new_index = calculate_handicap_index(diffs)
     user.handicap_index = Decimal(str(new_index))
+    # Provenance: this value came from the WHS engine (vs a manual staff entry).
+    user.handicap_source = "computed"
     return new_index
 
 
