@@ -19,15 +19,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { useAuth } from '../../auth/useAuth';
 import { Badge } from '../../components/ui/Badge';
@@ -69,6 +61,15 @@ function juniorName(j: AssignableJunior): string {
   return j.full_name?.trim() || `Golfer #${j.id}`;
 }
 
+// Doughnut slice colours, keyed by session type (stable regardless of which
+// types are present): azure / gold / emerald / violet.
+const SESSION_TYPE_COLOR: Record<string, string> = {
+  group: '#0082CD',
+  one_on_one: '#E0B341',
+  evaluation: '#34d399',
+  tournament_prep: '#a78bfa',
+};
+
 const assessmentTone: Record<string, 'red' | 'azure' | 'emerald'> = {
   below_expectation: 'red',
   meeting_expectation: 'azure',
@@ -91,7 +92,11 @@ export function CoachDetailPage() {
     if (!data) return [];
     return Object.entries(data.sessions_by_type)
       .filter(([, n]) => n > 0)
-      .map(([type, n]) => ({ label: SESSION_TYPE_LABEL[type] ?? type, count: n }));
+      .map(([type, n]) => ({
+        label: SESSION_TYPE_LABEL[type] ?? type,
+        count: n,
+        color: SESSION_TYPE_COLOR[type] ?? '#64748b',
+      }));
   }, [data]);
 
   return (
@@ -163,12 +168,23 @@ export function CoachDetailPage() {
               ) : (
                 <div className="h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: -16 }}>
-                      <CartesianGrid vertical={false} stroke="rgba(100,116,139,0.12)" />
-                      <XAxis dataKey="label" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        dataKey="count"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={48}
+                        outerRadius={78}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {chartData.map((slice) => (
+                          <Cell key={slice.label} fill={slice.color} />
+                        ))}
+                      </Pie>
                       <Tooltip
-                        cursor={{ fill: 'rgba(148,163,184,0.08)' }}
                         contentStyle={{
                           background: '#0b1220',
                           border: '1px solid rgba(255,255,255,0.1)',
@@ -176,8 +192,12 @@ export function CoachDetailPage() {
                           color: '#e2e8f0',
                         }}
                       />
-                      <Bar dataKey="count" name="Sessions" fill="#0082CD" radius={[6, 6, 0, 0]} />
-                    </BarChart>
+                      <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        formatter={(value) => <span className="text-xs text-slate">{value}</span>}
+                      />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
               )}
