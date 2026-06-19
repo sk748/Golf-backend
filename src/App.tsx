@@ -14,7 +14,8 @@ import { PlayerHandicapPage } from './pages/player/PlayerHandicapPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminCoursesPage } from './pages/admin/AdminCoursesPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
-import { AdminCoachAssignmentsPage } from './pages/admin/AdminCoachAssignmentsPage';
+import { CoachManagementPage } from './pages/coaches/CoachManagementPage';
+import { CoachDetailPage } from './pages/coaches/CoachDetailPage';
 import { AdminModerationPage } from './pages/admin/AdminModerationPage';
 import { AdminBenchmarksPage } from './pages/admin/AdminBenchmarksPage';
 import { AdminBadgesPage } from './pages/admin/AdminBadgesPage';
@@ -191,7 +192,6 @@ export function App() {
         {/* admin only — privileged user/config/reference/reporting surfaces. */}
         <Route element={<AdminOnly />}>
           <Route path="/users" element={<AdminUsersPage />} />
-          <Route path="/coach-assignments" element={<AdminCoachAssignmentsPage />} />
           <Route path="/moderation" element={<AdminModerationPage />} />
           <Route path="/audit-log" element={<AdminAuditLogPage />} />
           <Route path="/courses" element={<AdminCoursesPage />} />
@@ -199,9 +199,12 @@ export function App() {
           <Route path="/admin/badges" element={<AdminBadgesPage />} />
         </Route>
 
-        {/* admin + committee — bulk junior import and the evaluation
-            counter-sign queue. */}
+        {/* admin + committee — coach management (analytics + roster +
+            .xlsx export; assignment controls are admin-only inside the page),
+            bulk junior import, and the evaluation counter-sign queue. */}
         <Route element={<AdminCommitteeOnly />}>
+          <Route path="/coaches" element={<CoachManagementPage />} />
+          <Route path="/coaches/:coachId" element={<CoachDetailPage />} />
           <Route path="/import" element={<AdminImportPage />} />
           <Route path="/evaluations" element={<CommitteeEvaluationsPage />} />
         </Route>

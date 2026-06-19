@@ -511,6 +511,54 @@ around locally for now (no locked-file edits):
   User + junior payloads) — typed locally in `pages/juniors/handicap.queries.ts`.
 Do these in one pass when src/types/api.ts is unlocked.
 
+### Coach analytics (admin + committee oversight, 2026-06-18) — ✅ SHIPPED
+Per-coach oversight view for admin + committee. Pure read-aggregation over
+existing data — **no new tables, no migration**.
+- **Backend** (`app/coach_analytics/`): two read endpoints guarded
+  `@require_roles("admin","committee")` — `GET /api/coach-analytics` (one summary
+  row per active coach) and `GET /api/coach-analytics/<coach_id>` (detail). Both
+  take `?date_from=&date_to=` (default last 90 days; 400 on bad ISO; 404 on a
+  non-coach id). Per coach: sessions run (count + by-type + timeline), **1-on-1s
+  flagged billable — count + attendees only, no rates** (charging stays parked per
+  CLAUDE.md), and four performance signals over the coach's assigned juniors —
+  handicap improvement (avg change in index; +ve = improvement), evaluation
+  assessment mix + move-next-level recs, level progress (avg level), attendance
+  adherence (present/total). Registered in `main.py`.
+- **Frontend** (`src/pages/coach-analytics/`): `/coach-analytics` overview
+  (period selector, totals strip, sortable coach table with assessment-mix bars +
+  green/red handicap-change indicator) → `/coach-analytics/:coachId` detail
+  (stat cards, sessions-by-type recharts bar, sessions timeline w/ billable tag,
+  per-junior performance table). Nav: admin "Reference & Reporting" + committee
+  "Programme". All reads via `src/lib/api.ts`; no WHS math on the client.
+- Verified: tsc + lint + vite build green; api-contract-auditor PASS (no
+  CRITICAL/HIGH); test-client HTTP smoke confirmed guards (admin/committee 200,
+  coach/player/parent 403, unauth 401) + 404/400 edge paths against real seed data.
+- **Note:** built on `feat/frontend-phase0`; not yet mirrored to `Draft-1`/`main`.
+
+### Coach Management section + .xlsx export (2026-06-19) — ✅ SHIPPED
+Consolidated coach assignment + analytics into one **Coach Management** section
+(admin + committee) and added native Excel export (feedback-build item E).
+- **Restructure:** retired `/coach-assignments` (student-centric grid) and the
+  standalone `/coach-analytics` pages; folded both into `src/pages/coaches/`:
+  `/coaches` hub (dashboard — totals incl. unassigned-juniors for admin, period
+  selector, all-coaches export, coach roster table) → `/coaches/:coachId` detail
+  (analytics chart/timeline + **coach-centric roster management**: admin assigns/
+  unassigns juniors *to that coach*; committee read-only — `PUT /api/juniors/:id/
+  coach` stays `admin_only`). Nav "Coaches" now → `/coaches` (admin People +
+  committee People). Old files deleted; shared `coach-assignment.queries` reused.
+- **Excel export** (`app/coach_analytics/export.py`, adds **openpyxl 3.1.5** +
+  et-xmlfile to requirements): `GET /api/coach-analytics/export` (all-coaches
+  summary) + `GET /api/coach-analytics/:id/export` (per-coach: Summary, Sessions
+  held, **1-on-1 log (billable)**, Player performance). Workbook returned
+  base64 in the `{data}` envelope so the **locked api.ts** carries it with no
+  binary path / no direct fetch; frontend `downloadXlsx` decodes to a Blob.
+  Still count-only — no rates/money (charging parked). Both export routes
+  admin+committee; static `/export` safely outranks `/<coach_id>`.
+- Verified: tsc + lint + vite build green; api-contract-auditor PASS (1 MEDIUM
+  fixed — committee no longer fetches the all-juniors list / sees the unassigned
+  card); test-client smoke confirmed valid 4-sheet .xlsx, guards (admin/committee
+  200, player 403, unauth 401), 404 bad-id, 400 bad-date, no route collision.
+
 ### Next up (other)
 - **UI/UX reorganisation pass** (Sam: current nav/IA "hard to use" — admin nav is
   now ~18 items; design the IA once now that all surfaces exist). Inspo pending

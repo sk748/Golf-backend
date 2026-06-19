@@ -96,7 +96,7 @@ const communicationGroup: NavGroup = {
 // `mobileTabRank` picks the four mobile bottom tabs per role.
 export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
   admin: [
-    { heading: 'Overview', icon: LayoutDashboard, items: [dashboard, calendar] },
+    { heading: 'Overview', icon: LayoutDashboard, items: [dashboard] },
     {
       heading: 'People',
       icon: Users,
@@ -104,7 +104,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { to: '/users', label: 'Users', icon: Users },
         juniors,
-        { to: '/coach-assignments', label: 'Coaches', icon: UserCog },
+        { to: '/coaches', label: 'Coaches', icon: UserCog },
         { to: '/import', label: 'Import juniors', icon: Upload },
       ],
     },
@@ -113,6 +113,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       icon: CalendarDays,
       mobileTabRank: 1,
       items: [
+        calendar,
         { to: '/evaluations', label: 'Evaluations', icon: ClipboardList },
         { to: '/schedule', label: 'Schedules', icon: CalendarDays },
         groupSessions,
@@ -140,7 +141,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
     },
   ],
   coach: [
-    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 3, items: [dashboard, calendar] },
+    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 3, items: [dashboard] },
     { heading: 'People', icon: Users, mobileTabRank: 1, items: [juniors] },
     {
       heading: 'Programme',
@@ -163,12 +164,16 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
     communicationGroup,
   ],
   committee: [
-    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 3, items: [dashboard, calendar] },
+    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 3, items: [dashboard] },
     {
       heading: 'People',
       icon: Users,
       mobileTabRank: 1,
-      items: [juniors, { to: '/import', label: 'Import juniors', icon: Upload }],
+      items: [
+        juniors,
+        { to: '/coaches', label: 'Coaches', icon: UserCog },
+        { to: '/import', label: 'Import juniors', icon: Upload },
+      ],
     },
     {
       heading: 'Programme',
@@ -189,7 +194,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
     communicationGroup,
   ],
   parent: [
-    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 1, items: [dashboard, calendar] },
+    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 1, items: [dashboard] },
     {
       heading: 'My family',
       icon: Users,
@@ -204,7 +209,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
     communicationGroup,
   ],
   player: [
-    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 1, items: [dashboard, calendar] },
+    { heading: 'Overview', icon: LayoutDashboard, mobileTabRank: 1, items: [dashboard] },
     {
       heading: 'My golf',
       icon: Flag,
