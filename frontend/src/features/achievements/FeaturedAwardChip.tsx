@@ -32,9 +32,14 @@ function resolveAward(award: FeaturedAward): ResolvedAward | null {
 export function FeaturedAwardChip({
   award,
   className,
+  // Which side the detail card opens toward. Defaults to 'top' (the chat
+  // bubble case); the top bar passes 'bottom' so the card isn't clipped off
+  // the top of the viewport.
+  placement = 'top',
 }: {
   award: FeaturedAward;
   className?: string;
+  placement?: 'top' | 'bottom';
 }) {
   const [open, setOpen] = useState(false);
   const resolved = resolveAward(award);
@@ -64,7 +69,10 @@ export function FeaturedAwardChip({
       {open ? (
         <span
           role="tooltip"
-          className="absolute bottom-full left-0 z-20 mb-1 w-52 rounded-xl border border-gold/30 bg-navy p-3 text-left shadow-xl"
+          className={cn(
+            'absolute left-0 z-20 w-52 rounded-xl border border-gold/30 bg-navy p-3 text-left shadow-xl',
+            placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
+          )}
           data-testid="featured-award-card"
         >
           <span className="flex items-center gap-1.5 text-xs font-black text-gold">

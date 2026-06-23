@@ -9,6 +9,8 @@ import { NotificationBell } from './NotificationBell';
 import { useNotificationsSummary } from './notifications.queries';
 import { NAV_GROUPS_BY_ROLE } from './nav-config';
 import { activeItem, bottomGroupsFor, quickCreateFor, type NavGroup } from './nav-selectors';
+import { TourLaunchButton } from '../../features/tour/TourLaunchButton';
+import { HeaderFeaturedAward } from './HeaderFeaturedAward';
 
 // Mobile chrome: a top bar + a group-tab bottom bar with a pop-up subgroup
 // mini-bar, a center "+" quick-create launcher, and a floating chat bubble.
@@ -58,10 +60,12 @@ export function AppShellMobile() {
           <img src="/kcc-logo.png" alt="Karen Country Club" className="h-8 w-auto" />
         </NavLink>
         <h1 className="truncate text-base font-bold text-silver">{title}</h1>
+        {user.role === 'player' && <HeaderFeaturedAward />}
         <div className="ml-auto flex items-center gap-2">
           <NavLink to="/profile" data-testid="nav-profile" aria-label="My profile">
             <Avatar name={user.full_name || user.email} />
           </NavLink>
+          <TourLaunchButton />
           <NotificationBell />
         </div>
       </header>

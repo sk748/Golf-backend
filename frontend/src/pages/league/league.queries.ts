@@ -120,21 +120,27 @@ export interface Scoreboard {
 // ── Reads ───────────────────────────────────────────────────────────────────
 
 // GET /api/league/scoreboard — auth-scoped scoreboard for in-app dashboards.
-export function useScoreboard(): UseQueryResult<Scoreboard> {
+// `enabled` lets callers that share a component with the public variant (the
+// landing hero) keep this AUTHENTICATED request idle when logged out — firing
+// it without a token 401s and bounces the visitor to /login.
+export function useScoreboard(enabled = true): UseQueryResult<Scoreboard> {
   return useQuery({
     queryKey: ['league', 'scoreboard'],
     queryFn: () => api.get<Scoreboard>('/api/league/scoreboard'),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 
 // GET /api/public/league/scoreboard — NO auth required; powers the logged-out
-// landing-page hero.
-export function usePublicScoreboard(): UseQueryResult<Scoreboard> {
+// landing-page hero. `enabled` defaults on; the hero disables it in-app so only
+// one of the two scoreboard requests is ever in flight.
+export function usePublicScoreboard(enabled = true): UseQueryResult<Scoreboard> {
   return useQuery({
     queryKey: ['league', 'scoreboard', 'public'],
     queryFn: () => api.get<Scoreboard>('/api/public/league/scoreboard'),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 

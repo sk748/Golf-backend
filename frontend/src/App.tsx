@@ -48,6 +48,8 @@ import { LeagueOverviewPage } from './pages/league/LeagueOverviewPage';
 import { FixtureDetailPage } from './pages/league/FixtureDetailPage';
 import { LeagueManagePage } from './pages/league/LeagueManagePage';
 import { ProfilePage } from './pages/profile/ProfilePage';
+import { CreditsPage } from './pages/easter-egg/CreditsPage';
+import { KonamiListener } from './features/easter-egg/KonamiListener';
 
 // Access-tier guards. Each wraps an <Outlet/> so a group of routes declares its
 // allowed roles once, in the route tree, instead of repeating RequireRole on
@@ -106,8 +108,13 @@ export function App() {
   return (
     <>
       <ScrollToTop />
+      {/* Listens for the Konami code app-wide → the hidden credits page. */}
+      <KonamiListener />
       <Routes>
       <Route path="/" element={<Home />} />
+      {/* Hidden Easter egg — unlisted, reachable via the Konami code. Public so
+          the code works from anywhere, even before sign-in. */}
+      <Route path="/secret" element={<CreditsPage />} />
       <Route
         path="/login"
         element={

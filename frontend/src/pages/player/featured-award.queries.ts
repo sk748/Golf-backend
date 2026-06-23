@@ -16,6 +16,9 @@ import {
 
 import { api } from '../../lib/api';
 import type { JuniorProfile } from '../../types/api';
+import { useBadges } from '../../features/badges/badges.queries';
+import { useMyJunior } from './player-progress.queries';
+import type { FeaturedAward } from '../messages/messages.queries';
 
 // The featured-award fields the backend adds to the junior profile + the PUT
 // response. Kept local until the locked types catch up.
@@ -34,6 +37,36 @@ export function featuredAwardOf(
     featured_badge_id: j?.featured_badge_id ?? null,
     featured_achievement_key: j?.featured_achievement_key ?? null,
   };
+}
+
+// Resolve the CURRENT player's featured award into the tagged union the chip
+// renders, or null when nothing is featured (or while the data resolves). A
+// featured achievement carries only its key; a featured badge is joined to the
+// catalog for its name/description (so the same chip works in chat and chrome).
+// Player-only: it reads the player-scoped junior profile, so only mount the
+// caller for players.
+export function useMyFeaturedAward(): FeaturedAward | null {
+  const junior = useMyJunior();
+  const badges = useBadges();
+  const { featured_badge_id, featured_achievement_key } = featuredAwardOf(
+    junior.data,
+  );
+
+  if (featured_achievement_key) {
+    return { source: 'achievement', key: featured_achievement_key };
+  }
+  if (featured_badge_id != null) {
+    const def = badges.data?.find((b) => b.id === featured_badge_id);
+    // Catalog not loaded yet, or the badge was retired — render nothing.
+    if (!def) return null;
+    return {
+      source: 'badge',
+      id: def.id,
+      name: def.name,
+      description: def.description ?? '',
+    };
+  }
+  return null;
 }
 
 // PUT /api/juniors/:id/featured-badge — body is exactly ONE of:

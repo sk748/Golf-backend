@@ -41,6 +41,18 @@ the API contract was ambiguous and how it was resolved)._
 - _(kickoff)_ Backend is fixed and owned separately; frontend builds against the
   contract documented in `CLAUDE.md`.
 
+- **2026-06-19 — Interactive walkthrough / guided tour (all roles).** Custom,
+  no-dependency spotlight tour in `src/features/tour/` (`tour-steps.ts`,
+  `tour-context.ts`, `TourProvider`, `useTour`, `TourOverlay`, `TourLaunchButton`).
+  Auto-runs once per role on first login (localStorage `kcc.tour.{role}.v1`) and
+  is replayable from a "Take a tour" (?) button in both shell top bars. Each role
+  has a 6–8 step script targeting **existing** stable hooks — the player
+  dashboard's `feature-*`/`hero-handicap` cards and the role-aware sidebar
+  `nav-*` test-ids — so **no dashboard files were modified**. Spotlight is a single
+  box-shadow cutout (azure ring + navy dim); missing targets (e.g. sidebar items on
+  mobile) fall back to a centred card so a script never dead-ends. Esc / arrows /
+  Enter navigate. Part of the Phase 6 finishing-touches sweep. tsc + lint + build green.
+
 ### Phase 0 — done (branch `feat/frontend-phase0`)
 - **Repo structure:** frontend lives at the **repo root** (monorepo alongside the
   Flask backend), matching CLAUDE.md's locked layout (`src/`, `index.html`,
@@ -219,6 +231,12 @@ Backend domain is fully live and the two branches are unified (merge `7454e09`).
   rebuilding a clean DB from the chain and diffing schemas.
 - Still open for staging: production env vars (DATABASE_URI / APP_SETTINGS / JWT
   secret / FRONTEND_URL), rate-limiter storage backend, `VITE_API_BASE` build config.
+- ⚠️ **Scrub the embedded push token** from this workspace's `git` remote
+  (`remote.origin.url` carries a plaintext `x-access-token:` PAT, added 2026-06-19
+  to push past the read-only Gitpod credential helper). Reset to the clean
+  `https://github.com/sk748/Golf-backend.git` before staging / before the
+  workspace is shared. Token is local to `.git/config` only — never committed or
+  pushed — but is readable to anyone with workspace access.
 
 ### Build phase 2 decisions (Sam, 2026-06-10) — the UX-completion build
 Answers to the 14 decisions raised by the per-role UX gap evaluation:

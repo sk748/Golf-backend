@@ -304,9 +304,11 @@ function MiniStandings({
 
 export function ScoreboardHero({ source }: { source: 'auth' | 'public' }) {
   // Both hooks are called unconditionally (Rules of Hooks); `enabled` toggles
-  // which one actually fetches, so the unused one stays idle.
-  const authBoard = useScoreboard();
-  const publicBoard = usePublicScoreboard();
+  // which one actually fetches, so the unused one stays idle. This matters on
+  // the public landing: the auth-scoped /api/league/scoreboard 401s when logged
+  // out, and an un-gated 401 would bounce the visitor to /login.
+  const authBoard = useScoreboard(source === 'auth');
+  const publicBoard = usePublicScoreboard(source === 'public');
   const query = source === 'auth' ? authBoard : publicBoard;
 
   const board = query.data;

@@ -11,6 +11,8 @@ import { NAV_GROUPS_BY_ROLE } from './nav-config';
 import { activeItem, quickCreateFor } from './nav-selectors';
 import { NotificationBell } from './NotificationBell';
 import { useNotificationsSummary } from './notifications.queries';
+import { TourLaunchButton } from '../../features/tour/TourLaunchButton';
+import { HeaderFeaturedAward } from './HeaderFeaturedAward';
 
 const COLLAPSE_KEY = 'kcc.sidebar.collapsed';
 
@@ -222,9 +224,11 @@ export function AppShellDesktop() {
 
       <div className={cn('transition-[margin] duration-200', collapsed ? 'ml-16' : 'ml-64')}>
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-navy/80 px-6 py-3 backdrop-blur">
-          <h1 className="text-lg font-bold text-silver">{title}</h1>
+          <h1 className="shrink-0 text-lg font-bold text-silver">{title}</h1>
+          {user.role === 'player' && <HeaderFeaturedAward />}
           <div className="ml-auto flex items-center gap-3">
             <NewMenu />
+            <TourLaunchButton />
             <NotificationBell />
           </div>
         </header>
