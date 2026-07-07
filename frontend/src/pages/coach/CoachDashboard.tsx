@@ -1,0 +1,467 @@
+import { Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock,
+  Loader2,
+  PenLine,
+  Users,
+} from 'lucide-react';
+
+import { ApiError } from '../../lib/api';
+import { useAuth } from '../../auth/useAuth';
+import { Button } from '../../components/ui/Button';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { FeatureCard } from '../../components/ui/FeatureCard';
+import { Badge } from '../../components/ui/Badge';
+import { useCoachSchedule, type CoachSession } from './coach-schedule.queries';
+import {
+  useUnsignedEvaluations,
+  useCoachSign,
+  useGolferNames,
+} from './coach-evaluations.queries';
+import {
+  useCoachJuniors,
+  type AssignableJunior,
+} from '../admin/coach-assignment.queries';
+import { usePendingBookings } from '../coaching/group-sessions.queries';
+import { useAtRiskJuniors } from './at-risk.queries';
+import {
+  currentWeekStart,
+  dayLabel,
+  parseISODate,
+  sessionISODate,
+  sessionTimeLabel,
+} from './coach-dates';
+import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? err.message : fallback;
+}
+
+// Compact stat for a FeatureCard: a quiet placeholder while loading, an em dash
+// on error, otherwise the count.
+function statValue(loading: boolean, error: boolean, value: number): string | number {
+  if (loading) return '·';
+  if (error) return '—';
+  return value;
+}
+
+function ErrorPanel({ message, testId }: { message: string; testId?: string }) {
+  return (
+    <div
+      className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400"
+      role="alert"
+      data-testid={testId}
+    >
+      {message}
+    </div>
+  );
+}
+
+function monthLabel(iso: string): string {
+  return parseISODate(iso).toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+export function CoachDashboard() {
+  const { user } = useAuth();
+  const coachId = user?.id;
+  const week = currentWeekStart();
+
+  const schedule = useCoachSchedule(coachId, week);
+  const evals = useUnsignedEvaluations(coachId);
+  const coachSign = useCoachSign();
+  const { nameFor } = useGolferNames();
+  const myJuniors = useCoachJuniors(coachId);
+  const pendingBookings = usePendingBookings();
+  const atRisk = useAtRiskJuniors(coachId);
+
+  const sessions: CoachSession[] = schedule.data ?? [];
+  const pending = evals.data ?? [];
+  // Bookings this coach can act on (their own sessions / unassigned requests).
+  const myPendingBookings = (pendingBookings.data ?? []).filter(
+    (b) => !b.coach_id || b.coach_id === coachId,
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <p className="animate-fade-in-up text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
+        Coaching
+      </p>
+      <h1 className="animate-fade-in-up stagger-1 mt-1 text-2xl font-black text-silver sm:text-3xl">
+        {user ? `Welcome, ${user.first_name}` : 'Welcome'}
+      </h1>
+      <p className="animate-fade-in-up stagger-1 mt-2 max-w-2xl text-sm text-slate">
+        Your week and the evaluations waiting on your sign-off.
+      </p>
+
+      {/* ── Interactive overview: a stat + headline per area, each a link ── */}
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <FeatureCard
+          label="This week"
+          icon={CalendarDays}
+          tone="azure"
+          stat={statValue(schedule.isLoading, schedule.isError, sessions.length)}
+          headline="sessions on your schedule"
+          to="/schedule"
+          testId="feature-schedule"
+        />
+        <FeatureCard
+          label="Sign-offs"
+          icon={ClipboardCheck}
+          tone={pending.length > 0 ? 'gold' : 'default'}
+          stat={statValue(evals.isLoading, evals.isError, pending.length)}
+          headline="evaluations awaiting your signature"
+          to="/evaluations/new"
+          testId="feature-signoffs"
+        />
+        <FeatureCard
+          label="Bookings"
+          icon={CalendarPlus}
+          tone={myPendingBookings.length > 0 ? 'gold' : 'default'}
+          stat={statValue(
+            pendingBookings.isLoading,
+            pendingBookings.isError,
+            myPendingBookings.length,
+          )}
+          headline="session requests to review"
+          to="/coach-sessions"
+          testId="feature-bookings"
+        />
+        <FeatureCard
+          label="My juniors"
+          icon={Users}
+          stat={statValue(myJuniors.isLoading, myJuniors.isError, (myJuniors.data ?? []).length)}
+          headline="juniors assigned to you"
+          to="/juniors"
+          testId="feature-juniors"
+        />
+      </div>
+
+      {/* ── At-risk attendance: juniors below their band's session minimum ── */}
+      <GlassCard
+        className="animate-fade-in-up stagger-2 mt-6 p-5"
+        data-testid="at-risk-card"
+      >
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-silver">
+            <AlertTriangle size={16} className="text-gold" aria-hidden />
+            At-risk attendance
+          </h2>
+          <Link
+            to="/attendance"
+            className="text-xs font-medium text-azure hover:underline"
+            data-testid="at-risk-take-attendance"
+          >
+            Take attendance
+          </Link>
+        </div>
+        <p className="mt-1 text-xs text-slate">
+          Juniors below their band&apos;s minimum session count this period.
+        </p>
+
+        <div className="mt-4">
+          {atRisk.isLoading ? (
+            <div
+              className="flex items-center gap-2 text-sm text-slate"
+              data-testid="at-risk-loading"
+            >
+              <Loader2 size={18} className="animate-spin text-azure" />
+              Checking attendance against band minimums…
+            </div>
+          ) : atRisk.isError ? (
+            <ErrorPanel
+              message="Could not check attendance against band minimums."
+              testId="at-risk-error"
+            />
+          ) : atRisk.atRisk.length === 0 ? (
+            <p
+              className="flex items-center gap-2 text-sm text-slate"
+              data-testid="at-risk-empty"
+            >
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              All juniors are on track for their band minimum.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2" data-testid="at-risk-list">
+              {atRisk.atRisk.map(({ junior, present, min, shortfall }) => (
+                <li key={junior.id} data-testid={`at-risk-${junior.id}`}>
+                  <Link
+                    to={`/juniors/${junior.id}`}
+                    className="glass-light flex items-center gap-3 rounded-xl p-3 ring-1 ring-gold/20 transition-colors hover:ring-gold/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15">
+                      <AlertTriangle size={16} className="text-gold" aria-hidden />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-silver">
+                        {junior.full_name?.trim() || `Golfer #${junior.id}`}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                        <Badge tone="slate" className="px-1.5 py-0.5">
+                          L{junior.current_level}
+                        </Badge>
+                        <span className="tabular-nums text-gold">
+                          {present}/{min} sessions
+                        </span>
+                        <span>· {shortfall} short</span>
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </GlassCard>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        {/* ── This week's schedule ──────────────────────────────────────── */}
+        <GlassCard className="animate-fade-in-up stagger-1 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">This week</h2>
+            <Link
+              to="/schedule"
+              className="text-xs font-medium text-azure hover:underline"
+              data-testid="dashboard-view-schedule"
+            >
+              Full schedule
+            </Link>
+          </div>
+
+          <div className="mt-4">
+            {schedule.isLoading ? (
+              <div
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="week-loading"
+              >
+                <Loader2 size={18} className="animate-spin text-azure" />
+                Loading this week…
+              </div>
+            ) : schedule.isError ? (
+              <ErrorPanel
+                message={errorMessage(
+                  schedule.error,
+                  'Could not load your schedule.',
+                )}
+                testId="week-error"
+              />
+            ) : sessions.length === 0 ? (
+              <p className="text-sm text-slate" data-testid="week-empty">
+                No sessions scheduled this week.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="week-list">
+                {sessions.map((s) => {
+                  const iso = sessionISODate(s);
+                  const time = sessionTimeLabel(s);
+                  return (
+                    <li
+                      key={s.id}
+                      className="glass-light flex items-center gap-3 rounded-xl p-3"
+                      data-testid={`week-session-${s.id}`}
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-azure/15">
+                        <CalendarDays size={16} className="text-azure" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-silver">
+                          {s.session_type ?? 'Session'}
+                        </p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate">
+                          {iso && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarDays size={12} />
+                              {dayLabel(parseISODate(iso))}
+                            </span>
+                          )}
+                          {time && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={12} />
+                              {time}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </GlassCard>
+
+        {/* ── Awaiting my sign-off ──────────────────────────────────────── */}
+        <GlassCard className="animate-fade-in-up stagger-2 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">
+              Awaiting my sign-off
+            </h2>
+            <Link
+              to="/attendance"
+              className="text-xs font-medium text-azure hover:underline"
+              data-testid="dashboard-take-attendance"
+            >
+              Take attendance
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-slate">
+            Coach signs first; the committee then counter-signs.
+          </p>
+
+          <div className="mt-4">
+            {evals.isLoading ? (
+              <div
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="evals-loading"
+              >
+                <Loader2 size={18} className="animate-spin text-azure" />
+                Loading evaluations…
+              </div>
+            ) : evals.isError ? (
+              <ErrorPanel
+                message={errorMessage(
+                  evals.error,
+                  'Could not load evaluations.',
+                )}
+                testId="evals-error"
+              />
+            ) : pending.length === 0 ? (
+              <p
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="evals-empty"
+              >
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                Nothing awaiting your sign-off.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="evals-list">
+                {pending.map((e) => (
+                  <li
+                    key={e.id}
+                    className="glass-light flex items-center gap-3 rounded-xl p-3"
+                    data-testid={`eval-${e.id}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-silver">
+                        {nameFor(e.junior_id)}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                        <span>{monthLabel(e.report_month)}</span>
+                        <Badge tone="slate" className="px-1.5 py-0.5">
+                          L{e.current_level}
+                        </Badge>
+                      </p>
+                    </div>
+                    <Button
+                      variant="gold"
+                      size="sm"
+                      disabled={
+                        coachSign.isPending &&
+                        coachSign.variables === e.id
+                      }
+                      onClick={() => coachSign.mutate(e.id)}
+                      data-testid={`eval-sign-${e.id}`}
+                    >
+                      {coachSign.isPending && coachSign.variables === e.id ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <PenLine size={16} />
+                      )}
+                      Sign
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {coachSign.isError && (
+              <div className="mt-3">
+                <ErrorPanel
+                  message={errorMessage(
+                    coachSign.error,
+                    'Could not sign that evaluation.',
+                  )}
+                  testId="eval-sign-error"
+                />
+              </div>
+            )}
+          </div>
+        </GlassCard>
+
+        {/* ── My juniors ────────────────────────────────────────────────── */}
+        <GlassCard className="animate-fade-in-up stagger-3 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-bold text-silver">My juniors</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate">
+            The juniors assigned to you by the club admin.
+          </p>
+
+          <div className="mt-4">
+            {myJuniors.isLoading ? (
+              <div
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="my-juniors-loading"
+              >
+                <Loader2 size={18} className="animate-spin text-azure" />
+                Loading your juniors…
+              </div>
+            ) : myJuniors.isError ? (
+              <ErrorPanel
+                message={errorMessage(
+                  myJuniors.error,
+                  'Could not load your juniors.',
+                )}
+                testId="my-juniors-error"
+              />
+            ) : (myJuniors.data ?? []).length === 0 ? (
+              <p className="text-sm text-slate" data-testid="my-juniors-empty">
+                No juniors assigned to you yet — the club admin assigns
+                juniors to coaches.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="my-juniors-list">
+                {(myJuniors.data ?? []).map((j: AssignableJunior) => (
+                  <li
+                    key={j.id}
+                    className="glass-light flex items-center gap-3 rounded-xl p-3"
+                    data-testid={`my-junior-${j.id}`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-azure/15">
+                      <Users size={16} className="text-azure" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-silver">
+                        {j.full_name?.trim() || `Golfer #${j.id}`}
+                      </p>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                        <Badge tone="slate" className="px-1.5 py-0.5">
+                          L{j.current_level}
+                        </Badge>
+                        {j.has_handicap && j.handicap_index != null && (
+                          <span className="tabular-nums">
+                            HI {j.handicap_index.toFixed(1)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </GlassCard>
+
+        {/* ── Club announcements — fourth cell, balancing the 2×2 grid ───── */}
+        <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+      </div>
+    </div>
+  );
+}

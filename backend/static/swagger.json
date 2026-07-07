@@ -1,0 +1,3649 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Karen Golf Management Platform API",
+    "description": "REST API for Karen Country Club golf operations \u2014 tournament management, junior development, coaching, scoring and WHS handicaps.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local dev"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "first_name": {
+            "type": "string"
+          },
+          "last_name": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "coach",
+              "committee",
+              "parent",
+              "player"
+            ]
+          },
+          "membership_type": {
+            "type": "string",
+            "enum": [
+              "full",
+              "social",
+              "guest",
+              "junior"
+            ]
+          },
+          "handicap_index": {
+            "type": "number",
+            "nullable": true
+          },
+          "cdh_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Course": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "par": {
+            "type": "integer"
+          },
+          "altitude_ft": {
+            "type": "integer",
+            "nullable": true
+          },
+          "grass_type": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "TeeSet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "course_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "enum": [
+              "white",
+              "yellow",
+              "blue",
+              "red"
+            ]
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "men",
+              "women"
+            ]
+          },
+          "course_rating": {
+            "type": "number"
+          },
+          "slope_rating": {
+            "type": "integer"
+          },
+          "total_yards": {
+            "type": "integer"
+          }
+        }
+      },
+      "Hole": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "course_id": {
+            "type": "integer"
+          },
+          "hole_number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18
+          },
+          "par": {
+            "type": "integer",
+            "enum": [
+              3,
+              4,
+              5
+            ]
+          },
+          "stroke_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18
+          },
+          "white_yards": {
+            "type": "integer"
+          },
+          "yellow_yards": {
+            "type": "integer"
+          },
+          "blue_yards": {
+            "type": "integer"
+          },
+          "red_yards": {
+            "type": "integer"
+          }
+        }
+      },
+      "Tournament": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "scoring_basis": {
+            "type": "string"
+          },
+          "course_id": {
+            "type": "integer"
+          },
+          "tee_set_id": {
+            "type": "integer"
+          },
+          "holes": {
+            "type": "integer"
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string"
+          },
+          "counts_toward_handicap": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "series_id": {
+            "type": "integer"
+          },
+          "max_entrants": {
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "age_min": {
+            "type": "integer"
+          },
+          "age_max": {
+            "type": "integer"
+          },
+          "level_min": {
+            "type": "integer"
+          },
+          "level_max": {
+            "type": "integer"
+          },
+          "handicap_min": {
+            "type": "number"
+          },
+          "handicap_max": {
+            "type": "number"
+          },
+          "handicap_required": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "LeaderboardRow": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "type": "integer"
+          },
+          "team_id": {
+            "type": "integer"
+          },
+          "team_name": {
+            "type": "string"
+          },
+          "played": {
+            "type": "integer"
+          },
+          "wins": {
+            "type": "integer"
+          },
+          "ties": {
+            "type": "integer"
+          },
+          "losses": {
+            "type": "integer"
+          },
+          "match_points": {
+            "type": "integer"
+          },
+          "late_cancel_penalty": {
+            "type": "integer"
+          },
+          "declined_penalty": {
+            "type": "integer"
+          },
+          "total_points": {
+            "type": "integer"
+          },
+          "qualified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "JuniorProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "date_of_birth": {
+            "type": "string",
+            "format": "date"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female"
+            ]
+          },
+          "current_level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "band_id": {
+            "type": "integer"
+          },
+          "has_handicap": {
+            "type": "boolean"
+          },
+          "handicap_index": {
+            "type": "number",
+            "nullable": true
+          },
+          "experience": {
+            "type": "string",
+            "enum": [
+              "beginner",
+              "lt_1yr",
+              "1_3yr",
+              "4_6yr",
+              "7_10yr"
+            ]
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "twice_weekly",
+              "weekends_only",
+              "more_than_twice",
+              "holidays_only"
+            ]
+          },
+          "tournament_ready": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Evaluation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "junior_id": {
+            "type": "integer"
+          },
+          "coach_id": {
+            "type": "string"
+          },
+          "report_month": {
+            "type": "string",
+            "format": "date"
+          },
+          "current_level": {
+            "type": "integer"
+          },
+          "attendance_count": {
+            "type": "integer"
+          },
+          "assessment": {
+            "type": "string",
+            "enum": [
+              "below_expectation",
+              "meeting_expectation",
+              "exceeding_expectation"
+            ]
+          },
+          "recommendation": {
+            "type": "string",
+            "enum": [
+              "continue_level",
+              "move_next_level"
+            ]
+          },
+          "coach_signed": {
+            "type": "boolean"
+          },
+          "committee_signed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Round": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "course_id": {
+            "type": "integer"
+          },
+          "tee_set_id": {
+            "type": "integer"
+          },
+          "date_played": {
+            "type": "string",
+            "format": "date"
+          },
+          "round_type": {
+            "type": "string",
+            "enum": [
+              "casual",
+              "tournament",
+              "competition"
+            ]
+          },
+          "gross_score": {
+            "type": "integer"
+          },
+          "score_differential": {
+            "type": "number",
+            "nullable": true
+          },
+          "handicap_before": {
+            "type": "number",
+            "nullable": true
+          },
+          "handicap_after": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "class_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "coach_id": {
+            "type": "string"
+          },
+          "session_type": {
+            "type": "string",
+            "enum": [
+              "group",
+              "one_on_one",
+              "evaluation",
+              "tournament_prep"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "start_time": {
+            "type": "string"
+          },
+          "end_time": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "completed",
+              "cancelled"
+            ]
+          }
+        }
+      },
+      "TournamentDivision": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tournament_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          },
+          "tee_set_id": {
+            "type": "integer"
+          },
+          "age_min": {
+            "type": "integer"
+          },
+          "age_max": {
+            "type": "integer"
+          },
+          "gender": {
+            "type": "string"
+          },
+          "level_min": {
+            "type": "integer"
+          },
+          "level_max": {
+            "type": "integer"
+          },
+          "handicap_min": {
+            "type": "number"
+          },
+          "handicap_max": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "TournamentEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tournament_id": {
+            "type": "integer"
+          },
+          "junior_id": {
+            "type": "integer"
+          },
+          "division_id": {
+            "type": "integer"
+          },
+          "registered_by": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "registered_at": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "TournamentScore": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "entry_id": {
+            "type": "integer"
+          },
+          "holes_played": {
+            "type": "integer"
+          },
+          "gross_score": {
+            "type": "integer"
+          },
+          "net_score": {
+            "type": "integer"
+          },
+          "stableford_points": {
+            "type": "integer"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "round_id": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "TournamentMatch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "tournament_id": {
+            "type": "integer"
+          },
+          "round_number": {
+            "type": "integer"
+          },
+          "bracket_position": {
+            "type": "integer"
+          },
+          "player_a_entry_id": {
+            "type": "integer"
+          },
+          "player_b_entry_id": {
+            "type": "integer"
+          },
+          "winner_entry_id": {
+            "type": "integer"
+          },
+          "result_text": {
+            "type": "string"
+          },
+          "scheduled_date": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ExternalResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "junior_id": {
+            "type": "integer"
+          },
+          "event_name": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "holes": {
+            "type": "integer"
+          },
+          "gross_score": {
+            "type": "integer"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "field_size": {
+            "type": "integer"
+          },
+          "counts_toward_handicap": {
+            "type": "boolean"
+          },
+          "round_id": {
+            "type": "integer"
+          },
+          "logged_by": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "Series": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "points_scheme": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new user",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "full_name"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token + user"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Email already registered"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token + user"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get own profile",
+        "responses": {
+          "200": {
+            "description": "User object"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        }
+      }
+    },
+    "/api/auth/profile": {
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Update own profile",
+        "responses": {
+          "200": {
+            "description": "Updated user"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List users (admin/coach/committee)",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "membership_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of users"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create user (admin only)",
+        "responses": {
+          "201": {
+            "description": "Created user"
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user (admin or self)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated user"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete user (admin only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/seed": {
+      "post": {
+        "tags": [
+          "Seed"
+        ],
+        "summary": "Seed reference data (course, holes, tees, level bands, tournament)",
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Seeded"
+          }
+        }
+      }
+    },
+    "/api/courses": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "List courses",
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Create course (admin)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/courses/{id}": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Get course",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Course"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Update course (admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Delete course (admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/courses-with-tees": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "All courses with embedded tee sets (used by ScorecardForm)",
+        "responses": {
+          "200": {
+            "description": "Courses with tees array"
+          }
+        }
+      }
+    },
+    "/api/tee-sets": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "List tee sets",
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Create tee set (admin)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/tee-sets/{id}": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tee set"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/holes": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "List holes",
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Courses"
+        ],
+        "summary": "Create hole (admin)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/holes/{id}": {
+      "get": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hole"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Courses"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/tournaments": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "List tournaments",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "series_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Create tournament (admin/coach)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournaments/{id}": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Get tournament",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Update tournament (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Delete tournament (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournaments/{id}/leaderboard": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Leaderboard grouped by division (ties marked 'T')",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/juniors": {
+      "get": {
+        "tags": [
+          "Juniors"
+        ],
+        "summary": "List juniors (parents scoped to own children)",
+        "parameters": [
+          {
+            "name": "parent_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "band_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "current_level",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "age_min",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "age_max",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Juniors"
+        ],
+        "summary": "Create junior profile (admin/coach)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/juniors/{id}": {
+      "get": {
+        "tags": [
+          "Juniors"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Junior profile"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Juniors"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Juniors"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/juniors/{id}/progress": {
+      "get": {
+        "tags": [
+          "Juniors"
+        ],
+        "summary": "Junior progress: level history, evaluations, attendance, benchmarks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Progress data"
+          }
+        }
+      }
+    },
+    "/api/juniors/{id}/monthly-report": {
+      "get": {
+        "tags": [
+          "Juniors"
+        ],
+        "summary": "Full monthly report for a junior",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2026-03-01"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monthly report"
+          }
+        }
+      }
+    },
+    "/api/evaluations/summary": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Band summary for a month (coach/committee/admin)",
+        "parameters": [
+          {
+            "name": "band_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "month",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary array"
+          }
+        }
+      }
+    },
+    "/api/evaluations": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "junior_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "coach_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "report_month",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "coach_signed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "committee_signed",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Create evaluation (coach/admin)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/evaluations/{id}": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluation"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Evaluations"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/evaluations/{id}/coach-sign": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Coach signs evaluation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed evaluation"
+          },
+          "403": {
+            "description": "Not the assigned coach"
+          }
+        }
+      }
+    },
+    "/api/evaluations/{id}/committee-sign": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Committee signs evaluation (requires coach signature first)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed evaluation"
+          },
+          "403": {
+            "description": "Coach must sign first"
+          }
+        }
+      }
+    },
+    "/api/scores/sync": {
+      "post": {
+        "tags": [
+          "Rounds"
+        ],
+        "summary": "Submit scorecard \u2014 computes WHS differential, stores round, updates handicap_index",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tee_set_id",
+                  "gross_score"
+                ],
+                "properties": {
+                  "tee_set_id": {
+                    "type": "integer"
+                  },
+                  "gross_score": {
+                    "type": "integer"
+                  },
+                  "holes_played": {
+                    "type": "integer",
+                    "default": 18
+                  },
+                  "pcc": {
+                    "type": "number",
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scorecard result with new handicap_index"
+          }
+        }
+      }
+    },
+    "/api/users/{id}/handicap-history": {
+      "get": {
+        "tags": [
+          "Rounds"
+        ],
+        "summary": "All rounds for a user ordered by date with differentials",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of rounds"
+          }
+        }
+      }
+    },
+    "/api/rounds": {
+      "get": {
+        "tags": [
+          "Rounds"
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "course_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "round_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Rounds"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/sessions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "parameters": [
+          {
+            "name": "coach_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "class_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "session_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/coaches/{id}/schedule": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "All sessions for a coach in the week of the given date",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "week",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2026-03-10"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weekly sessions"
+          }
+        }
+      }
+    },
+    "/api/classes": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "parameters": [
+          {
+            "name": "coach_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "band_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "age_group",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/attendance": {
+      "get": {
+        "tags": [
+          "Attendance"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "junior_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Attendance"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/attendance/bulk": {
+      "post": {
+        "tags": [
+          "Attendance"
+        ],
+        "summary": "Bulk mark attendance for a session",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "records"
+                ],
+                "properties": {
+                  "session_id": {
+                    "type": "integer"
+                  },
+                  "records": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "junior_id": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "present",
+                            "absent",
+                            "excused"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upserted attendance records"
+          }
+        }
+      }
+    },
+    "/api/attendance/session/{session_id}/summary": {
+      "get": {
+        "tags": [
+          "Attendance"
+        ],
+        "summary": "Attendance summary counts for a session",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary with present/absent/excused counts"
+          }
+        }
+      }
+    },
+    "/api/booking-requests": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "parameters": [
+          {
+            "name": "parent_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "coach_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Create booking request (parent)",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/whs/score-differential": {
+      "post": {
+        "tags": [
+          "WHS"
+        ],
+        "summary": "Compute WHS 2024 score differential",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actual_gross_score",
+                  "holes_played",
+                  "handicap_index",
+                  "course_rating",
+                  "slope_rating"
+                ],
+                "properties": {
+                  "actual_gross_score": {
+                    "type": "integer"
+                  },
+                  "holes_played": {
+                    "type": "integer"
+                  },
+                  "handicap_index": {
+                    "type": "number"
+                  },
+                  "course_rating": {
+                    "type": "number"
+                  },
+                  "slope_rating": {
+                    "type": "integer"
+                  },
+                  "pcc": {
+                    "type": "number",
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ differential: float }"
+          }
+        }
+      }
+    },
+    "/api/whs/handicap-index": {
+      "post": {
+        "tags": [
+          "WHS"
+        ],
+        "summary": "Compute WHS 2024 Handicap Index from up to 20 differentials",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "differentials"
+                ],
+                "properties": {
+                  "differentials": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ handicap_index: float }"
+          }
+        }
+      }
+    },
+    "/api/whs/course-handicap": {
+      "post": {
+        "tags": [
+          "WHS"
+        ],
+        "summary": "Compute WHS 2024 Course Handicap",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "handicap_index",
+                  "slope_rating",
+                  "course_rating",
+                  "par"
+                ],
+                "properties": {
+                  "handicap_index": {
+                    "type": "number"
+                  },
+                  "slope_rating": {
+                    "type": "integer"
+                  },
+                  "course_rating": {
+                    "type": "number"
+                  },
+                  "par": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ course_handicap: int }"
+          }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Platform-wide stats (admin only)",
+        "responses": {
+          "200": {
+            "description": "Aggregate counts"
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List all users with filters (admin only)",
+        "responses": {
+          "200": {
+            "description": "List"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}/activate": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activated user"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}/deactivate": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deactivated user"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{id}/role": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Change user role (admin only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user"
+          }
+        }
+      }
+    },
+    "/api/tournaments/{id}/scores": {
+      "post": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Submit a junior's score (computes net/Stableford; handicap integration)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Saved"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournaments/{id}/generate-bracket": {
+      "post": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Generate single-elimination bracket from confirmed entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Bracket created"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournaments/{id}/bracket": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Full bracket grouped by round",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-divisions": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "List divisions",
+        "parameters": [
+          {
+            "name": "tournament_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Create division (admin/coach)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-divisions/{id}": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Get division",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Update division (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Delete division (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-entries": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "List entries (parent/player scoped)",
+        "parameters": [
+          {
+            "name": "tournament_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "junior_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "division_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Register a junior (admin/coach/parent-own-child)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registered"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-entries/{id}": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Get entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Update/confirm entry (admin/coach/parent-own)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Withdraw entry (admin/coach/parent-own)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Withdrawn"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-scores": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "List scores",
+        "parameters": [
+          {
+            "name": "tournament_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "entry_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-scores/{id}": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Get score",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Verify/update score (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Delete score (admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-matches": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "List matches",
+        "parameters": [
+          {
+            "name": "tournament_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "round_number",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/tournament-matches/{id}": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Match detail with stroke allocation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Set winner/result; advances the bracket (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/external-results": {
+      "get": {
+        "tags": [
+          "External Results"
+        ],
+        "summary": "List external results (parent/player scoped)",
+        "parameters": [
+          {
+            "name": "junior_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "External Results"
+        ],
+        "summary": "Log an external result (admin/coach/parent-own)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/external-results/{id}": {
+      "get": {
+        "tags": [
+          "External Results"
+        ],
+        "summary": "Get external result",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "External Results"
+        ],
+        "summary": "Update external result (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "External Results"
+        ],
+        "summary": "Delete external result (admin/coach)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/series": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "List series",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Create series (admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/series/{id}": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Get series",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Update series (admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Delete series (admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/series/{id}/standings": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Order-of-merit standings across completed events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/juniors/{id}/competitions": {
+      "get": {
+        "tags": [
+          "Tournaments"
+        ],
+        "summary": "Combined internal + external competition history for a junior",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentication and user profile"
+    },
+    {
+      "name": "Users",
+      "description": "User management"
+    },
+    {
+      "name": "Courses",
+      "description": "Course, tee sets and hole reference data"
+    },
+    {
+      "name": "Tournaments",
+      "description": "Rumble 2.0 \u2014 teams, matches, penalties, leaderboard"
+    },
+    {
+      "name": "Juniors",
+      "description": "Junior development \u2014 profiles, levels, badges"
+    },
+    {
+      "name": "Evaluations",
+      "description": "Monthly evaluation reports and sign-off"
+    },
+    {
+      "name": "Sessions",
+      "description": "Classes, sessions, enrollments and booking requests"
+    },
+    {
+      "name": "Attendance",
+      "description": "Session attendance tracking"
+    },
+    {
+      "name": "Rounds",
+      "description": "Score submission and handicap history"
+    },
+    {
+      "name": "WHS",
+      "description": "WHS 2024 stateless calculation engine"
+    },
+    {
+      "name": "Admin",
+      "description": "Platform administration"
+    },
+    {
+      "name": "Seed",
+      "description": "Reference data seeding"
+    },
+    {
+      "name": "Series",
+      "description": "Series / order-of-merit standings"
+    },
+    {
+      "name": "External Results",
+      "description": "Logged outside-competition results"
+    }
+  ]
+}

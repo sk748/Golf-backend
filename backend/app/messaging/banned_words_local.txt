@@ -1,0 +1,34 @@
+# Banned-word list — Swahili / Sheng (Nairobi context).
+#
+# REVIEW ME: local language is context-sensitive and this list is deliberately
+# CONSERVATIVE — high-confidence vulgar / sexual / slur terms only. Sam to review
+# and expand with someone fluent in current Sheng. Word-boundary matching keeps
+# these from tripping on innocent substrings (e.g. "kuma" will not match
+# "kumaliza"), but standard-Swahili homographs are the real risk — anything that
+# also has a common innocent meaning has been left OUT on purpose.
+#
+# One term per line; '#' lines and blanks are ignored. Case-insensitive,
+# word-boundary matched.
+#
+# --- vulgar / sexual ---
+kuma
+kumako
+kumamako
+kumanina
+mboro
+mbolo
+tomba
+kutomba
+dinya
+kudinya
+mavi
+# --- insults / slurs ---
+malaya
+malaaya
+msenge
+msege
+basha
+pumbavu
+mjinga
+fala
+zezuru
