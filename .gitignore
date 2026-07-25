@@ -13,6 +13,7 @@ htmlcov/
 
 # CodeMender local state (agent workspace, logs, scan db)
 .codemender/
+.cm_project
 
 # Node / Vite (frontend)
 node_modules/

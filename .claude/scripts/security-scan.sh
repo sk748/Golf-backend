@@ -66,10 +66,19 @@ preflight() {
     bad "config.yaml       missing — run: cm init (from $REPO)"; fail=1
   fi
 
-  # Clean-tree guard: CodeMender edits files in place. An already-dirty tree
-  # makes it impossible to tell its changes from yours, or to revert cleanly.
+  # Clean-tree guard — this is a HARD requirement, not hygiene.
+  #
+  # `cm find` opens by running its VCS reset unprompted, even with
+  # tools.confirm_commands: true — observed 2026-07-25:
+  #     git checkout HEAD -- . && git clean -fd
+  # That discards every uncommitted change and every untracked file that
+  # isn't gitignored, with no confirmation. Committing first is the only
+  # thing standing between a scan and lost work.
   if [ -n "$(git -C "$REPO" status --porcelain 2>/dev/null)" ]; then
-    warn "git tree          DIRTY — commit or stash before applying any fix"
+    bad "git tree          DIRTY — cm will 'git checkout HEAD -- . && git clean -fd'"
+    printf '                      and DESTROY uncommitted + untracked work. Commit or\n'
+    printf '                      stash (git stash -u) before scanning.\n'
+    fail=1
   else
     ok "git tree          clean ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null))"
   fi
