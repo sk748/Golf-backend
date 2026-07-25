@@ -74,8 +74,16 @@ sudo su postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='karen_t
 > `sudo -u postgres …` will fail in this env ("a terminal is required") because passwordless
 > sudo is **root-only**. Always go through root with `sudo su postgres -c "…"`.
 
-The dev server auto-creates all 21 tables on startup (`db.create_all()` when `debug=True`),
-so no migration step is needed for local dev.
+Tables are **not** auto-created in any environment (the old `db.create_all()`-on-startup
+behavior is retired). Apply the full migration chain to a fresh database before first run:
+
+```bash
+cd /workspaces/Golf-backend/backend
+FLASK_APP=main.py DATABASE_URI=postgresql://postgres:postgres@localhost/karen_db \
+  ./venv/bin/flask db upgrade
+```
+
+This creates all 42 tables.
 
 `.env` must exist with a real `SECRET_KEY`. If it's still the placeholder:
 ```bash
@@ -118,7 +126,7 @@ on a clean start; `gitpod environment port open` is only needed to (re)share pub
 ```bash
 ss -ltn | grep ':5000'                                         # should show LISTEN 0.0.0.0:5000
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000/swagger/   # 200
-sudo su postgres -c "psql -d karen_db -c '\dt'" | tail -n +1   # lists 21 tables
+sudo su postgres -c "psql -d karen_db -c '\dt'" | tail -n +1   # lists 42 tables
 ```
 
 CORS preflight for the frontend origin (should echo Access-Control-Allow-Origin):

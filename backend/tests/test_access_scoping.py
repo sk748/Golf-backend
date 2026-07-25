@@ -1,8 +1,8 @@
 """Cross-family access scoping for junior-badges and junior progress.
 
 Headline rule: a parent reads only their OWN child; a player is forced to self
-(their own junior_id) regardless of the query param; staff (admin/coach/
-committee) read any junior.
+(their own junior_id) regardless of the query param; admin/committee read any
+junior; a coach reads only the juniors on their own roster.
 """
 
 from datetime import date
@@ -80,13 +80,25 @@ def test_player_badges_forced_to_self(client, auth, make_user, make_junior):
 
 def test_staff_read_any_junior_badges(client, auth, make_user, make_junior):
     admin = make_user(role="admin")
-    junior = make_junior(level=3)
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=3, coach=coach)
     _award(junior, admin)
-    for role in ("admin", "coach", "committee"):
-        _, h = auth(role)
+    _, admin_h = auth("admin")
+    _, committee_h = auth("committee")
+    # Admin/committee read any junior; a coach reads their own roster.
+    for role, h in (("admin", admin_h), ("coach", coach_h), ("committee", committee_h)):
         r = client.get(f"/api/junior-badges?junior_id={junior.id}", headers=h)
         assert r.status_code == 200, role
         assert r.get_json()["count"] == 1
+
+
+def test_coach_cannot_read_unassigned_junior_badges(client, auth, make_user, make_junior):
+    admin = make_user(role="admin")
+    junior = make_junior(level=3)
+    _award(junior, admin)
+    _, coach_h = auth("coach")
+    r = client.get(f"/api/junior-badges?junior_id={junior.id}", headers=coach_h)
+    assert r.status_code == 403
 
 
 # ── junior progress scoping ──────────────────────────────────────────────────
@@ -108,8 +120,130 @@ def test_parent_cannot_read_other_child_progress(client, auth, make_user, make_j
 
 
 def test_staff_read_any_junior_progress(client, auth, make_junior):
-    junior = make_junior(level=7)
-    for role in ("admin", "coach", "committee"):
-        _, h = auth(role)
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
+    _, admin_h = auth("admin")
+    _, committee_h = auth("committee")
+    for role, h in (("admin", admin_h), ("coach", coach_h), ("committee", committee_h)):
         r = client.get(f"/api/juniors/{junior.id}/progress", headers=h)
         assert r.status_code == 200, role
+
+
+def test_coach_cannot_read_unassigned_junior_progress(client, auth, make_junior):
+    junior = make_junior(level=7)
+    _, coach_h = auth("coach")
+    r = client.get(f"/api/juniors/{junior.id}/progress", headers=coach_h)
+    assert r.status_code == 403
+
+
+# ── tournament + handicap-journey coach scoping (NEW-3) ──────────────────────
+
+def test_coach_cannot_read_unassigned_junior_tournament_entry(
+        client, auth, make_junior, make_tournament, make_entry):
+    entry = make_entry(make_tournament(), make_junior(level=7))
+    _, coach_h = auth("coach")
+    r = client.get(f"/api/tournament-entries/{entry.id}", headers=coach_h)
+    assert r.status_code == 403
+
+
+def test_coach_entry_list_filtered_to_own_roster(
+        client, auth, make_junior, make_tournament, make_entry):
+    coach, coach_h = auth("coach")
+    t = make_tournament()
+    mine = make_entry(t, make_junior(level=7, coach=coach))
+    make_entry(t, make_junior(level=7))
+    r = client.get(f"/api/tournament-entries?tournament_id={t.id}", headers=coach_h)
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["count"] == 1
+    assert body["data"][0]["id"] == mine.id
+
+
+def test_coach_cannot_read_unassigned_junior_competitions(client, auth, make_junior):
+    junior = make_junior(level=7)
+    _, coach_h = auth("coach")
+    r = client.get(f"/api/juniors/{junior.id}/competitions", headers=coach_h)
+    assert r.status_code == 403
+
+
+def test_coach_reads_own_junior_tournament_data(
+        client, auth, make_junior, make_tournament, make_entry):
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
+    entry = make_entry(make_tournament(), junior)
+    r = client.get(f"/api/tournament-entries/{entry.id}", headers=coach_h)
+    assert r.status_code == 200
+    r = client.get(f"/api/juniors/{junior.id}/competitions", headers=coach_h)
+    assert r.status_code == 200
+
+
+def test_coach_cannot_read_unassigned_junior_handicap_journey(client, auth, make_junior):
+    junior = make_junior(level=5)
+    _, coach_h = auth("coach")
+    r = client.get(f"/api/juniors/{junior.id}/handicap-journey", headers=coach_h)
+    assert r.status_code == 403
+
+
+def test_coach_reads_own_junior_handicap_journey(client, auth, make_junior):
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=5, coach=coach)
+    r = client.get(f"/api/juniors/{junior.id}/handicap-journey", headers=coach_h)
+    assert r.status_code == 200
+
+
+def test_admin_committee_read_any_junior_handicap_journey(client, auth, make_junior):
+    junior = make_junior(level=5)
+    for role in ("admin", "committee"):
+        _, h = auth(role)
+        r = client.get(f"/api/juniors/{junior.id}/handicap-journey", headers=h)
+        assert r.status_code == 200, role
+
+
+# ── handicap WRITE coach scoping (unassigned junior is admin-only) ───────────
+
+def test_coach_cannot_put_unassigned_junior_handicap_journey(client, auth, make_junior):
+    junior = make_junior(level=5)
+    _, coach_h = auth("coach")
+    r = client.put(f"/api/juniors/{junior.id}/handicap-journey",
+                   json={"coach_notes": "plan"}, headers=coach_h)
+    assert r.status_code == 403
+
+
+def test_coach_puts_own_junior_handicap_journey(client, auth, make_junior):
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=5, coach=coach)
+    r = client.put(f"/api/juniors/{junior.id}/handicap-journey",
+                   json={"coach_notes": "plan"}, headers=coach_h)
+    assert r.status_code == 200
+
+
+def test_admin_puts_unassigned_junior_handicap_journey(client, auth, make_junior):
+    junior = make_junior(level=5)
+    _, admin_h = auth("admin")
+    r = client.put(f"/api/juniors/{junior.id}/handicap-journey",
+                   json={"coach_notes": "plan"}, headers=admin_h)
+    assert r.status_code == 200
+
+
+def test_coach_cannot_set_unassigned_junior_handicap(client, auth, make_junior):
+    junior = make_junior(level=5)
+    _, coach_h = auth("coach")
+    r = client.put(f"/api/users/{junior.user_id}/handicap",
+                   json={"handicap_index": 20.0}, headers=coach_h)
+    assert r.status_code == 403
+
+
+def test_coach_sets_own_junior_handicap(client, auth, make_junior):
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=5, coach=coach)
+    r = client.put(f"/api/users/{junior.user_id}/handicap",
+                   json={"handicap_index": 20.0}, headers=coach_h)
+    assert r.status_code == 200
+
+
+def test_admin_sets_unassigned_junior_handicap(client, auth, make_junior):
+    junior = make_junior(level=5)
+    _, admin_h = auth("admin")
+    r = client.put(f"/api/users/{junior.user_id}/handicap",
+                   json={"handicap_index": 20.0}, headers=admin_h)
+    assert r.status_code == 200

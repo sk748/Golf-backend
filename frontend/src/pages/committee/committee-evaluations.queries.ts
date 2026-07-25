@@ -170,7 +170,12 @@ export function usePlayerUsers(): UseQueryResult<User[]> {
   });
 }
 
-// GET /api/tournaments?status=active — read-only overview count.
+// GET /api/tournaments — read-only overview count. The backend has no
+// "active" status (only draft/registration_open/registration_closed/
+// in_progress/completed/cancelled — see Tournament.status), so "active" is
+// computed client-side as registration_open + in_progress, matching the
+// same definition already used server-side for the admin dashboard's
+// tournaments.active stat (backend/app/admin/controllers.py).
 export interface TournamentRow {
   id: number;
   name: string;
@@ -179,12 +184,14 @@ export interface TournamentRow {
   start_date: string;
 }
 
+const ACTIVE_TOURNAMENT_STATUSES = new Set(['registration_open', 'in_progress']);
+
 export function useActiveTournaments(): UseQueryResult<TournamentRow[]> {
   return useQuery({
-    queryKey: ['tournaments', { status: 'active' }],
-    queryFn: () =>
-      api.get<TournamentRow[]>('/api/tournaments', { status: 'active' }),
+    queryKey: ['tournaments'],
+    queryFn: () => api.get<TournamentRow[]>('/api/tournaments'),
     staleTime: 60 * 1000,
+    select: (rows) => rows.filter((t) => ACTIVE_TOURNAMENT_STATUSES.has(t.status)),
   });
 }
 

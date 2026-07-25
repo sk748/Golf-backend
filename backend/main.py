@@ -1,16 +1,21 @@
+import logging
 import os
+import sys
 from datetime import timedelta
 
 from dotenv import load_dotenv
 
 load_dotenv()  # load variables from .env before config classes read os.environ
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
 from flask_swagger_ui import get_swaggerui_blueprint
+from sqlalchemy import text
+from werkzeug.exceptions import HTTPException
 
+from config import ProductionConfig
 from app.database.database import db
 from app.models import register_all
 from app.utils.limiter import limiter
@@ -34,15 +39,25 @@ from app.handicap.routes import handicap_bp
 from app.events.routes import events_bp
 from app.league.routes import league_bp
 from app.coach_analytics.routes import coach_analytics_bp
+from app.reports.routes import reports_bp
 
 def create_app(config_filename=None):
     if config_filename is None:
         config_filename = os.environ.get("APP_SETTINGS", "config.DevelopmentConfig")
 
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
     app = Flask(__name__)
     app.config.from_object(config_filename)
+    if config_filename == "config.ProductionConfig":
+        ProductionConfig.validate()
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=8)   # reduced from 24h
     app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=7)
+    app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
 
     JWTManager(app)
 
@@ -70,12 +85,39 @@ def create_app(config_filename=None):
     def _add_security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if not app.debug:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
     app.after_request(_add_security_headers)
+
+    # ── Global fallback: uncaught exceptions become the normal error envelope ──
+    def _handle_uncaught_exception(e):
+        if isinstance(e, HTTPException):
+            return e
+        app.logger.exception("Unhandled exception")
+        return jsonify({"error": {"code": "INTERNAL_ERROR", "message": "Internal server error"}}), 500
+
+    app.register_error_handler(Exception, _handle_uncaught_exception)
+
+    # ── Health probe for Docker healthchecks / load balancers (no auth) ────────
+    @app.route("/health")
+    def health():
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception:
+            return jsonify({"status": "error"}), 503
+        return jsonify({"status": "ok"}), 200
 
     # Register all module blueprints
     app.register_blueprint(user_v1)          # /api/auth/* + /api/users/*
@@ -96,6 +138,7 @@ def create_app(config_filename=None):
     app.register_blueprint(handicap_bp)      # /api/juniors/<id>/handicap-journey
     app.register_blueprint(league_bp)        # /api/leagues, /api/league-teams, /api/league-fixtures, /api/league-pairings, /api/fixtures, /api/league/scoreboard
     app.register_blueprint(coach_analytics_bp)  # /api/coach-analytics, /api/coach-analytics/<coach_id>
+    app.register_blueprint(reports_bp)       # /api/reports/junior/<junior_id>, /api/reports/programme
 
     # Swagger UI — served only in non-production environments
     if os.environ.get("APP_SETTINGS") != "config.ProductionConfig":

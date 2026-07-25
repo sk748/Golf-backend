@@ -26,6 +26,7 @@ import { ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { FeatureCard } from '../../components/ui/FeatureCard';
+import { AttentionBand } from '../../components/ui/AttentionBand';
 import { Badge } from '../../components/ui/Badge';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -110,7 +111,7 @@ function SignupApprovalRow({ child }: { child: ParentChild }) {
 function SignupApprovalsCard({ pending }: { pending: ParentChild[] }) {
   return (
     <GlassCard
-      className="animate-fade-in-up mt-6 p-5 sm:p-6"
+      className="animate-fade-in-up p-5 sm:p-6"
       data-testid="signup-approvals-card"
     >
       <div className="flex items-center gap-2.5">
@@ -350,7 +351,7 @@ function RequestsSummary({
     .slice(0, 4);
 
   return (
-    <GlassCard className="animate-fade-in-up stagger-3 p-5 sm:p-6">
+    <GlassCard className="animate-fade-in-up stagger-3 h-full p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-azure/15">
@@ -527,7 +528,10 @@ function ApprovalsCard({ kids }: { kids: ParentChild[] }) {
     tournaments.data?.find((t) => t.id === id)?.name ?? 'Tournament';
 
   return (
-    <GlassCard className="animate-fade-in-up stagger-2 p-5 sm:p-6" data-testid="approvals-card">
+    <GlassCard
+      className="animate-fade-in-up stagger-2 h-full p-5 sm:p-6"
+      data-testid="approvals-card"
+    >
       <div className="flex items-center gap-2.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold/15">
           <Trophy size={16} className="text-gold" aria-hidden />
@@ -606,9 +610,60 @@ export function ParentDashboard() {
     (r) => String(r.status).toLowerCase() === 'pending',
   );
   const myEntries = entries.data ?? [];
+  const rsvpPending = myEntries.filter((e) => e.status === 'interested');
+
+  // Band priority: tournament RSVPs first (events have dates, and /tournaments
+  // is a real destination to act on them), then the parent's own pending session
+  // requests. Signup approvals are only actionable on this page, so they keep
+  // their full-width card right below the band instead of driving it.
+  const attention =
+    entries.isLoading || requests.isLoading
+      ? {
+          icon: Sparkles,
+          eyebrow: 'Your family',
+          headline: '·',
+          subline: undefined,
+          ctaLabel: 'See progress',
+          to: '/my-child',
+        }
+      : rsvpPending.length > 0
+        ? {
+            icon: Trophy,
+            eyebrow: 'Waiting on your go-ahead',
+            headline:
+              rsvpPending.length === 1
+                ? '1 tournament entry to approve'
+                : `${rsvpPending.length} tournament entries to approve`,
+            subline:
+              'Your child wants to play — approve or decline to confirm their spot.',
+            ctaLabel: 'Review entries',
+            to: '/tournaments',
+          }
+        : pendingRequests.length > 0
+          ? {
+              icon: CalendarPlus,
+              eyebrow: 'Coaching sessions',
+              headline:
+                pendingRequests.length === 1
+                  ? '1 session request awaiting the club'
+                  : `${pendingRequests.length} session requests awaiting the club`,
+              subline:
+                'The club will confirm a time — track or update your requests any time.',
+              ctaLabel: 'View requests',
+              to: '/sessions',
+            }
+          : {
+              icon: Sparkles,
+              eyebrow: 'All caught up',
+              headline: 'Nothing needs your approval',
+              subline:
+                "Follow your family's progress — anything needing your go-ahead will appear here.",
+              ctaLabel: 'See progress',
+              to: '/my-child',
+            };
 
   return (
-    <div className="animate-fade-in-up mx-auto max-w-4xl" data-testid="parent-dashboard">
+    <div className="animate-fade-in-up mx-auto max-w-5xl" data-testid="parent-dashboard">
       <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-400">
         Your family
       </p>
@@ -621,61 +676,77 @@ export function ParentDashboard() {
         requests, all in one place.
       </p>
 
-      {/* ── Navigation hub: a stat + headline per area, each a link ───────── */}
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        <FeatureCard
-          label={kids.length === 1 ? 'My child' : 'My children'}
-          icon={Users}
-          tone="azure"
-          stat={statValue(children.isLoading, children.isError, kids.length)}
-          headline="profiles, progress & reports"
-          to="/my-child"
-          testId="feature-my-child"
-        />
-        <FeatureCard
-          label="Coaching sessions"
-          icon={CalendarPlus}
-          tone={pendingRequests.length > 0 ? 'gold' : 'default'}
-          stat={statValue(requests.isLoading, requests.isError, pendingRequests.length)}
-          headline="requests pending the club's reply"
-          to="/sessions"
-          testId="feature-sessions"
-        />
-        <FeatureCard
-          label="Tournaments"
-          icon={Trophy}
-          stat={statValue(entries.isLoading, entries.isError, myEntries.length)}
-          headline="your children's event entries"
-          to="/tournaments"
-          testId="feature-tournaments"
-        />
-      </div>
+      {/* ── Bento grid: 4 columns on desktop, single column on mobile ─────── */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        {/* Row 0 — ATTENTION BAND (full width) */}
+        <div className="stagger-1 lg:col-span-4">
+          <AttentionBand
+            icon={attention.icon}
+            eyebrow={attention.eyebrow}
+            headline={attention.headline}
+            subline={attention.subline}
+            ctaLabel={attention.ctaLabel}
+            to={attention.to}
+            testId="parent-attention-band"
+          />
+        </div>
 
-      {/* Signup approvals — children waiting on this parent's consent. */}
-      {kids.some((k) => k.approval_status === 'pending_parent') ? (
-        <SignupApprovalsCard
-          pending={kids.filter((k) => k.approval_status === 'pending_parent')}
-        />
-      ) : null}
+        {/* Signup approvals — children waiting on this parent's consent. */}
+        {kids.some((k) => k.approval_status === 'pending_parent') ? (
+          <div className="lg:col-span-4">
+            <SignupApprovalsCard
+              pending={kids.filter((k) => k.approval_status === 'pending_parent')}
+            />
+          </div>
+        ) : null}
 
-      {/* Children */}
-      <div className="mt-6">
+        {/* Row 1 — navigation hub: a stat + headline per area, each a link */}
+        <div className="stagger-1 grid grid-cols-1 gap-4 sm:grid-cols-3 lg:col-span-4">
+          <FeatureCard
+            label={kids.length === 1 ? 'My child' : 'My children'}
+            icon={Users}
+            tone="azure"
+            stat={statValue(children.isLoading, children.isError, kids.length)}
+            headline="profiles, progress & reports"
+            to="/my-child"
+            testId="feature-my-child"
+          />
+          <FeatureCard
+            label="Coaching sessions"
+            icon={CalendarPlus}
+            tone={pendingRequests.length > 0 ? 'gold' : 'default'}
+            stat={statValue(requests.isLoading, requests.isError, pendingRequests.length)}
+            headline="requests pending the club's reply"
+            to="/sessions"
+            testId="feature-sessions"
+          />
+          <FeatureCard
+            label="Tournaments"
+            icon={Trophy}
+            stat={statValue(entries.isLoading, entries.isError, myEntries.length)}
+            headline="your children's event entries"
+            to="/tournaments"
+            testId="feature-tournaments"
+          />
+        </div>
+
+        {/* Row 2 — one tile per child (full width for a single child) */}
         {children.isLoading || bands.isLoading ? (
           <div
-            className="flex items-center gap-2 py-12 text-sm text-slate"
+            className="flex items-center gap-2 py-12 text-sm text-slate lg:col-span-4"
             data-testid="children-loading"
           >
             <Loader2 size={18} className="animate-spin text-azure" aria-hidden />
             Loading your family…
           </div>
         ) : children.isError ? (
-          <GlassCard className="p-4" data-testid="children-error">
+          <GlassCard className="p-4 lg:col-span-4" data-testid="children-error">
             <p className="rounded-xl bg-red-500/15 p-3 text-sm text-red-400" role="alert">
               {errorMessage(children.error, "Could not load your child's details.")}
             </p>
           </GlassCard>
         ) : kids.length === 0 ? (
-          <GlassCard className="p-8 text-center" data-testid="children-empty">
+          <GlassCard className="p-8 text-center lg:col-span-4" data-testid="children-empty">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15">
               <Users size={24} className="text-emerald-400" aria-hidden />
             </span>
@@ -691,7 +762,7 @@ export function ParentDashboard() {
         ) : (
           <div
             className={cn(
-              'grid gap-4',
+              'grid gap-4 lg:col-span-4',
               kids.length > 1 ? 'sm:grid-cols-2' : 'grid-cols-1',
             )}
             data-testid="children-grid"
@@ -706,15 +777,13 @@ export function ParentDashboard() {
             ))}
           </div>
         )}
-      </div>
 
-      {/* Quick links to the deeper child view */}
-      {kids.length > 0 ? (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {/* Row 3 — quick links to the deeper child view (half width each) */}
+        {kids.length > 0 ? (
           <Link
             to="/my-child"
             className={cn(
-              'group glass-light flex items-center justify-between gap-3 rounded-2xl p-5 transition-all',
+              'group glass-light flex items-center justify-between gap-3 rounded-2xl p-5 transition-all lg:col-span-2',
               'hover:-translate-y-0.5 hover:border hover:border-azure/40',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50',
             )}
@@ -739,11 +808,13 @@ export function ParentDashboard() {
               aria-hidden
             />
           </Link>
+        ) : null}
 
+        {kids.length > 0 ? (
           <Link
             to="/sessions"
             className={cn(
-              'group glass-light flex items-center justify-between gap-3 rounded-2xl p-5 transition-all',
+              'group glass-light flex items-center justify-between gap-3 rounded-2xl p-5 transition-all lg:col-span-2',
               'hover:-translate-y-0.5 hover:border hover:border-azure/40',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/50',
             )}
@@ -768,29 +839,28 @@ export function ParentDashboard() {
               aria-hidden
             />
           </Link>
+        ) : null}
+
+        {/* Row 4 — tournament approvals beside the session-requests summary */}
+        {kids.length > 0 ? (
+          <div className="lg:col-span-2">
+            <ApprovalsCard kids={kids} />
+          </div>
+        ) : null}
+
+        <div className={cn(kids.length > 0 ? 'lg:col-span-2' : 'lg:col-span-4')}>
+          <RequestsSummary
+            requests={requests.data ?? []}
+            isLoading={requests.isLoading}
+            isError={requests.isError}
+            error={requests.error}
+          />
         </div>
-      ) : null}
 
-      {/* Tournament approvals */}
-      {kids.length > 0 ? (
-        <div className="mt-6">
-          <ApprovalsCard kids={kids} />
+        {/* Row 5 — club announcements (full width) */}
+        <div className="lg:col-span-4">
+          <AnnouncementsWidget className="p-5 sm:p-6" />
         </div>
-      ) : null}
-
-      {/* Session requests summary */}
-      <div className="mt-6">
-        <RequestsSummary
-          requests={requests.data ?? []}
-          isLoading={requests.isLoading}
-          isError={requests.isError}
-          error={requests.error}
-        />
-      </div>
-
-      {/* Club announcements */}
-      <div className="mt-6">
-        <AnnouncementsWidget className="p-5 sm:p-6" />
       </div>
     </div>
   );

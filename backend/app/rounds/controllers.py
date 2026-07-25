@@ -13,10 +13,12 @@ hole_scores_schema = SimpleModelSchema(HoleScore, many=True)
 
 # ── Rounds ────────────────────────────────────────────────────────────────────
 
-def list_rounds(user_id=None, course_id=None, round_type=None, status=None):
+def list_rounds(user_id=None, user_ids=None, course_id=None, round_type=None, status=None):
     q = Round.query
     if user_id:
         q = q.filter_by(user_id=user_id)
+    if user_ids is not None:
+        q = q.filter(Round.user_id.in_(user_ids))
     if course_id:
         q = q.filter_by(course_id=course_id)
     if round_type:
@@ -30,11 +32,9 @@ def get_round(round_id: int):
     return db.session.get(Round, round_id)
 
 
-def create_round(data: dict):
-    r = round_schema.load(data)
-    db.session.add(r)
-    db.session.commit()
-    return r
+# create_round was removed (security audit C-2/MA-1): it mass-assigned the
+# request body, letting a client set user_id and the WHS engine's output
+# columns. POST /rounds now goes through sync_score like /scores/sync.
 
 
 def update_round(r, data: dict):

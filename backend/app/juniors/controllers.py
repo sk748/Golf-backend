@@ -167,14 +167,14 @@ def assign_coach(junior, coach_id):
 
 def get_junior_progress(junior_id: int):
     from app.evaluations.models import Evaluation
-    from app.attendance.models import Attendance
+    from app.attendance.controllers import summarize_attendance
 
     junior = db.session.get(JuniorProfile, junior_id)
     if junior is None:
         return None, "Junior not found"
 
     evaluations = Evaluation.query.filter_by(junior_id=junior_id).order_by(Evaluation.report_month).all()
-    attendance_rows = Attendance.query.filter_by(junior_id=junior_id).all()
+    attendance_summary = summarize_attendance(junior_id)
 
     benchmarks = []
     if junior.current_level in (6, 7, 8):
@@ -208,10 +208,10 @@ def get_junior_progress(junior_id: int):
             for e in evaluations
         ],
         "attendance": {
-            "present": sum(1 for a in attendance_rows if a.status.value == "present"),
-            "absent": sum(1 for a in attendance_rows if a.status.value == "absent"),
-            "excused": sum(1 for a in attendance_rows if a.status.value == "excused"),
-            "total": len(attendance_rows),
+            "present": attendance_summary["present"],
+            "absent": attendance_summary["absent"],
+            "excused": attendance_summary["excused"],
+            "total": attendance_summary["total"],
         },
         "benchmarks": benchmarks,
         # Earned recognitions, so parents/staff viewing a junior see them too
@@ -239,33 +239,23 @@ def get_junior_progress(junior_id: int):
 def get_monthly_report(junior_id: int, month: str):
     from datetime import datetime
     from app.evaluations.models import Evaluation
-    from app.attendance.models import Attendance
+    from app.attendance.controllers import summarize_attendance
 
     junior = db.session.get(JuniorProfile, junior_id)
     if junior is None:
         return None, "Junior not found"
 
     evaluation = Evaluation.query.filter_by(junior_id=junior_id, report_month=month).first()
-    # Attendance can be sourced from a coaching Session OR a Junior League fixture
-    # (league rows have session_id NULL). Resolve each row's date from whichever
-    # source it has, and keep those in the report month onward.
     month_date = datetime.strptime(month, "%Y-%m-%d").date() if isinstance(month, str) else month
-    attendance_rows = []
-    for a in Attendance.query.filter_by(junior_id=junior_id).all():
-        if a.session_id is not None:
-            d = a.session.date if a.session else None
-        else:
-            d = a.league_fixture.date if a.league_fixture else None
-        if d is not None and d >= month_date:
-            attendance_rows.append(a)
+    attendance_summary = summarize_attendance(junior_id, date_from=month_date)
     return {
         "profile": junior_schema.dump(junior),
         "evaluation": SimpleModelSchema(Evaluation).dump(evaluation) if evaluation else None,
         "attendance": {
-            "present": sum(1 for a in attendance_rows if a.status.value == "present"),
-            "absent": sum(1 for a in attendance_rows if a.status.value == "absent"),
-            "excused": sum(1 for a in attendance_rows if a.status.value == "excused"),
-            "total": len(attendance_rows),
+            "present": attendance_summary["present"],
+            "absent": attendance_summary["absent"],
+            "excused": attendance_summary["excused"],
+            "total": attendance_summary["total"],
         },
     }, None
 

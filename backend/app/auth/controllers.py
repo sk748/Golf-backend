@@ -308,7 +308,7 @@ def update_user(user, data: dict, allow_privileged: bool = False):
 
     # Strip privileged fields unless caller is admin
     if not allow_privileged:
-        for field in ("role", "is_active", "email", "cdh_number"):
+        for field in ("role", "is_active", "email", "cdh_number", "membership_number", "handicap_index"):
             data.pop(field, None)
 
     for key, value in data.items():

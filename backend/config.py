@@ -41,6 +41,7 @@ class ProductionConfig:
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URI")  # REQUIRED — set in environment
     # Always on in production (env can't weaken it below this default).
     RATELIMIT_ENABLED = _env_flag("RATELIMIT_ENABLED", True)
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
 
     @classmethod
     def validate(cls):

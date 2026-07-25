@@ -15,7 +15,7 @@ from app.sessions.controllers import (
     validate_session_booking, approve_booking, decline_booking, approved_count,
 )
 from app.juniors.controllers import get_junior
-from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role
+from app.utils.decorators import require_roles, require_auth, admin_only, get_current_user, has_role, coach_owns_junior
 
 sessions_bp = Blueprint("sessions_bp", __name__, url_prefix="/api")
 
@@ -85,8 +85,12 @@ def get_my_sessions():
 @sessions_bp.route("/sessions", methods=["POST"])
 @require_roles("admin", "coach")
 def post_session():
+    caller = get_current_user()
+    data = request.get_json() or {}
+    if has_role(caller, "coach"):
+        data["coach_id"] = caller.id
     try:
-        s = create_session(request.get_json() or {})
+        s = create_session(data)
         return _data(session_schema.dump(s), 201)
     except IntegrityError:
         return _err("CONFLICT", "Session conflicts with existing data", 409)
@@ -164,8 +168,12 @@ def get_classes():
 @sessions_bp.route("/classes", methods=["POST"])
 @require_roles("admin", "coach")
 def post_class():
+    caller = get_current_user()
+    data = request.get_json() or {}
+    if has_role(caller, "coach"):
+        data["coach_id"] = caller.id
     try:
-        c = create_class(request.get_json() or {})
+        c = create_class(data)
         return _data(class_schema.dump(c), 201)
     except IntegrityError:
         return _err("CONFLICT", "Class conflicts with existing data", 409)
@@ -218,8 +226,12 @@ def get_enrollments():
 @sessions_bp.route("/enrollments", methods=["POST"])
 @require_roles("admin", "coach")
 def post_enrollment():
+    caller = get_current_user()
+    data = request.get_json() or {}
+    if has_role(caller, "coach") and not coach_owns_junior(caller, get_junior(data.get("junior_id"))):
+        return _err("FORBIDDEN", "Coaches can only enroll their own juniors", 403)
     try:
-        e = create_enrollment(request.get_json() or {})
+        e = create_enrollment(data)
         return _data(enrollment_schema.dump(e), 201)
     except IntegrityError:
         return _err("CONFLICT", "Enrollment already exists for this class/junior", 409)
@@ -240,6 +252,9 @@ def put_enrollment(enrollment_id):
     e = get_enrollment(enrollment_id)
     if e is None:
         return _not_found("Enrollment")
+    caller = get_current_user()
+    if has_role(caller, "coach") and not coach_owns_junior(caller, get_junior(e.junior_id)):
+        return _err("FORBIDDEN", "Coaches can only manage enrollments for their own juniors", 403)
     return _data(enrollment_schema.dump(update_enrollment(e, request.get_json() or {})))
 
 
@@ -249,6 +264,9 @@ def delete_enrollment_route(enrollment_id):
     e = get_enrollment(enrollment_id)
     if e is None:
         return _not_found("Enrollment")
+    caller = get_current_user()
+    if has_role(caller, "coach") and not coach_owns_junior(caller, get_junior(e.junior_id)):
+        return _err("FORBIDDEN", "Coaches can only manage enrollments for their own juniors", 403)
     delete_enrollment(e)
     return "", 204
 
@@ -264,10 +282,13 @@ def get_booking_requests():
     # lives in parent_id regardless of role)
     if has_role(caller, "parent", "player"):
         parent_id = caller.id
+    coach_id = request.args.get("coach_id")
+    if has_role(caller, "coach"):
+        coach_id = caller.id
     items = list_booking_requests(
         parent_id=parent_id,
         status=request.args.get("status"),
-        coach_id=request.args.get("coach_id"),
+        coach_id=coach_id,
         session_id=request.args.get("session_id"),
         junior_id=request.args.get("junior_id"),
     )
@@ -342,7 +363,8 @@ def approve_booking_route(booking_id):
         if b.session_id:
             s = get_session(b.session_id)
             target_coach = s.coach_id if s else target_coach
-        if target_coach is not None and str(target_coach) != str(caller.id):
+        # NULL coach_id = unassigned request; only admin may act on it.
+        if target_coach is None or str(target_coach) != str(caller.id):
             return _err("FORBIDDEN", "Coaches can only approve bookings for their own sessions", 403)
     notes = (request.get_json(silent=True) or {}).get("admin_notes")
     b, err = approve_booking(b, approver_notes=notes)
@@ -363,7 +385,8 @@ def decline_booking_route(booking_id):
         if b.session_id:
             s = get_session(b.session_id)
             target_coach = s.coach_id if s else target_coach
-        if target_coach is not None and str(target_coach) != str(caller.id):
+        # NULL coach_id = unassigned request; only admin may act on it.
+        if target_coach is None or str(target_coach) != str(caller.id):
             return _err("FORBIDDEN", "Coaches can only decline bookings for their own sessions", 403)
     notes = (request.get_json(silent=True) or {}).get("admin_notes")
     return _data(booking_schema.dump(decline_booking(b, approver_notes=notes)))
@@ -387,6 +410,15 @@ def put_booking_request(booking_id):
     b = get_booking_request(booking_id)
     if b is None:
         return _not_found("Booking request")
+    caller = get_current_user()
+    if has_role(caller, "coach"):
+        target_coach = b.coach_id
+        if b.session_id:
+            s = get_session(b.session_id)
+            target_coach = s.coach_id if s else target_coach
+        # NULL coach_id = unassigned request; only admin may act on it.
+        if target_coach is None or str(target_coach) != str(caller.id):
+            return _err("FORBIDDEN", "Coaches can only edit bookings for their own sessions", 403)
     return _data(booking_schema.dump(update_booking_request(b, request.get_json() or {})))
 
 

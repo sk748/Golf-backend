@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database.database import db
 from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, has_role,
+    junior_in_scope,
 )
 from app.tournaments import controllers as c
 from app.audit.service import record
@@ -37,22 +38,6 @@ def _not_found(resource="Resource"):
 def _from_tuple(err):
     code, message, status = err
     return _err(code, message, status)
-
-
-# ── Parent / player scoping helpers ────────────────────────────────────────────
-
-def _junior_in_scope(caller, junior):
-    """True if caller may act on / view this junior. Admin/coach/committee: all.
-    Parent: own child. Player: self."""
-    if junior is None:
-        return False
-    if has_role(caller, "admin", "coach", "committee"):
-        return True
-    if has_role(caller, "parent"):
-        return str(junior.parent_id) == str(caller.id)
-    if has_role(caller, "player"):
-        return str(junior.user_id) == str(caller.id)
-    return False
 
 
 def _get_junior(junior_id):
@@ -223,9 +208,8 @@ def get_entries():
         division_id=request.args.get("division_id"),
         status=request.args.get("status"),
     )
-    # parents/players only see entries for juniors in their scope
-    if has_role(caller, "parent", "player"):
-        items = [e for e in items if _junior_in_scope(caller, e.junior)]
+    # every caller only sees entries for juniors in their scope (coach: own roster)
+    items = [e for e in items if junior_in_scope(caller, e.junior)]
     return _data(c.entries_schema.dump(items), count=len(items))
 
 
@@ -238,7 +222,7 @@ def post_entry():
     # themselves (→ interested, pending a parent's approval).
     if has_role(caller, "parent", "player"):
         junior = _get_junior(data.get("junior_id"))
-        if not _junior_in_scope(caller, junior):
+        if not junior_in_scope(caller, junior):
             who = "their own child" if has_role(caller, "parent") else "themselves"
             return _err("FORBIDDEN", f"You can only register {who}", 403)
     if has_role(caller, "player"):
@@ -256,7 +240,7 @@ def get_entry_route(eid):
     e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    if has_role(caller, "parent", "player") and not _junior_in_scope(caller, e.junior):
+    if not junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Out of scope", 403)
     return _data(c.entry_schema.dump(e))
 
@@ -268,7 +252,7 @@ def put_entry(eid):
     e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+    if has_role(caller, "parent") and not junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Parents can only manage their own child's entry", 403)
     return _data(c.entry_schema.dump(c.update_entry(e, request.get_json() or {})))
 
@@ -280,12 +264,12 @@ def delete_entry_route(eid):
     e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+    if has_role(caller, "parent") and not junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Parents can only withdraw their own child's entry", 403)
     # A player may cancel their OWN RSVP, but only while it's still interested
     # (i.e. a parent hasn't approved/declined it yet).
     if has_role(caller, "player"):
-        if not _junior_in_scope(caller, e.junior):
+        if not junior_in_scope(caller, e.junior):
             return _err("FORBIDDEN", "Players can only cancel their own RSVP", 403)
         if (getattr(e.status, "value", e.status)) != "interested":
             return _err("CONFLICT", "You can only cancel an RSVP a parent hasn't acted on yet", 409)
@@ -301,7 +285,7 @@ def approve_entry(eid):
     e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+    if has_role(caller, "parent") and not junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Parents can only approve their own child's RSVP", 403)
     if (getattr(e.status, "value", e.status)) != "interested":
         return _err("CONFLICT", "Only an interested (RSVP) entry can be approved", 409)
@@ -316,7 +300,7 @@ def decline_entry(eid):
     e = c.get_entry(eid)
     if e is None:
         return _not_found("Entry")
-    if has_role(caller, "parent") and not _junior_in_scope(caller, e.junior):
+    if has_role(caller, "parent") and not junior_in_scope(caller, e.junior):
         return _err("FORBIDDEN", "Parents can only decline their own child's RSVP", 403)
     if (getattr(e.status, "value", e.status)) != "interested":
         return _err("CONFLICT", "Only an interested (RSVP) entry can be declined", 409)
@@ -416,7 +400,7 @@ def get_external_results():
         date_to=request.args.get("date_to"),
     )
     if has_role(caller, "parent", "player"):
-        items = [r for r in items if _junior_in_scope(caller, r.junior)]
+        items = [r for r in items if junior_in_scope(caller, r.junior)]
     return _data(c.externals_schema.dump(items), count=len(items))
 
 
@@ -428,7 +412,7 @@ def post_external_result():
     is_parent = has_role(caller, "parent")
     if is_parent:
         junior = _get_junior(data.get("junior_id"))
-        if not _junior_in_scope(caller, junior):
+        if not junior_in_scope(caller, junior):
             return _err("FORBIDDEN", "Parents can only log results for their own child", 403)
     # Staff-logged results are verified at creation; parent-logged ones wait
     # for staff verification (decision 11).
@@ -453,7 +437,7 @@ def get_external_result_route(rid):
     r = c.get_external_result(rid)
     if r is None:
         return _not_found("External result")
-    if has_role(caller, "parent", "player") and not _junior_in_scope(caller, r.junior):
+    if has_role(caller, "parent", "player") and not junior_in_scope(caller, r.junior):
         return _err("FORBIDDEN", "Out of scope", 403)
     return _data(c.external_schema.dump(r))
 
@@ -543,7 +527,7 @@ def get_junior_competitions(junior_id):
     junior = _get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
-    if not _junior_in_scope(caller, junior):
+    if not junior_in_scope(caller, junior):
         return _err("FORBIDDEN", "Out of scope", 403)
     result = c.junior_competitions(
         junior_id,
@@ -564,7 +548,7 @@ def get_junior_competition_requirements(junior_id):
     junior = _get_junior(junior_id)
     if junior is None:
         return _not_found("Junior")
-    if not _junior_in_scope(caller, junior):
+    if not junior_in_scope(caller, junior):
         return _err("FORBIDDEN", "Out of scope", 403)
     result, err = c.competition_requirements(
         junior_id, season=request.args.get("season")

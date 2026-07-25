@@ -71,6 +71,7 @@ def get_evaluation(evaluation_id: int):
 
 
 def create_evaluation(data: dict):
+    data = {k: v for k, v in data.items() if k not in _SIGNOFF_FIELDS}
     _validate(data)
     ev = evaluation_schema.load(data)
     db.session.add(ev)
@@ -80,8 +81,8 @@ def create_evaluation(data: dict):
 
 # Sign-off state is set ONLY through coach_sign()/committee_sign() (their
 # dedicated, role-guarded routes enforce the sequential coach→committee order).
-# Stripping these from a blanket PUT blocks a coach forging the committee
-# signature / self-approving via update (security audit 2026-06-15, CRITICAL).
+# Stripping these from a blanket POST/PUT blocks a coach forging the committee
+# signature / self-approving via create or update (security audit 2026-06-15, CRITICAL).
 _SIGNOFF_FIELDS = {
     "coach_signed",
     "coach_signed_date",

@@ -16,6 +16,7 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { StatCard } from '../../components/ui/StatCard';
 import { FeatureCard } from '../../components/ui/FeatureCard';
+import { AttentionBand } from '../../components/ui/AttentionBand';
 import type { Role } from '../../types/api';
 import { AnnouncementsWidget } from '../announcements/AnnouncementsWidget';
 import { useAdminStats, useRecentActivity } from './admin-dashboard.queries';
@@ -91,6 +92,8 @@ export function AdminDashboard() {
   const stats = useAdminStats();
   const activity = useRecentActivity();
 
+  const unsigned = stats.data?.evaluations.unsigned ?? 0;
+
   return (
     <div className="mx-auto max-w-6xl">
       <p className="animate-fade-in-up text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
@@ -103,117 +106,157 @@ export function AdminDashboard() {
         Club-wide activity at a glance.
       </p>
 
-      {/* ── A) Navigation hub: primary counters that navigate ──────────── */}
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <FeatureCard
-          label="Users"
-          icon={Users}
-          stat={statValue(stats.isLoading, stats.isError, stats.data?.users.total ?? 0)}
-          headline="manage accounts & roles"
-          to="/users"
-          testId="feature-users"
-        />
-        <FeatureCard
-          label="Juniors"
-          icon={GraduationCap}
-          tone="azure"
-          stat={statValue(stats.isLoading, stats.isError, stats.data?.juniors ?? 0)}
-          headline="in the development programme"
-          to="/juniors"
-          testId="feature-juniors"
-        />
-        <FeatureCard
-          label="Tournaments"
-          icon={Trophy}
-          stat={statValue(stats.isLoading, stats.isError, stats.data?.tournaments.active ?? 0)}
-          headline="active events"
-          to="/tournaments"
-          testId="feature-tournaments"
-        />
-        <FeatureCard
-          label="Evaluations"
-          icon={ClipboardCheck}
-          tone={(stats.data?.evaluations.unsigned ?? 0) > 0 ? 'gold' : 'default'}
-          stat={statValue(stats.isLoading, stats.isError, stats.data?.evaluations.unsigned ?? 0)}
-          headline="awaiting sign-off"
-          to="/evaluations"
-          testId="feature-evaluations"
-        />
-      </div>
+      {/* ── Bento grid: 4 columns on desktop, single column on mobile ──── */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        {/* Row 0 — ATTENTION BAND (full width) */}
+        <div className="animate-fade-in-up stagger-1 lg:col-span-4">
+          {unsigned > 0 ? (
+            <AttentionBand
+              icon={ClipboardCheck}
+              eyebrow="Needs sign-off"
+              headline={
+                <>
+                  {unsigned} evaluation{unsigned === 1 ? '' : 's'} awaiting
+                  sign-off
+                </>
+              }
+              subline="Coach and committee signatures keep monthly reports moving."
+              ctaLabel="Review evaluations"
+              to="/evaluations"
+              testId="admin-attention"
+            />
+          ) : (
+            <AttentionBand
+              icon={GraduationCap}
+              eyebrow="Club at a glance"
+              headline={
+                <>
+                  {statValue(stats.isLoading, stats.isError, stats.data?.juniors ?? 0)}{' '}
+                  juniors in the programme
+                </>
+              }
+              subline="The junior development programme, at a glance."
+              ctaLabel="View juniors"
+              to="/juniors"
+              testId="admin-attention"
+            />
+          )}
+        </div>
 
-      {stats.isError ? (
-        <div className="mt-6">
-          <ErrorPanel
-            message={errorMessage(stats.error, 'Could not load club stats.')}
-            testId="stats-error"
+        {/* Row 1 — navigation hub (2-up) */}
+        <div className="stagger-1 lg:col-span-2">
+          <FeatureCard
+            label="Users"
+            icon={Users}
+            stat={statValue(stats.isLoading, stats.isError, stats.data?.users.total ?? 0)}
+            headline="manage accounts & roles"
+            to="/users"
+            testId="feature-users"
           />
         </div>
-      ) : stats.isLoading ? (
-        <div
-          className="mt-6 flex items-center gap-2 text-sm text-slate"
-          data-testid="stats-loading"
-        >
-          <Loader2 size={18} className="animate-spin text-azure" />
-          Loading club stats…
+        <div className="stagger-1 lg:col-span-2">
+          <FeatureCard
+            label="Juniors"
+            icon={GraduationCap}
+            tone="azure"
+            stat={statValue(stats.isLoading, stats.isError, stats.data?.juniors ?? 0)}
+            headline="in the development programme"
+            to="/juniors"
+            testId="feature-juniors"
+          />
         </div>
-      ) : stats.data ? (
-        <>
-          {/* ── B) Users by role ────────────────────────────────────────── */}
-          <GlassCard className="animate-fade-in-up stagger-2 mt-6 p-5">
-            <h2 className="text-sm font-bold text-silver">Users by role</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {ROLE_ROWS.map(({ role, label, key }) => (
-                <div
-                  key={role}
-                  className="glass-light rounded-xl p-3"
-                  data-testid={`role-count-${role}`}
-                >
-                  <p className="text-xl font-black text-silver">
-                    {stats.data.users[key]}
-                  </p>
-                  <p className="mt-1 text-xs text-slate">{label}</p>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
+        <div className="stagger-2 lg:col-span-2">
+          <FeatureCard
+            label="Tournaments"
+            icon={Trophy}
+            stat={statValue(stats.isLoading, stats.isError, stats.data?.tournaments.active ?? 0)}
+            headline="active events"
+            to="/tournaments"
+            testId="feature-tournaments"
+          />
+        </div>
+        <div className="stagger-2 lg:col-span-2">
+          <FeatureCard
+            label="Evaluations"
+            icon={ClipboardCheck}
+            tone={unsigned > 0 ? 'gold' : 'default'}
+            stat={statValue(stats.isLoading, stats.isError, unsigned)}
+            headline="awaiting sign-off"
+            to="/evaluations"
+            testId="feature-evaluations"
+          />
+        </div>
 
-          {/* ── C) Secondary stats ──────────────────────────────────────── */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {stats.isError ? (
+          <div className="lg:col-span-4">
+            <ErrorPanel
+              message={errorMessage(stats.error, 'Could not load club stats.')}
+              testId="stats-error"
+            />
+          </div>
+        ) : stats.isLoading ? (
+          <div
+            className="flex items-center gap-2 text-sm text-slate lg:col-span-4"
+            data-testid="stats-loading"
+          >
+            <Loader2 size={18} className="animate-spin text-azure" />
+            Loading club stats…
+          </div>
+        ) : stats.data ? (
+          <>
+            {/* Users by role (full width) */}
+            <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-4">
+              <h2 className="text-sm font-bold text-silver">Users by role</h2>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {ROLE_ROWS.map(({ role, label, key }) => (
+                  <div
+                    key={role}
+                    className="glass-light rounded-xl p-3"
+                    data-testid={`role-count-${role}`}
+                  >
+                    <p className="text-xl font-black text-silver">
+                      {stats.data.users[key]}
+                    </p>
+                    <p className="mt-1 text-xs text-slate">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
+            {/* Secondary stats (2-up) */}
             <StatCard
               icon={Flag}
               value={stats.data.rounds}
               label="Rounds logged"
-              className="animate-fade-in-up stagger-1"
+              className="animate-fade-in-up stagger-1 lg:col-span-2"
               testId="stat-rounds"
             />
             <StatCard
               icon={GraduationCap}
               value={stats.data.sessions}
               label="Sessions"
-              className="animate-fade-in-up stagger-2"
+              className="animate-fade-in-up stagger-2 lg:col-span-2"
               testId="stat-sessions"
             />
             <StatCard
               icon={Layers}
               value={stats.data.classes}
               label="Classes"
-              className="animate-fade-in-up stagger-3"
+              className="animate-fade-in-up stagger-3 lg:col-span-2"
               testId="stat-classes"
             />
             <StatCard
               icon={Trophy}
               value={stats.data.tournaments.total}
               label="Total tournaments"
-              className="animate-fade-in-up stagger-4"
+              className="animate-fade-in-up stagger-4 lg:col-span-2"
               testId="stat-total-tournaments"
             />
-          </div>
-        </>
-      ) : null}
+          </>
+        ) : null}
 
-      {/* ── D) Recent activity + E) Quick actions & announcements ──────── */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
-        <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-2">
+        {/* Recent activity (left half) */}
+        <GlassCard className="animate-fade-in-up stagger-2 min-w-0 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Recent activity</h2>
             <Link
@@ -276,30 +319,31 @@ export function AdminDashboard() {
           </div>
         </GlassCard>
 
-        {/* Right column: quick actions stacked over announcements — no gap. */}
-        <div className="flex flex-col gap-4 lg:col-span-1">
-          <GlassCard className="animate-fade-in-up stagger-1 p-5">
-            <h2 className="text-sm font-bold text-silver">Quick actions</h2>
-            <div className="mt-4 flex flex-col gap-3">
-              <Link to="/users" data-testid="action-manage-users">
-                <Button variant="secondary" fullWidth>
-                  <Users size={18} />
-                  Manage users
-                </Button>
-              </Link>
-              <Link to="/courses" data-testid="action-courses">
-                <Button variant="ghost" fullWidth>
-                  <Flag size={18} />
-                  Course reference
-                </Button>
-              </Link>
-            </div>
-            <p className="mt-3 text-xs text-slate">
-              Create coach / committee accounts from the Users page.
-            </p>
-          </GlassCard>
+        {/* Quick actions (right half) */}
+        <GlassCard className="animate-fade-in-up stagger-1 p-5 lg:col-span-2">
+          <h2 className="text-sm font-bold text-silver">Quick actions</h2>
+          <div className="mt-4 flex flex-col gap-3">
+            <Link to="/users" data-testid="action-manage-users">
+              <Button variant="secondary" fullWidth>
+                <Users size={18} />
+                Manage users
+              </Button>
+            </Link>
+            <Link to="/courses" data-testid="action-courses">
+              <Button variant="ghost" fullWidth>
+                <Flag size={18} />
+                Course reference
+              </Button>
+            </Link>
+          </div>
+          <p className="mt-3 text-xs text-slate">
+            Create coach / committee accounts from the Users page.
+          </p>
+        </GlassCard>
 
-          <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+        {/* Club announcements (full width) */}
+        <div className="lg:col-span-4">
+          <AnnouncementsWidget className="animate-fade-in-up stagger-3 p-5" />
         </div>
       </div>
     </div>

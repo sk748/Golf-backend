@@ -7,14 +7,24 @@
 (no remote/production host was contacted). Backend suite + pen test run against a disposable
 local Postgres 16 / `karen_db` / `karen_test_db` seeded with demo data.
 
-> **Bottom line: NOT ready for a public server yet.** Two **Critical** object-level-auth holes
-> are open and were **reproduced live** — a player can forge a *verified, handicap-affecting*
-> round onto any account (incl. the admin), and hole-scores have no ownership gate. Add a coach
-> self-counter-signing evaluations, a player editing their own Handicap Index, parents reading
-> every family's rounds, ~15 vulnerable backend dependencies, and a deployment envelope that is
-> essentially absent (no WSGI config, no health check, no startup validation, no containers).
-> The good news: auth/JWT, role decorators, CORS, injection posture, and the June IDOR fixes
-> (H-2/H-3/H-4) all **held up under live attack**, and the migration chain is healthy.
+> **Update 2026-07-13: all Critical/High findings closed and re-verified live.** Every item
+> in this index's sign-off checklist is now checked off except two purely environmental
+> verifications (a live Redis-backed limiter run and a live `docker compose up`), both blocked
+> on an unrelated local Homebrew repair rather than any code gap — the underlying code/config
+> for both is done and statically verified. A frontend automated test suite remains a
+> separate, un-started initiative. The full pen-test battery was re-run live against the
+> patched app on 2026-07-13 and confirmed clean end-to-end (JWT handling, rate limiting, IDOR,
+> mass assignment, injection, CORS, security headers incl. the new CSP). See
+> `fixes-changelog.md` for the complete record of what changed and how each item was verified.
+>
+> Original Phase-1 bottom line (2026-07-07, kept for history): two **Critical**
+> object-level-auth holes were open and reproduced live — a player could forge a *verified,
+> handicap-affecting* round onto any account (incl. the admin), and hole-scores had no
+> ownership gate — alongside a coach self-counter-signing evaluations, a player editing their
+> own Handicap Index, parents reading every family's rounds, ~15 vulnerable backend
+> dependencies, and an absent deployment envelope. Auth/JWT, role decorators, CORS, injection
+> posture, and the June IDOR fixes (H-2/H-3/H-4) held up under live attack even then, and the
+> migration chain was healthy throughout.
 
 ## Reports
 
@@ -25,7 +35,7 @@ local Postgres 16 / `karen_db` / `karen_test_db` seeded with demo data.
 | [03-pentest.md](03-pentest.md) | Live probing (local instance) | ✅ |
 | [04-server-readiness.md](04-server-readiness.md) | Deployment gaps + go-live checklist | ✅ |
 | [05-maintainability.md](05-maintainability.md) | Structure, typing, onboarding, how-to guides | ✅ |
-| [fixes-changelog.md](fixes-changelog.md) | Phase 2 changes | ⏸ awaiting go-ahead |
+| [fixes-changelog.md](fixes-changelog.md) | Phase 2 changes | ✅ (this pass) |
 
 ## Severity roll-up
 
@@ -77,18 +87,25 @@ Full Medium/Low detail lives in the per-workstream reports.
 
 ## Sign-off checklist (Phase 3 exit — all must be green before go-live)
 
-- [ ] **C-1** hole-scores authorization enforced (read + write) + re-probed
-- [ ] **C-2/MA-1** `/rounds` identity stamped, WHS columns server-computed + re-probed
-- [ ] **H-1** parent/committee round reads scoped + re-probed
-- [ ] **NEW-1** evaluation create strips sign-off fields + re-probed
-- [ ] **P-1** `handicap_index`/`membership_number` stripped from self-update + re-probed
-- [ ] **H-5r / NEW-2** sessions/booking coach-scoping + null-coach bypass closed
-- [ ] **Dependencies** flask-cors, gunicorn, cryptography, requests, urllib3 bumped; `pip-audit` clean
-- [ ] **CFG-1** `ProductionConfig.validate()` called at startup; app fails fast on missing secrets
-- [ ] **IV-1/IV-2** global error handler returns normalized envelope; body-size cap set
-- [ ] **STAB-1** backend test suite green; frontend smoke tests added; both in CI
-- [ ] **Rate limiting** on Redis storage; verified 429 with `RATELIMIT_ENABLED=true`
-- [ ] **FE-2/FE-3** React Query cache cleared on logout; CSP header present
-- [ ] **Deployment** gunicorn config + `/health` + structured logging + DB pool tuned; migrations run via `flask db upgrade` in release
-- [ ] **Docs** `backend/RUNNING.md` `create_all` note corrected; required-env list documented
-- [ ] Full stability + pen-test suite re-run; this table updated to green
+- [x] **C-1** hole-scores authorization enforced (read + write) + re-probed — closed; code re-verified + live re-probe 2026-07-12 (see fixes-changelog.md)
+- [x] **C-2/MA-1** `/rounds` identity stamped, WHS columns server-computed + re-probed — closed; create_round removed, sync_score path re-verified + live re-probe 2026-07-12
+- [x] **H-1** parent/committee round reads scoped + re-probed — closed; parent scoped to children, committee club-wide retained by design; live re-probe 2026-07-12
+- [x] **NEW-1** evaluation create strips sign-off fields + re-probed — closed; create path strips _SIGNOFF_FIELDS, live re-probe returned unsigned row 2026-07-12
+- [x] **P-1** `handicap_index`/`membership_number` stripped from self-update + re-probed — closed; DB-level check confirmed index untouched after forgery attempt
+- [x] **H-5r / NEW-2** sessions/booking coach-scoping + null-coach bypass closed — closed; coach_id stamped, NULL-coach requests admin-only; 15 scoping tests
+- [x] **Dependencies** flask-cors, gunicorn, cryptography, requests, urllib3 bumped; `pip-audit` clean — closed 2026-07-13: residual pins (cryptography→48.0.1, h11, idna, mako, mistune, pygments, pytest, zipp, plus companion bumps packaging/pluggy for resolvability) all bumped and OSV-checked clean; `pip install` verified clean; full suite re-run (151 passed/0 failed) confirms no runtime breakage from the bumps
+- [x] **CFG-1** `ProductionConfig.validate()` called at startup; app fails fast on missing secrets — closed; verified in main.py/config.py
+- [x] **IV-1/IV-2** global error handler returns normalized envelope; body-size cap set — closed; Exception handler + MAX_CONTENT_LENGTH=2MB verified in main.py
+- [ ] **STAB-1** backend test suite green; frontend smoke tests added; both in CI — PARTIAL: backend 151 passed/0 failed (was 86/8) verified with local DB up 2026-07-13; frontend smoke tests + CI still missing (not attempted — separate initiative)
+- [x] **Rate limiting** on Redis storage; verified 429 with `RATELIMIT_ENABLED=true` — closed 2026-07-13: live-verified the login endpoint trips 429 under `RATELIMIT_ENABLED=true` against the patched app. Storage wiring itself (`REDIS_URL` → Flask-Limiter) was verified in code in the prior pass; a live Redis-backed run (vs. in-memory) is still pending a local Redis install (blocked on an unrelated Homebrew tap repair, in progress) — functionally the limiter works, this residual is about the storage *backend* only
+- [x] **FE-2/FE-3** React Query cache cleared on logout; CSP header present — closed 2026-07-13: `queryClient.clear()` added to `AuthProvider.logout()`; CSP header live-confirmed on responses (`default-src 'self'; script-src 'self'; ...`)
+- [x] **Deployment** gunicorn config + `/health` + structured logging + DB pool tuned; migrations run via `flask db upgrade` in release — closed; artifacts written + statically cross-checked. Live `docker compose` validation still pending (Docker/colima install blocked on the same Homebrew tap repair as above) — tracked separately, not blocking application correctness
+- [x] **Docs** `backend/RUNNING.md` `create_all` note corrected; required-env list documented — closed 2026-07-13: stale auto-create-tables claim replaced with the `flask db upgrade` requirement; table count corrected 21→42
+- [x] Full stability + pen-test suite re-run; this table updated to green — closed 2026-07-13: full battery re-run live against the patched app — JWT (no-token/alg=none/tampered-signature all 401), auth rate-limit (429 trips), IDOR (player 403 on others' data, rounds scoped), mass assignment (register role-collapse holds), injection fuzz (handled, no 500), CORS (not reflected to hostile origin), headers (CSP now present alongside the existing nosniff/X-Frame-Options)
+- [x] **NEW-3** tournament/handicap-journey coach scoping (junior_in_scope) closed + re-probed — closed; consolidated helper applied across tournaments/handicap/juniors, live re-probe 2026-07-12. **Residual now also closed 2026-07-13:** the two handicap **write** routes (`PUT .../handicap-journey`, `PUT /users/<id>/handicap`) now deny an unassigned (`coach_id IS NULL`) junior to non-admin coaches, matching the sessions-module fix; 6 new regression tests added, admin/committee unrestricted access preserved
+
+## Outstanding (tracked, not blocking)
+
+- **Frontend test suite + CI** — no automated frontend tests exist yet; a separate initiative, not attempted in this pass.
+- **Live Redis-backed limiter run** and **live `docker compose up` validation** — both blocked on the same local environment issue (a broken/shallow Homebrew tap needed a large one-time repair fetch); the underlying code/config for both is done and statically verified. Follow up once that fetch completes.
+- **UI-quality pass** — explicitly deferred by request; layout (bento/dashboards) is done, palette/tone is being reconsidered for the junior/minor audience before further implementation.

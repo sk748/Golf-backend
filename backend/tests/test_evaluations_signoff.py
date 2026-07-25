@@ -30,8 +30,8 @@ def _create_eval(client, coach_h, junior, month="2026-05-01"):
 
 
 def test_coach_creates_evaluation_unsigned(client, auth, make_junior):
-    _, coach_h = auth("coach")
-    junior = make_junior(level=7)
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
     ev = _create_eval(client, coach_h, junior)
     assert ev["coach_signed"] is False
     assert ev["committee_signed"] is False
@@ -39,10 +39,27 @@ def test_coach_creates_evaluation_unsigned(client, auth, make_junior):
     assert ev["coach_id"] is not None
 
 
+def test_create_strips_signoff_fields_from_body(client, auth, make_junior):
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
+    body = _eval_body(junior)
+    # Forgery attempt: self-counter-signed at creation time.
+    body["coach_signed"] = True
+    body["committee_signed"] = True
+    body["committee_signed_by"] = 999
+
+    r = client.post("/api/evaluations", json=body, headers=coach_h)
+    assert r.status_code == 201, r.get_data(as_text=True)
+    ev = r.get_json()["data"]
+    assert ev["coach_signed"] is False
+    assert ev["committee_signed"] is False
+    assert ev["committee_signed_by"] is None
+
+
 def test_committee_cannot_sign_before_coach(client, auth, make_junior):
-    _, coach_h = auth("coach")
+    coach, coach_h = auth("coach")
     _, committee_h = auth("committee")
-    junior = make_junior(level=7)
+    junior = make_junior(level=7, coach=coach)
     ev = _create_eval(client, coach_h, junior)
 
     r = client.post(f"/api/evaluations/{ev['id']}/committee-sign", headers=committee_h)
@@ -51,9 +68,9 @@ def test_committee_cannot_sign_before_coach(client, auth, make_junior):
 
 
 def test_signoff_sequence_coach_then_committee(client, auth, make_junior):
-    _, coach_h = auth("coach")
+    coach, coach_h = auth("coach")
     _, committee_h = auth("committee")
-    junior = make_junior(level=7)
+    junior = make_junior(level=7, coach=coach)
     ev = _create_eval(client, coach_h, junior)
 
     # Coach signs first.
@@ -70,9 +87,9 @@ def test_signoff_sequence_coach_then_committee(client, auth, make_junior):
 
 
 def test_only_authoring_coach_can_sign(client, auth, make_user, make_junior):
-    _, coach_h = auth("coach")
+    coach, coach_h = auth("coach")
     _, other_coach_h = auth("coach")
-    junior = make_junior(level=7)
+    junior = make_junior(level=7, coach=coach)
     ev = _create_eval(client, coach_h, junior)
 
     # A different coach cannot sign someone else's evaluation.
@@ -81,8 +98,8 @@ def test_only_authoring_coach_can_sign(client, auth, make_user, make_junior):
 
 
 def test_duplicate_evaluation_same_month_is_409(client, auth, make_junior):
-    _, coach_h = auth("coach")
-    junior = make_junior(level=7)
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
     _create_eval(client, coach_h, junior, month="2026-05-01")
 
     r = client.post(
@@ -94,8 +111,8 @@ def test_duplicate_evaluation_same_month_is_409(client, auth, make_junior):
 
 
 def test_different_month_is_allowed(client, auth, make_junior):
-    _, coach_h = auth("coach")
-    junior = make_junior(level=7)
+    coach, coach_h = auth("coach")
+    junior = make_junior(level=7, coach=coach)
     _create_eval(client, coach_h, junior, month="2026-05-01")
     r = client.post(
         "/api/evaluations",

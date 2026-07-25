@@ -63,11 +63,12 @@ def auth(make_user):
 def make_junior(app, make_user):
     from app.juniors.models import JuniorProfile, LevelBand
 
-    def _make(level=7, gender="male", handicap=None, dob=date(2012, 1, 1), parent=None):
+    def _make(level=7, gender="male", handicap=None, dob=date(2012, 1, 1), parent=None, coach=None):
         user = make_user(role="player")
         band = LevelBand.query.filter(LevelBand.min_level <= level, LevelBand.max_level >= level).first()
         j = JuniorProfile(
             user_id=user.id, parent_id=parent.id if parent else None,
+            coach_id=coach.id if coach else None,
             date_of_birth=dob, gender=gender, current_level=level, band_id=band.id,
             has_handicap=handicap is not None, handicap_index=handicap,
             experience="beginner", availability="weekends_only",

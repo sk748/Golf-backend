@@ -15,6 +15,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { FeatureCard } from '../../components/ui/FeatureCard';
+import { AttentionBand } from '../../components/ui/AttentionBand';
 import {
   useActiveTournaments,
   useEvaluationSummary,
@@ -68,39 +69,67 @@ export function CommitteeDashboard() {
         the second sign-off on monthly evaluations.
       </p>
 
-      {/* ── Navigation hub: a stat + headline per area, each a link ──────── */}
-      <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        <FeatureCard
-          label="Counter-sign"
-          icon={PenLine}
-          tone={queueItems.length > 0 ? 'gold' : 'default'}
-          stat={statValue(queue.isLoading, queue.isError, queueItems.length)}
-          headline="evaluations awaiting your sign-off"
-          to="/evaluations"
-          testId="feature-countersign"
-        />
-        <FeatureCard
-          label="Juniors"
-          icon={GraduationCap}
-          tone="azure"
-          stat={statValue(juniors.isLoading, juniors.isError, juniors.data?.length ?? 0)}
-          headline="in the development programme"
-          to="/juniors"
-          testId="feature-juniors"
-        />
-        <FeatureCard
-          label="Tournaments"
-          icon={Trophy}
-          stat={statValue(tournaments.isLoading, tournaments.isError, tournaments.data?.length ?? 0)}
-          headline="active events"
-          to="/tournaments"
-          testId="feature-tournaments"
-        />
-      </div>
+      {/* ── Bento grid: 4 columns on desktop, single column on mobile ─────── */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4 [&>*]:min-w-0">
+        {/* Row 0 — COUNTER-SIGN ATTENTION BAND (full width) */}
+        <div className="animate-fade-in-up stagger-1 lg:col-span-4">
+          <AttentionBand
+            icon={PenLine}
+            eyebrow="Counter-sign queue"
+            headline={
+              queue.isLoading
+                ? 'Checking the counter-sign queue…'
+                : queueItems.length > 0
+                  ? `${queueItems.length} evaluation${queueItems.length === 1 ? '' : 's'} awaiting your counter-signature`
+                  : 'All caught up — nothing to counter-sign'
+            }
+            subline={
+              queueItems.length > 0
+                ? 'Coach-signed evaluations need your second sign-off to complete the month.'
+                : 'Every coach-signed evaluation has been counter-signed.'
+            }
+            ctaLabel="Review evaluations"
+            to="/evaluations"
+            testId="countersign-callout"
+          />
+        </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
-        {/* ── Counter-sign queue (primary CTA list) ──────────────────────── */}
-        <GlassCard className="animate-fade-in-up stagger-1 p-5 lg:col-span-2">
+        {/* Row 1 — navigation hub: counter-sign emphasised, juniors + tournaments alongside */}
+        <div className="animate-fade-in-up stagger-1 lg:col-span-2">
+          <FeatureCard
+            label="Counter-sign"
+            icon={PenLine}
+            tone={queueItems.length > 0 ? 'gold' : 'default'}
+            stat={statValue(queue.isLoading, queue.isError, queueItems.length)}
+            headline="evaluations awaiting your sign-off"
+            to="/evaluations"
+            testId="feature-countersign"
+          />
+        </div>
+        <div className="animate-fade-in-up stagger-1 lg:col-span-1">
+          <FeatureCard
+            label="Juniors"
+            icon={GraduationCap}
+            tone="azure"
+            stat={statValue(juniors.isLoading, juniors.isError, juniors.data?.length ?? 0)}
+            headline="in the development programme"
+            to="/juniors"
+            testId="feature-juniors"
+          />
+        </div>
+        <div className="animate-fade-in-up stagger-1 lg:col-span-1">
+          <FeatureCard
+            label="Tournaments"
+            icon={Trophy}
+            stat={statValue(tournaments.isLoading, tournaments.isError, tournaments.data?.length ?? 0)}
+            headline="active events"
+            to="/tournaments"
+            testId="feature-tournaments"
+          />
+        </div>
+
+        {/* Row 2 — counter-sign queue (primary CTA list) + band summary */}
+        <GlassCard className="animate-fade-in-up stagger-2 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">
               Counter-sign queue
@@ -193,10 +222,13 @@ export function CommitteeDashboard() {
           </div>
         </GlassCard>
 
-        {/* Right column: band summary stacked over announcements — no gap. */}
-        <div className="flex flex-col gap-4 lg:col-span-1">
+        <div className="h-full lg:col-span-2">
           <BandSummaryWidget />
-          <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+        </div>
+
+        {/* Row 3 — club announcements (full width) */}
+        <div className="lg:col-span-4">
+          <AnnouncementsWidget className="animate-fade-in-up stagger-3 p-5" />
         </div>
       </div>
     </div>
@@ -222,7 +254,7 @@ function BandSummaryWidget() {
   };
 
   return (
-    <GlassCard className="animate-fade-in-up stagger-2 p-5">
+    <GlassCard className="animate-fade-in-up stagger-2 h-full p-5">
       <h2 className="text-sm font-bold text-silver">Band sign-off summary</h2>
       <p className="mt-1 text-xs text-slate">
         Monthly evaluation progress for a whole band.

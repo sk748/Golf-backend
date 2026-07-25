@@ -5,6 +5,7 @@ import {
   CalendarPlus,
   ClipboardCheck,
   ClipboardList,
+  FileSpreadsheet,
   Flag,
   LayoutDashboard,
   Map,
@@ -84,6 +85,9 @@ const announcements: NavItem = { to: '/announcements', label: 'Announcements', i
 // Quarterly clinic timetable (group sessions by band + age group) — staff see
 // the whole schedule; players/parents see bookable clinics (scoped server-side).
 const timetable: NavItem = { to: '/timetable', label: 'Timetable', icon: CalendarRange };
+// Reports — downloadable Excel/PDF progress reports, scoped by the backend to
+// what each role may see (programme-wide / own roster / own child / self).
+const reports: NavItem = { to: '/reports', label: 'Reports', icon: FileSpreadsheet };
 
 // Communication is identical for every role, so define it once.
 const communicationGroup: NavGroup = {
@@ -132,6 +136,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       icon: Settings,
       mobileTabRank: 3,
       items: [
+        reports,
         { to: '/courses', label: 'Courses', icon: Map },
         { to: '/admin/benchmarks', label: 'Benchmarks', icon: Target },
         { to: '/admin/badges', label: 'Badges', icon: Award },
@@ -161,6 +166,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       mobileTabRank: 2,
       items: [tournaments, league, leagueManage, series, logRound, verifyRounds, externalResults],
     },
+    { heading: 'Reporting', icon: FileSpreadsheet, items: [reports] },
     communicationGroup,
   ],
   committee: [
@@ -191,6 +197,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       mobileTabRank: 2,
       items: [tournaments, league, leagueManage, series, verifyRounds],
     },
+    { heading: 'Reporting', icon: FileSpreadsheet, items: [reports] },
     communicationGroup,
   ],
   parent: [
@@ -202,6 +209,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
       items: [
         { to: '/my-child', label: 'My child', icon: TrendingUp },
         { to: '/sessions', label: 'Coaching', icon: CalendarPlus },
+        reports,
       ],
     },
     { heading: 'Programme', icon: CalendarDays, mobileTabRank: 3, items: [timetable] },
@@ -218,6 +226,7 @@ export const NAV_GROUPS_BY_ROLE: Record<Role, NavGroup[]> = {
         { to: '/progress', label: 'Progress', icon: BarChart3 },
         { to: '/achievements', label: 'Achievements', icon: Trophy },
         logRound,
+        reports,
       ],
     },
     {

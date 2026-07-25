@@ -139,3 +139,21 @@ def coach_owns_junior(caller, junior):
     if junior is None:
         return False
     return str(getattr(junior, "coach_id", None)) == str(caller.id)
+
+
+def junior_in_scope(caller, junior):
+    """Whether the caller may read this junior's data. Admin/committee: any
+    junior (programme-wide oversight). Coach: only their own roster (Sam's
+    directive 2026-06-16 — see coach_owns_junior). Parent: own child.
+    Player: self."""
+    if junior is None:
+        return False
+    if has_role(caller, "admin", "committee"):
+        return True
+    if has_role(caller, "coach"):
+        return coach_owns_junior(caller, junior)
+    if has_role(caller, "parent"):
+        return str(junior.parent_id) == str(caller.id)
+    if has_role(caller, "player"):
+        return str(junior.user_id) == str(caller.id)
+    return False

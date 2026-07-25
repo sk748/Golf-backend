@@ -40,6 +40,7 @@ import { cn } from '../../lib/cn';
 import { Badge } from '../../components/ui/Badge';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { FeatureCard } from '../../components/ui/FeatureCard';
+import { AttentionBand } from '../../components/ui/AttentionBand';
 import { useAuth } from '../../auth/useAuth';
 import type { Round } from '../../types/api';
 import {
@@ -244,183 +245,138 @@ export function PlayerDashboard() {
         Every round is progress. Keep playing and watch your game grow.
       </p>
 
-      {/* ── Navigation hub: a stat + headline per area, each a link ───────── */}
-      <div className="stagger-1 mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {stats?.hasHandicap && stats.handicapIndex != null ? (
-          <FeatureCard
-            label="Handicap"
-            icon={Gauge}
-            tone="azure"
-            stat={statValue(achLoading, achError, stats.handicapIndex)}
-            headline="your handicap index & history"
-            to="/handicap"
-            testId="feature-handicap"
-          />
-        ) : (
-          <FeatureCard
-            label="Handicap"
-            icon={Gauge}
-            tone="azure"
-            stat={achLoading ? '·' : '—'}
-            headline="get scorecards signed to earn yours"
-            to="/handicap"
-            testId="feature-handicap"
-          />
-        )}
-        <FeatureCard
-          label="Progress"
-          icon={TrendingUp}
-          stat={statValue(achLoading, achError, `L${currentLevel}`)}
-          headline="your level & path to the next"
-          to="/progress"
-          testId="feature-progress"
-        />
-        <FeatureCard
-          label="Achievements"
-          icon={Award}
-          tone="gold"
-          stat={statValue(achLoading, achError, `${earnedCount}/${total}`)}
-          headline="badges you've unlocked"
-          to="/achievements"
-          testId="feature-achievements"
-        />
-        <FeatureCard
-          label="Log a round"
-          icon={PlusCircle}
-          headline="enter a scorecard, hole by hole"
-          to="/log-round"
-          testId="feature-log-round"
-        />
-      </div>
-
-      {/* ── 0) NEXT-LEVEL CALLOUT — the motivating top of the page ────────── */}
-      <Link
-        to="/progress"
-        data-testid="next-level-callout"
-        className={cn(
-          'group stagger-1 mt-6 block rounded-2xl border border-azure/40 bg-gradient-to-br from-azure/20 via-azure/10 to-transparent p-6 transition-all',
-          'hover:-translate-y-0.5 hover:border-azure/70 hover:shadow-lg hover:shadow-azure/10',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-azure/60',
-        )}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-azure/25">
-              <TrendingUp size={24} className="text-azure" />
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-azure">
-                Your next milestone
-              </p>
-              {atTop ? (
-                <p className="mt-1 text-xl font-black text-silver sm:text-2xl">
-                  You&apos;re at the top — Elite!
-                </p>
+      {/* ── Bento grid: 4 columns on desktop, single column on mobile ─────── */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        {/* Row 0 — NEXT-LEVEL ATTENTION BAND (full width) */}
+        <div className="stagger-1 lg:col-span-4">
+          <AttentionBand
+            icon={TrendingUp}
+            eyebrow="Your next milestone"
+            headline={
+              atTop ? (
+                <>You&apos;re at the top — Elite!</>
               ) : (
-                <p className="mt-1 text-xl font-black text-silver sm:text-2xl">
+                <>
                   Next: Level {nextLevel}
                   <span className="ml-2 text-base font-bold text-azure">
                     {bandForLevel(nextLevel)}
                   </span>
-                </p>
-              )}
-              <p className="mt-1 text-sm text-slate">
-                {atTop
-                  ? 'You have reached the highest band. Keep your game sharp!'
-                  : 'Keep going — see exactly what it takes to get there.'}
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-xl bg-azure px-4 py-2 text-sm font-bold text-navy transition group-hover:gap-3">
-            {atTop ? 'View progress' : 'See your path'}
-            <ArrowRight size={18} />
-          </span>
+                </>
+              )
+            }
+            subline={
+              atTop
+                ? 'You have reached the highest band. Keep your game sharp!'
+                : 'Keep going — see exactly what it takes to get there.'
+            }
+            ctaLabel={atTop ? 'View progress' : 'See your path'}
+            to="/progress"
+            meter={{ current: currentLevel, total: MAX_LEVEL }}
+            testId="next-level-callout"
+          />
         </div>
 
-        {/* Level meter — current level out of 9, with band label. */}
-        <div className="mt-5" data-testid="level-meter">
-          <div className="flex items-center justify-between text-xs font-bold text-slate">
-            <span>
-              Level{' '}
-              <span className="text-silver">{currentLevel}</span> of {MAX_LEVEL}
-            </span>
-            <span className="text-azure">{bandForLevel(currentLevel)}</span>
-          </div>
-          <div className="mt-2 flex gap-1.5">
-            {Array.from({ length: MAX_LEVEL }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  'h-2 flex-1 rounded-full transition-colors',
-                  i < currentLevel ? 'bg-azure' : 'bg-white/10',
-                )}
-              />
-            ))}
-          </div>
-        </div>
-      </Link>
-
-      {/* ── 1) HERO: handicap index + trend chip (links to full history) ──── */}
-      <Link
-        to="/handicap"
-        data-testid="handicap-link"
-        className={cn(
-          'group block focus:outline-none',
-        )}
-      >
-        <GlassCard
+        {/* Row 1 — HERO handicap index (left half) */}
+        <Link
+          to="/handicap"
+          data-testid="handicap-link"
           className={cn(
-            'stagger-1 mt-6 p-6 transition-all',
-            'group-hover:-translate-y-0.5 group-hover:border group-hover:border-azure/40',
-            'group-focus-visible:ring-2 group-focus-visible:ring-azure/50',
+            'group block focus:outline-none lg:col-span-2',
           )}
         >
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate">
-                Handicap index
-              </p>
-              <p
-                className="mt-1 font-mono text-5xl font-black leading-none text-azure sm:text-6xl"
-                data-testid="hero-handicap"
-              >
-                {heroIndex != null ? heroIndex : '—'}
-              </p>
-              <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-azure/80 transition group-hover:gap-2 group-hover:text-azure">
-                View handicap history
-                <ArrowRight size={14} />
-              </span>
-            </div>
-
-            {/* Trend chip — lower is better in golf, so DOWN = good (encouraging). */}
-            {latestHcp != null && prevHcp != null && (
-              <div data-testid="hero-trend">
-                {latestHcp < prevHcp ? (
-                  <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-400">
-                    <TrendingDown size={18} />
-                    Improving — nice work!
-                  </span>
-                ) : latestHcp > prevHcp ? (
-                  <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
-                    <Minus size={18} />
-                    Steady — keep at it
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
-                    <Minus size={18} />
-                    Holding steady
-                  </span>
-                )}
-              </div>
+          <GlassCard
+            className={cn(
+              'stagger-1 h-full p-6 transition-all',
+              'group-hover:-translate-y-0.5 group-hover:border group-hover:border-azure/40',
+              'group-focus-visible:ring-2 group-focus-visible:ring-azure/50',
             )}
-          </div>
-        </GlassCard>
-      </Link>
+          >
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate">
+                  Handicap index
+                </p>
+                <p
+                  className="mt-1 font-mono text-5xl font-black leading-none text-azure sm:text-6xl"
+                  data-testid="hero-handicap"
+                >
+                  {heroIndex != null ? heroIndex : '—'}
+                </p>
+                <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-azure/80 transition group-hover:gap-2 group-hover:text-azure">
+                  View handicap history
+                  <ArrowRight size={14} />
+                </span>
+              </div>
 
-      {/* ── 2 + 3) Charts ────────────────────────────────────────────────── */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {/* Handicap trend */}
-        <GlassCard className="stagger-2 p-5">
+              {/* Trend chip — lower is better in golf, so DOWN = good (encouraging). */}
+              {latestHcp != null && prevHcp != null && (
+                <div data-testid="hero-trend">
+                  {latestHcp < prevHcp ? (
+                    <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-400">
+                      <TrendingDown size={18} />
+                      Improving — nice work!
+                    </span>
+                  ) : latestHcp > prevHcp ? (
+                    <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
+                      <Minus size={18} />
+                      Steady — keep at it
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 rounded-xl bg-slate/15 px-3 py-2 text-sm font-bold text-slate">
+                      <Minus size={18} />
+                      Holding steady
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </GlassCard>
+        </Link>
+
+        {/* Row 1 — quick-stat tiles (right half, stacked) */}
+        <div className="stagger-1 grid gap-4 lg:col-span-2">
+          <FeatureCard
+            label="Progress"
+            icon={TrendingUp}
+            stat={statValue(achLoading, achError, `L${currentLevel}`)}
+            headline="your level & path to the next"
+            to="/progress"
+            testId="feature-progress"
+          />
+          <FeatureCard
+            label="Achievements"
+            icon={Award}
+            tone="gold"
+            stat={statValue(achLoading, achError, `${earnedCount}/${total}`)}
+            headline="badges you've unlocked"
+            to="/achievements"
+            testId="feature-achievements"
+          />
+          {stats?.hasHandicap && stats.handicapIndex != null ? (
+            <FeatureCard
+              label="Handicap"
+              icon={Gauge}
+              tone="azure"
+              stat={statValue(achLoading, achError, stats.handicapIndex)}
+              headline="your handicap index & history"
+              to="/handicap"
+              testId="feature-handicap"
+            />
+          ) : (
+            <FeatureCard
+              label="Handicap"
+              icon={Gauge}
+              tone="azure"
+              stat={achLoading ? '·' : '—'}
+              headline="get scorecards signed to earn yours"
+              to="/handicap"
+              testId="feature-handicap"
+            />
+          )}
+        </div>
+
+        {/* Row 2 — charts, side by side */}
+        <GlassCard className="stagger-2 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Handicap trend</h2>
             <span className="text-xs text-slate">lower is better</span>
@@ -482,8 +438,7 @@ export function PlayerDashboard() {
           </div>
         </GlassCard>
 
-        {/* Recent scores */}
-        <GlassCard className="stagger-3 p-5">
+        <GlassCard className="stagger-3 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Recent scores</h2>
             <span className="text-xs text-slate">gross per round</span>
@@ -535,17 +490,14 @@ export function PlayerDashboard() {
             )}
           </div>
         </GlassCard>
-      </div>
 
-      {/* ── 4) Level & progress ──────────────────────────────────────────── */}
-      <div className="stagger-4 mt-6">
-        <LevelProgressCard />
-      </div>
+        {/* Level & progress (full width) */}
+        <div className="stagger-4 lg:col-span-4">
+          <LevelProgressCard />
+        </div>
 
-      {/* ── 4b) Your next goal + badge-wall preview ──────────────────────── */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {/* Your next goal — nearest locked achievement */}
-        <GlassCard className="p-5" data-testid="next-goal">
+        {/* Row 3 — next goal + badge-wall preview */}
+        <GlassCard className="p-5 lg:col-span-2" data-testid="next-goal">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">Your next goal</h2>
             <Target size={16} className="text-azure" />
@@ -605,8 +557,7 @@ export function PlayerDashboard() {
           )}
         </GlassCard>
 
-        {/* Badge-wall preview */}
-        <GlassCard className="p-5" data-testid="badge-preview">
+        <GlassCard className="p-5 lg:col-span-2" data-testid="badge-preview">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">
               Achievements — {earnedCount}/{total} unlocked
@@ -638,30 +589,27 @@ export function PlayerDashboard() {
             </div>
           )}
         </GlassCard>
-      </div>
 
-      {/* ── 5) Recent games: list + hover preview, click opens scorecard ─── */}
-      <div className="mt-6">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-lg font-black text-silver">Recent games</h2>
-          <div className="flex items-baseline gap-4">
-            <span className="hidden text-xs text-slate sm:inline">
-              Tap a game to see every hole
-            </span>
-            <Link
-              to="/handicap"
-              data-testid="games-view-all"
-              className="inline-flex items-center gap-1 text-xs font-bold text-azure transition hover:gap-2"
-            >
-              View all
-              <ArrowRight size={14} />
-            </Link>
+        {/* Row 4 — recent games (left) + preview & log-a-round (right) */}
+        <div className="lg:col-span-2">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-black text-silver">Recent games</h2>
+            <div className="flex items-baseline gap-4">
+              <span className="hidden text-xs text-slate sm:inline">
+                Tap a game to see every hole
+              </span>
+              <Link
+                to="/handicap"
+                data-testid="games-view-all"
+                className="inline-flex items-center gap-1 text-xs font-bold text-azure transition hover:gap-2"
+              >
+                View all
+                <ArrowRight size={14} />
+              </Link>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          {/* Games list (2 cols on desktop) */}
-          <div className="lg:col-span-2">
+          <div className="mt-4">
             {rounds.isLoading ? (
               <Loading label="Loading your games…" testId="games-loading" />
             ) : rounds.isError ? (
@@ -744,7 +692,9 @@ export function PlayerDashboard() {
               </ul>
             )}
           </div>
+        </div>
 
+        <div className="flex flex-col gap-4 lg:col-span-2">
           {/* Desktop hover-preview panel */}
           {shownPreview && (
             <GlassCard
@@ -793,12 +743,20 @@ export function PlayerDashboard() {
               <p className="mt-4 text-xs text-slate">Tap the game to open the full scorecard.</p>
             </GlassCard>
           )}
-        </div>
-      </div>
 
-      {/* ── 6) Club announcements ────────────────────────────────────────── */}
-      <div className="mt-6">
-        <AnnouncementsWidget />
+          <FeatureCard
+            label="Log a round"
+            icon={PlusCircle}
+            headline="enter a scorecard, hole by hole"
+            to="/log-round"
+            testId="feature-log-round"
+          />
+        </div>
+
+        {/* Row 5 — club announcements (full width) */}
+        <div className="lg:col-span-4">
+          <AnnouncementsWidget />
+        </div>
       </div>
 
       {/* Scorecard modal */}

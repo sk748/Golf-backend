@@ -48,6 +48,7 @@ import { LeagueOverviewPage } from './pages/league/LeagueOverviewPage';
 import { FixtureDetailPage } from './pages/league/FixtureDetailPage';
 import { LeagueManagePage } from './pages/league/LeagueManagePage';
 import { ProfilePage } from './pages/profile/ProfilePage';
+import { ReportsPage } from './pages/reports/ReportsPage';
 import { CreditsPage } from './pages/easter-egg/CreditsPage';
 import { KonamiListener } from './features/easter-egg/KonamiListener';
 
@@ -167,6 +168,10 @@ export function App() {
         <Route path="/calendar" element={<CalendarPage />} />
         {/* Self-service profile — any signed-in user edits their own name/phone. */}
         <Route path="/profile" element={<ProfilePage />} />
+        {/* Reports — every role downloads the report(s) the backend scopes to
+            them (programme-wide for admin/committee, own roster for a coach,
+            own child for a parent, self for a player). */}
+        <Route path="/reports" element={<ReportsPage />} />
 
         {/* admin + coach — tournament management, external results, sessions,
             and writing/coach-signing evaluations. */}

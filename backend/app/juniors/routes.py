@@ -24,7 +24,7 @@ from app.juniors.controllers import (
 )
 from app.utils.decorators import (
     require_roles, require_auth, admin_only, get_current_user, require_ownership,
-    has_role, coach_owns_junior,
+    has_role, coach_owns_junior, junior_in_scope,
 )
 
 juniors_bp = Blueprint("juniors_bp", __name__, url_prefix="/api")
@@ -326,11 +326,11 @@ def junior_progress(junior_id):
     if junior is None:
         return _not_found("Junior")
     caller = get_current_user()
-    if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
-        return _err("FORBIDDEN", "Parents can only view their own children", 403)
-    if has_role(caller, "player") and str(junior.user_id) != str(caller.id):
-        return _err("FORBIDDEN", "You can only view your own progress", 403)
-    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+    if not junior_in_scope(caller, junior):
+        if has_role(caller, "parent"):
+            return _err("FORBIDDEN", "Parents can only view their own children", 403)
+        if has_role(caller, "player"):
+            return _err("FORBIDDEN", "You can only view your own progress", 403)
         return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
     result, err = get_junior_progress(junior_id)
     if err:
@@ -348,9 +348,9 @@ def monthly_report(junior_id):
     if junior is None:
         return _not_found("Junior")
     caller = get_current_user()
-    if has_role(caller, "parent") and str(junior.parent_id) != str(caller.id):
-        return _err("FORBIDDEN", "Parents can only view their own children", 403)
-    if has_role(caller, "coach") and not coach_owns_junior(caller, junior):
+    if not junior_in_scope(caller, junior):
+        if has_role(caller, "parent"):
+            return _err("FORBIDDEN", "Parents can only view their own children", 403)
         return _err("FORBIDDEN", "Coaches can only view their own juniors", 403)
     result, err = get_monthly_report(junior_id, month)
     if err:

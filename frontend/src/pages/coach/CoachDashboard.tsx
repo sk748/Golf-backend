@@ -17,6 +17,7 @@ import { Button } from '../../components/ui/Button';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { FeatureCard } from '../../components/ui/FeatureCard';
 import { Badge } from '../../components/ui/Badge';
+import { AttentionBand } from '../../components/ui/AttentionBand';
 import { useCoachSchedule, type CoachSession } from './coach-schedule.queries';
 import {
   useUnsignedEvaluations,
@@ -101,129 +102,159 @@ export function CoachDashboard() {
         Your week and the evaluations waiting on your sign-off.
       </p>
 
-      {/* ── Interactive overview: a stat + headline per area, each a link ── */}
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <FeatureCard
-          label="This week"
-          icon={CalendarDays}
-          tone="azure"
-          stat={statValue(schedule.isLoading, schedule.isError, sessions.length)}
-          headline="sessions on your schedule"
-          to="/schedule"
-          testId="feature-schedule"
-        />
-        <FeatureCard
-          label="Sign-offs"
-          icon={ClipboardCheck}
-          tone={pending.length > 0 ? 'gold' : 'default'}
-          stat={statValue(evals.isLoading, evals.isError, pending.length)}
-          headline="evaluations awaiting your signature"
-          to="/evaluations/new"
-          testId="feature-signoffs"
-        />
-        <FeatureCard
-          label="Bookings"
-          icon={CalendarPlus}
-          tone={myPendingBookings.length > 0 ? 'gold' : 'default'}
-          stat={statValue(
-            pendingBookings.isLoading,
-            pendingBookings.isError,
-            myPendingBookings.length,
-          )}
-          headline="session requests to review"
-          to="/coach-sessions"
-          testId="feature-bookings"
-        />
-        <FeatureCard
-          label="My juniors"
-          icon={Users}
-          stat={statValue(myJuniors.isLoading, myJuniors.isError, (myJuniors.data ?? []).length)}
-          headline="juniors assigned to you"
-          to="/juniors"
-          testId="feature-juniors"
-        />
-      </div>
-
-      {/* ── At-risk attendance: juniors below their band's session minimum ── */}
-      <GlassCard
-        className="animate-fade-in-up stagger-2 mt-6 p-5"
-        data-testid="at-risk-card"
-      >
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-silver">
-            <AlertTriangle size={16} className="text-gold" aria-hidden />
-            At-risk attendance
-          </h2>
-          <Link
-            to="/attendance"
-            className="text-xs font-medium text-azure hover:underline"
-            data-testid="at-risk-take-attendance"
-          >
-            Take attendance
-          </Link>
+      {/* ── Bento grid: 4 columns on desktop, single column on mobile ─────── */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4">
+        {/* Row 0 — SIGN-OFF ATTENTION BAND (full width) */}
+        <div className="animate-fade-in-up stagger-1 lg:col-span-4">
+          <AttentionBand
+            icon={ClipboardCheck}
+            eyebrow="Evaluations awaiting your signature"
+            headline={
+              evals.isLoading
+                ? '·'
+                : evals.isError
+                  ? '—'
+                  : pending.length === 0
+                    ? 'All signed — nothing waiting'
+                    : pending.length === 1
+                      ? '1 evaluation to sign'
+                      : `${pending.length} evaluations to sign`
+            }
+            subline="Coach signs first; the committee then counter-signs."
+            ctaLabel="Go to sign-offs"
+            to="/evaluations/new"
+            testId="signoff-callout"
+          />
         </div>
-        <p className="mt-1 text-xs text-slate">
-          Juniors below their band&apos;s minimum session count this period.
-        </p>
 
-        <div className="mt-4">
-          {atRisk.isLoading ? (
-            <div
-              className="flex items-center gap-2 text-sm text-slate"
-              data-testid="at-risk-loading"
-            >
-              <Loader2 size={18} className="animate-spin text-azure" />
-              Checking attendance against band minimums…
-            </div>
-          ) : atRisk.isError ? (
-            <ErrorPanel
-              message="Could not check attendance against band minimums."
-              testId="at-risk-error"
-            />
-          ) : atRisk.atRisk.length === 0 ? (
-            <p
-              className="flex items-center gap-2 text-sm text-slate"
-              data-testid="at-risk-empty"
-            >
-              <CheckCircle2 size={16} className="text-emerald-400" />
-              All juniors are on track for their band minimum.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2" data-testid="at-risk-list">
-              {atRisk.atRisk.map(({ junior, present, min, shortfall }) => (
-                <li key={junior.id} data-testid={`at-risk-${junior.id}`}>
-                  <Link
-                    to={`/juniors/${junior.id}`}
-                    className="glass-light flex items-center gap-3 rounded-xl p-3 ring-1 ring-gold/20 transition-colors hover:ring-gold/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15">
-                      <AlertTriangle size={16} className="text-gold" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-silver">
-                        {junior.full_name?.trim() || `Golfer #${junior.id}`}
-                      </p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
-                        <Badge tone="slate" className="px-1.5 py-0.5">
-                          L{junior.current_level}
-                        </Badge>
-                        <span className="tabular-nums text-gold">
-                          {present}/{min} sessions
-                        </span>
-                        <span>· {shortfall} short</span>
-                      </p>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+        {/* Row 1 — feature-area stats, two per row */}
+        <div className="animate-fade-in-up stagger-1 lg:col-span-2">
+          <FeatureCard
+            label="This week"
+            icon={CalendarDays}
+            tone="azure"
+            stat={statValue(schedule.isLoading, schedule.isError, sessions.length)}
+            headline="sessions on your schedule"
+            to="/schedule"
+            testId="feature-schedule"
+          />
         </div>
-      </GlassCard>
+        <div className="animate-fade-in-up stagger-1 lg:col-span-2">
+          <FeatureCard
+            label="Sign-offs"
+            icon={ClipboardCheck}
+            tone={pending.length > 0 ? 'gold' : 'default'}
+            stat={statValue(evals.isLoading, evals.isError, pending.length)}
+            headline="evaluations awaiting your signature"
+            to="/evaluations/new"
+            testId="feature-signoffs"
+          />
+        </div>
+        <div className="animate-fade-in-up stagger-2 lg:col-span-2">
+          <FeatureCard
+            label="Bookings"
+            icon={CalendarPlus}
+            tone={myPendingBookings.length > 0 ? 'gold' : 'default'}
+            stat={statValue(
+              pendingBookings.isLoading,
+              pendingBookings.isError,
+              myPendingBookings.length,
+            )}
+            headline="session requests to review"
+            to="/coach-sessions"
+            testId="feature-bookings"
+          />
+        </div>
+        <div className="animate-fade-in-up stagger-2 lg:col-span-2">
+          <FeatureCard
+            label="My juniors"
+            icon={Users}
+            stat={statValue(myJuniors.isLoading, myJuniors.isError, (myJuniors.data ?? []).length)}
+            headline="juniors assigned to you"
+            to="/juniors"
+            testId="feature-juniors"
+          />
+        </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        {/* Row 2 — at-risk attendance + this week's schedule */}
+        <GlassCard
+          className="animate-fade-in-up stagger-2 min-w-0 p-5 lg:col-span-2"
+          data-testid="at-risk-card"
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-silver">
+              <AlertTriangle size={16} className="text-gold" aria-hidden />
+              At-risk attendance
+            </h2>
+            <Link
+              to="/attendance"
+              className="text-xs font-medium text-azure hover:underline"
+              data-testid="at-risk-take-attendance"
+            >
+              Take attendance
+            </Link>
+          </div>
+          <p className="mt-1 text-xs text-slate">
+            Juniors below their band&apos;s minimum session count this period.
+          </p>
+
+          <div className="mt-4">
+            {atRisk.isLoading ? (
+              <div
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="at-risk-loading"
+              >
+                <Loader2 size={18} className="animate-spin text-azure" />
+                Checking attendance against band minimums…
+              </div>
+            ) : atRisk.isError ? (
+              <ErrorPanel
+                message="Could not check attendance against band minimums."
+                testId="at-risk-error"
+              />
+            ) : atRisk.atRisk.length === 0 ? (
+              <p
+                className="flex items-center gap-2 text-sm text-slate"
+                data-testid="at-risk-empty"
+              >
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                All juniors are on track for their band minimum.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2" data-testid="at-risk-list">
+                {atRisk.atRisk.map(({ junior, present, min, shortfall }) => (
+                  <li key={junior.id} data-testid={`at-risk-${junior.id}`}>
+                    <Link
+                      to={`/juniors/${junior.id}`}
+                      className="glass-light flex items-center gap-3 rounded-xl p-3 ring-1 ring-gold/20 transition-colors hover:ring-gold/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15">
+                        <AlertTriangle size={16} className="text-gold" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-silver">
+                          {junior.full_name?.trim() || `Golfer #${junior.id}`}
+                        </p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate">
+                          <Badge tone="slate" className="px-1.5 py-0.5">
+                            L{junior.current_level}
+                          </Badge>
+                          <span className="tabular-nums text-gold">
+                            {present}/{min} sessions
+                          </span>
+                          <span>· {shortfall} short</span>
+                        </p>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </GlassCard>
+
         {/* ── This week's schedule ──────────────────────────────────────── */}
-        <GlassCard className="animate-fade-in-up stagger-1 p-5">
+        <GlassCard className="animate-fade-in-up stagger-1 min-w-0 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">This week</h2>
             <Link
@@ -297,8 +328,9 @@ export function CoachDashboard() {
           </div>
         </GlassCard>
 
+        {/* Row 3 — sign-off queue + my juniors */}
         {/* ── Awaiting my sign-off ──────────────────────────────────────── */}
-        <GlassCard className="animate-fade-in-up stagger-2 p-5">
+        <GlassCard className="animate-fade-in-up stagger-2 min-w-0 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">
               Awaiting my sign-off
@@ -396,7 +428,7 @@ export function CoachDashboard() {
         </GlassCard>
 
         {/* ── My juniors ────────────────────────────────────────────────── */}
-        <GlassCard className="animate-fade-in-up stagger-3 p-5">
+        <GlassCard className="animate-fade-in-up stagger-3 min-w-0 p-5 lg:col-span-2">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-bold text-silver">My juniors</h2>
           </div>
@@ -459,8 +491,10 @@ export function CoachDashboard() {
           </div>
         </GlassCard>
 
-        {/* ── Club announcements — fourth cell, balancing the 2×2 grid ───── */}
-        <AnnouncementsWidget className="animate-fade-in-up stagger-3 h-full p-5" />
+        {/* Row 4 — club announcements (full width) */}
+        <div className="min-w-0 lg:col-span-4">
+          <AnnouncementsWidget className="animate-fade-in-up stagger-3 p-5" />
+        </div>
       </div>
     </div>
   );

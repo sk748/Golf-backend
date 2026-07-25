@@ -77,3 +77,39 @@ def get_session_summary(session_id: int):
         "total": len(rows),
         "records": attendances_schema.dump(rows),
     }
+
+
+def summarize_attendance(junior_id: int, date_from=None, date_to=None):
+    """Present/absent/excused/total counts (+ rate) for one junior, optionally
+    windowed by date (date objects).
+
+    A row's date comes from its coaching Session OR its Junior League fixture
+    (league rows have session_id NULL). Without a window every row counts;
+    with one, rows whose source carries no date are excluded (they can't be
+    placed in the window).
+    """
+    rows = Attendance.query.filter_by(junior_id=junior_id).all()
+    if date_from is not None or date_to is not None:
+        kept = []
+        for a in rows:
+            if a.session_id is not None:
+                d = a.session.date if a.session else None
+            else:
+                d = a.league_fixture.date if a.league_fixture else None
+            if d is None:
+                continue
+            if date_from is not None and d < date_from:
+                continue
+            if date_to is not None and d > date_to:
+                continue
+            kept.append(a)
+        rows = kept
+    present = sum(1 for r in rows if r.status == AttendanceStatus.present)
+    total = len(rows)
+    return {
+        "present": present,
+        "absent": sum(1 for r in rows if r.status == AttendanceStatus.absent),
+        "excused": sum(1 for r in rows if r.status == AttendanceStatus.excused),
+        "total": total,
+        "rate": round(present / total, 3) if total else None,
+    }

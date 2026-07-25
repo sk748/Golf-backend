@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { authApi, getToken, setToken } from '../lib/api';
 import type { LoginPayload, RegisterPayload, User } from '../types/api';
 import { AuthContext, type AuthContextValue, type AuthStatus } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<AuthStatus>(
     getToken() ? 'loading' : 'unauthenticated',
@@ -57,7 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setStatus('unauthenticated');
-  }, []);
+    // Shared-kiosk safety: drop the previous user's cached server data.
+    queryClient.clear();
+  }, [queryClient]);
 
   const updateUser = useCallback((next: User) => setUser(next), []);
 
