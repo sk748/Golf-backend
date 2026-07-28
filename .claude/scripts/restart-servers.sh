@@ -190,7 +190,13 @@ start_tunnel(){
   [ -n "$p" ] && { echo "Stopping cloudflared -> $(echo "$p" | tr '\n' ' ')"; echo "$p" | xargs kill -9 2>/dev/null; sleep 1; }
   : >"$TUN_LOG"
   echo "Starting Cloudflare tunnel -> http://localhost:$FRONT_PORT"
-  spawn "$TUN_LOG" cloudflared tunnel --url "http://localhost:$FRONT_PORT" --no-autoupdate
+  # --protocol http2 (TCP 443) instead of the default QUIC (UDP 7844). Many
+  # networks — including this one — block outbound UDP 7844, which makes the
+  # tunnel flap: curl gets lucky between reconnects, but a browser loading
+  # dozens of module requests lands on dead connections and renders a blank
+  # page. HTTP/2 costs a little throughput and is far more reliable.
+  spawn "$TUN_LOG" cloudflared tunnel --url "http://localhost:$FRONT_PORT" \
+    --protocol "${CLOUDFLARED_PROTOCOL:-http2}" --no-autoupdate
   local url=""
   for _ in $(seq 1 40); do url="$(tunnel_url)"; [ -n "$url" ] && break; sleep 0.5; done
 }
